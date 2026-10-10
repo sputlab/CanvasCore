@@ -1,0 +1,58 @@
+/* CanvasCore — base UI globale (premium, densa, sicura).
+   NB: niente regole su elementi generici (button/input/a/h1...) per non alterare
+   l'anteprima del canvas, che renderizza l'HTML reale dei blocchi. */
+
+:root {
+  /* Palette admin */
+  --cc-bg: #0b1220;
+  --cc-surface: #0f172a;
+  --cc-surface-2: #1e293b;
+  --cc-surface-3: #243149;
+  --cc-border: #2a3a52;
+  --cc-border-soft: #1e293b;
+  --cc-text: #e2e8f0;
+  --cc-text-strong: #f8fafc;
+  --cc-muted: #94a3b8;
+  --cc-faint: #64748b;
+  --cc-accent: #38bdf8;
+  --cc-accent-2: #3b82f6;
+  --cc-danger: #ef4444;
+
+  /* Scala di spaziatura compatta (densa) */
+  --cc-xs: 4px;
+  --cc-sm: 8px;
+  --cc-md: 12px;
+  --cc-lg: 16px;
+  --cc-xl: 22px;
+
+  --cc-radius: 10px;
+  --cc-radius-sm: 6px;
+  --cc-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  --cc-shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Scrollbar sottili e discrete (premium) */
+* { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: #475569; background-clip: padding-box; }
+
+::selection { background: rgba(56, 189, 248, 0.28); }
+
+/* Ingresso morbido dell'app */
+#root { animation: ccFadeIn 0.25s ease both; }
+@keyframes ccFadeIn { from { opacity: 0; } to { opacity: 1; } }

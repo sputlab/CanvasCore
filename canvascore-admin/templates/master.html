@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}}</title>
+    <style>
+        /* CSS Base Leggero per il sito statico */
+        body { font-family: system-ui, sans-serif; margin: 0; padding: 0; color: #333; }
+        .cc-main-menu { list-style: none; padding: 0; display: flex; gap: 20px; background: #f8f9fa; margin: 0; padding: 15px; }
+        .cc-main-menu a { text-decoration: none; color: #000; font-weight: bold; }
+        .cc-submenu { position: absolute; background: white; border: 1px solid #ddd; display: none; }
+        .cc-menu-item:hover > .cc-submenu { display: block; }
+        .site-footer { background: #222; color: white; padding: 40px 20px; margin-top: 60px; }
+    </style>
+</head>
+<body>
+    
+    <header>
+        {{MENU}}
+    </header>
+
+    <main style="max-width: 1200px; margin: 0 auto; padding: 40px 20px;">
+        {{CONTENT}}
+    </main>
+
+    <footer class="site-footer">
+        {{FOOTER}}
+    </footer>
+
+</body>
+</html>

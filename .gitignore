@@ -1,0 +1,119 @@
+# =====================================================================
+#  CanvasCore — .gitignore
+#  Editor React (Vite, Zustand) + compiler PHP (SQLite) → HTML statico
+#  NB: version.json è la fonte di verità della versione → resta TRACCIATO
+#      (viene aggiornato da scripts/bump.mjs a ogni `npm run build`).
+# =====================================================================
+
+# ---------------------------------------------------------------------
+#  Radice = webroot del sito pubblicato
+#  rebuild_all.php / api.php scrivono il sito statico nella cartella
+#  SOPRA canvascore-admin/, cioè qui: index.html, 404.html, sitemap.xml,
+#  robots.txt, .htaccess, uploads/ e una cartella per ogni slug di pagina
+#  o voce di collezione (nomi arbitrari). Per non committare mai l'output
+#  si ignora tutto in radice tranne ciò che è elencato qui sotto.
+#  → Se aggiungi un nuovo file/cartella in radice, aggiungilo qui.
+# ---------------------------------------------------------------------
+/*
+!/.gitignore
+!/.gitattributes
+!/.editorconfig
+!/README.md
+!/canvascore-admin/
+!/canvascore-frontend/
+
+# ---------------------------------------------------------------------
+#  Backend PHP: dati locali e artefatti di deploy
+# ---------------------------------------------------------------------
+# Data dir "legacy" dentro la webroot (DB SQLite, settings.json, menu.json,
+# forms.json, sessions/). Quella consigliata è ../../canvascore-data, già fuori repo.
+/canvascore-admin/data/
+# Build del frontend copiata in canvascore-admin/ per il deploy (vedi FASE-0)
+/canvascore-admin/index.html
+/canvascore-admin/assets/
+/canvascore-admin/favicon.svg
+/canvascore-admin/icons.svg
+
+# ---------------------------------------------------------------------
+#  Node / Vite (editor frontend)
+# ---------------------------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+.eslintcache
+*.tsbuildinfo
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+# package-lock.json va committato: NON ignorarlo
+
+# ---------------------------------------------------------------------
+#  PHP / Composer (se in futuro verrà introdotto)
+# ---------------------------------------------------------------------
+vendor/
+.phpunit.result.cache
+.phpunit.cache/
+.php-cs-fixer.cache
+
+# ---------------------------------------------------------------------
+#  Database SQLite e journal (ovunque si trovino)
+# ---------------------------------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+*-journal
+*-wal
+*-shm
+
+# ---------------------------------------------------------------------
+#  Variabili d'ambiente e segreti
+# ---------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+config.local.php
+
+# ---------------------------------------------------------------------
+#  Log, cache, temporanei
+# ---------------------------------------------------------------------
+*.log
+*.tmp
+.cc_wtest_*
+
+# ---------------------------------------------------------------------
+#  Editor / IDE
+# ---------------------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.history/
+
+# ---------------------------------------------------------------------
+#  Sistema operativo
+# ---------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Desktop.ini
+
+# ---------------------------------------------------------------------
+#  Archivi di release / backup (es. export_site)
+# ---------------------------------------------------------------------
+*.zip
+*.tar.gz
+*.bak
+*.orig

@@ -1,0 +1,204 @@
+// tests/parity.mjs
+// Verifica di PARITÀ tra il renderer canonico JS (src/render/renderBlock.mjs)
+// e il compiler PHP (canvascore-admin/compiler.php).
+//
+// Confronta STRUTTURA e STILI dell'HTML prodotto dai due renderer, ignorando:
+//  - il testo/HTML rich-text interno (sanitizzato diversamente lato server),
+//  - gli <script>/<style> di comodità (autoplay slider, media query) che non
+//    cambiano il layout del box.
+// Esce con codice != 0 se trova divergenze (usabile in CI).
+
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { load } from 'cheerio';
+import { renderBlock } from '../src/render/renderBlock.mjs';
+
+const phpScript = fileURLToPath(new URL('./render_php.php', import.meta.url));
+
+// --- Fixtures: un blocco rappresentativo per tipo, con stili/contenuti significativi ---
+const fixtures = [
+  { id: 'f1', type: 'SECTION', styles: { padding: '80px 20px', backgroundColor: '#fff', width: '100%', margin: '10px' }, children: [] },
+  { id: 'f2', type: 'CONTAINER', styles: { maxWidth: '1200px', margin: '0 auto', width: '100%' }, children: [] },
+  { id: 'f3', type: 'FLEX_ROW', styles: { display: 'flex', gap: '20px', flexWrap: 'wrap', width: '100%' }, children: [] },
+  { id: 'f4', type: 'CSS_GRID', styles: { width: '100%' }, content: { columns: 3, gap: '30px' }, children: [] },
+  { id: 'f5', type: 'TEXT', styles: { padding: '10px 0', width: '100%' }, content: { text: '<p>ciao</p>' } },
+  { id: 'f6', type: 'IMAGE', styles: { width: '100%' }, content: { src: 'a.jpg', alt: 'x', objectFit: 'cover', aspectRatio: '1 / 1', objectPosition: 'top', scale: 1.2 } },
+  { id: 'f7', type: 'BUTTON', styles: { textAlign: 'left', margin: '10px', padding: '30px 60px', borderWidth: '2px', borderColor: '#f00', borderStyle: 'solid' }, content: { text: 'Vai', url: 'chi-siamo', useGlobal: true } },
+  { id: 'f7b', type: 'BUTTON', styles: { textAlign: 'right', backgroundColor: '#222', padding: '8px 16px' }, content: { text: 'X', url: '#', useGlobal: false } },
+  { id: 'f8', type: 'GRID', styles: { width: '100%' }, content: { columns: 2, items: ['<p>a</p>', '<p>b</p>'] } },
+  { id: 'f9', type: 'HERO', styles: { padding: '100px 20px', backgroundColor: '#0f172a', color: '#fff', textAlign: 'center', width: '100%', minHeight: '400px' }, content: { title: '<h1>Hi</h1>', subtitle: '<p>s</p>', bgImage: 'bg.jpg', buttons: [{ text: 'Go', url: 'servizi', bgColor: '#3b82f6', textColor: '#fff', borderRadius: '8px' }] } },
+  { id: 'f10', type: 'IMAGE_TEXT', styles: { padding: '60px 0', width: '100%' }, content: { src: 'a.jpg', text: '<h2>t</h2>', layout: 'img-right' } },
+  { id: 'f11', type: 'CARDS', styles: { padding: '60px 0', width: '100%' }, content: { items: ['<h3>a</h3>', '<h3>b</h3>'] } },
+  { id: 'f12', type: 'VIDEO', styles: { borderRadius: '12px', width: '100%' }, content: { url: 'https://youtu.be/dQw4w9WgXcQ' } },
+  { id: 'f13', type: 'ICON_BOX', styles: { padding: '30px', backgroundColor: '#f8fafc', borderRadius: '12px', textAlign: 'center', width: '100%' }, content: { icon: '*', title: 'Feature', description: 'd' } },
+  { id: 'f14', type: 'TESTIMONIAL', styles: { padding: '40px', backgroundColor: '#f8fafc', borderRadius: '16px', width: '100%' }, content: { quote: 'q', author: 'a', role: 'r' } },
+  { id: 'f15', type: 'SLIDER', styles: { width: '100%' }, content: { effect: 'slide', images: [{ src: 'a.jpg' }, { src: 'b.jpg' }], aspectRatio: '21 / 9', objectFit: 'cover', objectPosition: 'center' } },
+  { id: 'f15b', type: 'SLIDER', styles: { width: '100%' }, content: { effect: 'fade', images: [{ src: 'a.jpg' }, { src: 'b.jpg' }] } },
+  { id: 'f16', type: 'MAPS', styles: { width: '100%' }, content: { address: 'Roma', zoom: 14 } },
+  { id: 'f17', type: 'HTML', styles: { width: '100%' }, content: { code: '<p>raw</p>' } },
+  { id: 'f18', type: 'FAQ', styles: { width: '100%' }, content: { items: [{ q: 'Q1?', a: 'A1' }, { q: 'Q2?', a: 'riga1\nriga2' }] } },
+  { id: 'f19', type: 'FORM', styles: { padding: '40px', width: '100%' }, content: { title: '<h3>Contatti</h3>', btnText: 'Invia', successMsg: 'Grazie', email: 'a@b.it', customId: 'myform', fields: [{ label: 'Nome', type: 'text', required: true }, { label: 'Msg', type: 'textarea' }] } },
+  // ---- test incrociati: container con blocchi dentro ----
+  { id: 'fx1', type: 'FLEX_ROW', styles: { display: 'flex', gap: '20px', flexWrap: 'wrap', width: '100%' }, children: [
+      { id: 'fx1a', type: 'IMAGE', styles: { width: '50%' }, content: { src: 'a.jpg', aspectRatio: '1 / 1' } },
+      { id: 'fx1b', type: 'TEXT', styles: { width: '50%', padding: '10px' }, content: { text: '<p>col</p>' } },
+      { id: 'fx1c', type: 'BUTTON', styles: { textAlign: 'center' }, content: { text: 'Go', url: '#', useGlobal: true } },
+  ] },
+  { id: 'fx2', type: 'CSS_GRID', styles: { width: '100%' }, content: { columns: 3, gap: '16px' }, children: [
+      { id: 'fx2a', type: 'ICON_BOX', styles: { padding: '20px', textAlign: 'center' }, content: { icon: '*', title: 'A', description: 'd' } },
+      { id: 'fx2b', type: 'IMAGE', styles: {}, content: { src: 'b.jpg', aspectRatio: '16 / 9' } },
+      { id: 'fx2c', type: 'FLEX_ROW', styles: { display: 'flex', gap: '8px' }, children: [
+          { id: 'fx2c1', type: 'BUTTON', styles: {}, content: { text: 'X', url: '#' } },
+      ] },
+  ] },
+  // ---- nuovi blocchi (0.11.0) ----
+  { id: 'n1', type: 'ACCORDION', styles: { width: '100%' }, content: { allowMultiple: false, openFirst: true, icon: 'plus', variant: 'card', items: [{ title: 'Prima', content: '<p>uno</p>' }, { title: 'Seconda', content: '<p>due</p>' }] } },
+  { id: 'n1b', type: 'ACCORDION', styles: { width: '100%' }, content: { allowMultiple: true, openFirst: false, icon: 'chevron', variant: 'flat', items: [{ title: 'A', content: '<p>x</p>' }] } },
+  { id: 'n1c', type: 'ACCORDION', styles: {}, content: { icon: 'none', items: [] } },
+  { id: 'n2', type: 'TABS', styles: { width: '100%' }, content: { variant: 'underline', tabAlign: 'left', items: [{ title: 'Uno', content: '<p>a</p>' }, { title: 'Due', content: '<p>b</p>' }, { title: 'Tre', content: '<p>c</p>' }] } },
+  { id: 'n2b', type: 'TABS', styles: {}, content: { variant: 'pills', tabAlign: 'center', items: [{ title: 'Solo', content: '<p>s</p>' }] } },
+  { id: 'n3', type: 'PRICING', styles: { padding: '20px 0', width: '100%' }, content: { columns: 0, plans: [
+      { name: 'Free', price: '$0', period: '/mo', description: 'Start here', features: ['One', 'Two', ''], buttonText: 'Go', buttonUrl: 'chi-siamo', highlighted: false, badge: '' },
+      { name: 'Pro', price: '$19', period: '/mo', description: '', features: ['Everything'], buttonText: 'Mail us', buttonUrl: 'mailto:info@example.com', highlighted: true, badge: 'Popular' } ] } },
+  { id: 'n4', type: 'GALLERY', styles: { width: '100%' }, content: { layout: 'grid', columns: 3, gap: 12, aspectRatio: '1 / 1', borderRadius: '8px', lightbox: true, showCaptions: false, images: [{ src: 'a.jpg', alt: 'A', caption: 'Cap A' }, { src: 'b.jpg', alt: 'B', caption: '' }] } },
+  { id: 'n4b', type: 'GALLERY', styles: { width: '100%' }, content: { layout: 'masonry', columns: 4, gap: 8, lightbox: false, showCaptions: true, images: [{ src: 'a.jpg', alt: 'A', caption: 'Didascalia' }, { src: 'b.jpg', alt: 'B', caption: 'Altra' }] } },
+
+  // ---- 12 nuovi blocchi (0.13.0): varianti e casi limite ----
+  { id: 'd1', type: 'DIVIDER', styles: { width: '100%' }, content: { style: 'line', color: '#ff0000', thickness: 4, width: 60 } },
+  { id: 'd2', type: 'DIVIDER', styles: {}, content: { style: 'gradient', color: 'rgb(10, 20, 30)', thickness: 3, width: 80 } },
+  { id: 'd3', type: 'DIVIDER', styles: {}, content: { style: 'dots', color: 'tomato', thickness: 5 } },
+  { id: 'd4', type: 'DIVIDER', styles: {}, content: { style: 'wave', color: '#0f172a', height: 120, flip: true } },
+  { id: 'd5', type: 'DIVIDER', styles: {}, content: { style: 'curve', height: 60 } },
+  { id: 'd6', type: 'DIVIDER', styles: {}, content: { style: 'diagonal', color: 'var(--brand-color, #3b82f6)' } },
+  { id: 'd7', type: 'DIVIDER', styles: {}, content: { style: 'spacer', height: 200 } },
+  { id: 'd8', type: 'DIVIDER', styles: {}, content: { style: 'inventato', color: 'red; background:url(x)', thickness: 999, width: -5 } },
+  { id: 'c1', type: 'CALLOUT', styles: { width: '100%' }, content: { variant: 'warning', title: 'Attenzione', text: '<p>testo</p>', showIcon: true } },
+  { id: 'c2', type: 'CALLOUT', styles: {}, content: { variant: 'danger', title: '', text: '<p>solo testo</p>', showIcon: false } },
+  { id: 'c3', type: 'CALLOUT', styles: {}, content: { variant: 'sconosciuta', text: '' } },
+  { id: 'st1', type: 'STEPS', styles: { width: '100%' }, content: { layout: 'horizontal', items: [{ title: 'Uno', text: 'a' }, { title: 'Due', text: '' }, { title: 'Tre', text: 'c' }] } },
+  { id: 'st2', type: 'STEPS', styles: {}, content: { layout: 'vertical', items: [{ title: 'Primo', text: 'x' }, { title: 'Secondo', text: 'y' }] } },
+  { id: 'st3', type: 'STEPS', styles: {}, content: { layout: 'horizontal', items: [] } },
+  { id: 'k1', type: 'COUNTERS', styles: { width: '100%' }, content: { columns: 0, animate: true, duration: 1000, items: [{ value: 1234567, prefix: '$', suffix: '+', decimals: 0, label: 'Revenue' }, { value: '4.5', decimals: 1, label: 'Rating' }, { value: 'abc', label: 'Invalid' }] } },
+  { id: 'k2', type: 'COUNTERS', styles: {}, content: { columns: 2, animate: false, items: [{ value: 12.345, decimals: 2, suffix: '%' }] } },
+  { id: 'p1', type: 'PROGRESS', styles: { width: '100%' }, content: { height: 14, showValue: true, animate: true, items: [{ label: 'Design', value: 90.55, color: '#10b981' }, { label: 'Dev', value: 150, color: 'bad;color' }, { label: 'Neg', value: -3 }] } },
+  { id: 'p2', type: 'PROGRESS', styles: {}, content: { showValue: false, animate: false, items: [{ label: 'X', value: 40 }] } },
+  { id: 'tb1', type: 'TABLE', styles: { width: '100%' }, content: { data: 'Nome | Eta | Citta\nAnna | 30 | Roma\nMarco | 41\nGiulia | 28 | Milano | extra', caption: 'Persone', headerRow: true, striped: true, bordered: true, compact: true, rowHeaders: true, stickyHeader: true, maxHeight: 300 } },
+  { id: 'tb2', type: 'TABLE', styles: {}, content: { data: 'a\tb\n\n  c | d  \n', headerRow: false, striped: false } },
+  { id: 'tb3', type: 'TABLE', styles: {}, content: { data: '', headerRow: true } },
+  { id: 'cd1', type: 'COUNTDOWN', styles: { width: '100%' }, content: { datetime: '2030-06-15T18:30', utcOffset: '+02:00', endAction: 'message', endMessage: 'Fatto!', showSeconds: true, showDate: true, labelDays: 'Giorni', labelHours: 'Ore', labelMinutes: 'Minuti', labelSeconds: 'Secondi' } },
+  { id: 'cd2', type: 'COUNTDOWN', styles: {}, content: { datetime: 'non valida', utcOffset: 'boh', endAction: 'hide', showSeconds: false, showDate: false } },
+  { id: 'tl1', type: 'TIMELINE', styles: { width: '100%' }, content: { layout: 'left', items: [{ date: '2021', title: 'Inizio', text: 'a' }, { date: '', title: 'Senza data', text: '' }] } },
+  { id: 'tl2', type: 'TIMELINE', styles: {}, content: { layout: 'alternate', items: [{ date: '2022', title: 'A', text: 'x' }, { date: '2023', title: 'B', text: 'y' }, { date: '2024', title: 'C', text: 'z' }] } },
+  { id: 'lg1', type: 'LOGOS', styles: { width: '100%' }, content: { layout: 'grid', title: 'Clienti', columns: 4, height: 40, gap: 24, grayscale: true, logos: [{ src: 'a.png', alt: 'A', href: 'https://a.example' }, { src: 'b.png', alt: 'B', href: '' }, { src: 'c.png', alt: 'C', href: 'chi-siamo/index.html' }] } },
+  { id: 'lg2', type: 'LOGOS', styles: {}, content: { layout: 'marquee', title: '', speed: 20, grayscale: false, gap: 30, logos: [{ src: 'a.png', alt: 'A', href: 'https://a.example' }, { src: 'b.png', alt: 'B', href: '' }] } },
+  { id: 'tm1', type: 'TEAM', styles: { width: '100%' }, content: { columns: 0, layout: 'card', photoShape: 'rounded', members: [
+      { name: 'Anna Rossi', role: 'CEO', bio: 'Guida.', photo: 'anna.jpg', email: 'anna@example.com', linkedin: 'linkedin.com/in/anna', twitter: 'https://x.com/anna', website: '' },
+      { name: 'marco', role: '', bio: '', photo: '', email: 'non-una-email', linkedin: '', twitter: '', website: 'example.com' },
+      { name: '', role: 'Ruolo', photo: '' } ] } },
+  { id: 'tm2', type: 'TEAM', styles: {}, content: { columns: 2, layout: 'minimal', photoShape: 'square', members: [{ name: 'Zed', role: 'Dev' }] } },
+  { id: 'ba1', type: 'BEFORE_AFTER', styles: { width: '100%' }, content: { startPosition: 30, aspectRatio: '4 / 3', showLabels: true, before: { src: 'b.jpg', alt: 'Prima', label: 'Prima' }, after: { src: 'a.jpg', alt: 'Dopo', label: 'Dopo' } } },
+  { id: 'ba2', type: 'BEFORE_AFTER', styles: {}, content: { startPosition: 999, showLabels: false, before: { src: 'b.jpg' }, after: { src: 'a.jpg' } } },
+  { id: 'bz1', type: 'BUSINESS', styles: { width: '100%' }, content: { name: 'Bar Roma', businessType: 'CafeOrCoffeeShop', address: 'Via Roma 1\n00100 Roma', phone: '+39 06 123 4567', email: 'info@bar.example', website: 'bar.example/it', mapsLink: true, directionsLabel: 'Indicazioni', hoursTitle: 'Orari', closedLabel: 'Chiuso', note: 'Chiuso nei festivi', hours: [{ day: 'Lunedi', open: '08:00', close: '19:00', closed: false }, { day: 'Martedi', open: '', close: '', closed: true }, { day: 'Mercoledi', open: 'x', close: 'y', closed: false }] } },
+  { id: 'bz2', type: 'BUSINESS', styles: {}, content: { name: '', address: '', phone: '', email: 'sbagliata', hours: [] } },
+];
+
+// Fixture dai DEFAULT REALI (blocks.json): e' esattamente cio' che l'editor crea con addBlock.
+{
+  const defs = JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks.json', import.meta.url)), 'utf-8'));
+  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS']) {
+    const def = defs.types[type];
+    if (!def) { console.error(`blocks.json: manca il tipo ${type}`); process.exit(1); }
+    fixtures.push({ id: 'def_' + type.toLowerCase(), type, styles: { ...(defs._baseStyles || {}), ...(def.styles || {}) }, content: JSON.parse(JSON.stringify(def.content || {})) });
+  }
+}
+
+// Normalizza un albero HTML in una rappresentazione confrontabile:
+// tag + classi + stile normalizzato, scartando testo e nodi <script>.
+function normalizeStyle(style) {
+  if (!style) return '';
+  return style.split(';').map(s => s.trim()).filter(Boolean)
+    .map(s => s.replace(/\s+/g, ' ').replace(/:\s+/g, ':').replace(/,\s+/g, ',')).sort().join('; ');
+}
+
+function skeleton($, el) {
+  const node = $(el);
+  const tag = el.tagName ? el.tagName.toLowerCase() : '';
+  if (tag === 'script' || tag === 'style') return null; // ignora comportamento JS/CSS testuale
+  const cls = (node.attr('class') || '').split(/\s+/).filter(Boolean).sort().join('.');
+  const style = normalizeStyle(node.attr('style'));
+  // attributi strutturali rilevanti
+  const attrs = {};
+  for (const a of ['href', 'src', 'object-fit']) { const v = node.attr(a); if (v) attrs[a] = v; }
+  const children = [];
+  node.children().each((_, c) => { const s = skeleton($, c); if (s) children.push(s); });
+  return { tag, cls, style, attrs, children };
+}
+
+function toSkeleton(html) {
+  const $ = load(`<div id="__root__">${html}</div>`, null, false);
+  const root = $('#__root__')[0];
+  const out = [];
+  $(root).children().each((_, c) => { const s = skeleton($, c); if (s) out.push(s); });
+  return out;
+}
+
+function diff(a, b, path = '') {
+  if (JSON.stringify(a) === JSON.stringify(b)) return [];
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const out = [];
+    const n = Math.max(a.length, b.length);
+    for (let i = 0; i < n; i++) {
+      if (!a[i]) { out.push(`${path}[${i}]: manca in JS`); continue; }
+      if (!b[i]) { out.push(`${path}[${i}]: manca in PHP`); continue; }
+      out.push(...diff(a[i], b[i], `${path}[${i}]`));
+    }
+    return out;
+  }
+  if (typeof a === 'object' && typeof b === 'object' && a && b) {
+    const out = [];
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      if (k === 'children') { out.push(...diff(a[k] || [], b[k] || [], `${path}.children`)); continue; }
+      if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) {
+        out.push(`${path}.${k}: JS=${JSON.stringify(a[k])}  PHP=${JSON.stringify(b[k])}`);
+      }
+    }
+    return out;
+  }
+  return [`${path}: JS=${JSON.stringify(a)} PHP=${JSON.stringify(b)}`];
+}
+
+// Per questi blocchi il CSS generato porta LOGICA (tab radio, stato open, responsive):
+// oltre alla struttura confrontiamo anche il testo degli <style>.
+const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS']);
+function styleTexts(html) {
+  const $ = load(`<div id="__root__">${html}</div>`, null, false);
+  return $('style').map((_, e) => $(e).text().replace(/\s+/g, ' ').replace(/:\s+/g, ':').replace(/,\s+/g, ',').trim()).get();
+}
+
+let failures = 0;
+for (const fx of fixtures) {
+  const jsHtml = renderBlock(fx);
+  let phpHtml;
+  try {
+    phpHtml = execFileSync('php', [phpScript], { input: JSON.stringify(fx) }).toString();
+  } catch (e) {
+    console.error(`[${fx.type}] errore PHP:`, e.message);
+    failures++; continue;
+  }
+  const d = diff(toSkeleton(jsHtml), toSkeleton(phpHtml));
+  if (STRICT_STYLE.has(fx.type)) {
+    const a = styleTexts(jsHtml), b = styleTexts(phpHtml);
+    if (JSON.stringify(a) !== JSON.stringify(b)) d.push(`<style> diverge: JS=${JSON.stringify(a).slice(0, 160)}…  PHP=${JSON.stringify(b).slice(0, 160)}…`);
+  }
+  if (d.length) {
+    failures++;
+    console.error(`\n✗ PARITÀ FALLITA — ${fx.type} (${fx.id})`);
+    for (const line of d.slice(0, 20)) console.error('   ' + line);
+  } else {
+    console.log(`✓ ${fx.type}`);
+  }
+}
+
+console.log(`\n${failures === 0 ? 'PARITÀ OK' : failures + ' blocchi divergenti'}`);
+process.exit(failures === 0 ? 0 : 1);

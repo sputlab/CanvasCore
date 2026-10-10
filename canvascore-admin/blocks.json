@@ -1,0 +1,767 @@
+{
+  "_baseStyles": {
+    "padding": "0px",
+    "margin": "0px",
+    "backgroundColor": "transparent",
+    "borderStyle": "solid",
+    "borderWidth": "0px",
+    "borderColor": "#000000",
+    "borderRadius": "0px",
+    "width": "auto",
+    "height": "auto"
+  },
+  "types": {
+    "SECTION": {
+      "children": true,
+      "styles": {
+        "padding": "80px 20px",
+        "backgroundColor": "#ffffff",
+        "minHeight": "50px",
+        "width": "100%"
+      }
+    },
+    "CONTAINER": {
+      "children": true,
+      "styles": {
+        "margin": "0 auto",
+        "maxWidth": "1200px",
+        "minHeight": "50px",
+        "width": "100%"
+      }
+    },
+    "FLEX_ROW": {
+      "children": true,
+      "styles": {
+        "display": "flex",
+        "gap": "20px",
+        "flexWrap": "wrap",
+        "minHeight": "50px",
+        "width": "100%"
+      }
+    },
+    "CSS_GRID": {
+      "children": true,
+      "styles": {
+        "display": "grid",
+        "gridTemplateColumns": "repeat(2, 1fr)",
+        "gap": "20px",
+        "minHeight": "50px",
+        "width": "100%"
+      },
+      "content": {
+        "columns": 2,
+        "gap": "20px"
+      }
+    },
+    "TEXT": {
+      "content": {
+        "text": "<p>Edit this text...</p>"
+      },
+      "styles": {
+        "padding": "10px 0",
+        "width": "100%"
+      }
+    },
+    "IMAGE": {
+      "content": {
+        "src": "https://via.placeholder.com/600x400",
+        "alt": "Image",
+        "objectFit": "cover",
+        "aspectRatio": "auto",
+        "objectPosition": "center",
+        "scale": 1
+      },
+      "styles": {
+        "width": "100%",
+        "objectFit": "cover",
+        "transform": "scale(1)"
+      }
+    },
+    "BUTTON": {
+      "content": {
+        "text": "Click Here",
+        "url": "#",
+        "useGlobal": true
+      },
+      "styles": {
+        "padding": "12px 24px",
+        "backgroundColor": "#3b82f6",
+        "color": "#ffffff",
+        "borderRadius": "6px",
+        "textAlign": "center",
+        "display": "inline-block"
+      }
+    },
+    "GRID": {
+      "content": {
+        "columns": 2,
+        "items": [
+          "<p>Col 1</p>",
+          "<p>Col 2</p>"
+        ]
+      },
+      "styles": {
+        "padding": "20px 0",
+        "width": "100%"
+      }
+    },
+    "CARDS": {
+      "content": {
+        "items": [
+          "<h3>\u2b50 Quality</h3>",
+          "<h3>\ud83d\ude80 Speed</h3>",
+          "<h3>\ud83d\udca1 Support</h3>"
+        ]
+      },
+      "styles": {
+        "padding": "60px 0",
+        "width": "100%"
+      }
+    },
+    "HERO": {
+      "content": {
+        "title": "<h1>Welcome</h1>",
+        "subtitle": "<p>Hero section text.</p>",
+        "buttons": [
+          {
+            "text": "Start Now",
+            "url": "#",
+            "bgColor": "#3b82f6",
+            "textColor": "#ffffff",
+            "borderRadius": "8px"
+          }
+        ],
+        "bgImage": ""
+      },
+      "styles": {
+        "padding": "100px 20px",
+        "backgroundColor": "#0f172a",
+        "color": "#ffffff",
+        "textAlign": "center",
+        "width": "100%"
+      }
+    },
+    "IMAGE_TEXT": {
+      "content": {
+        "src": "https://via.placeholder.com/600x400",
+        "text": "<h2>Service</h2><p>Description.</p>",
+        "layout": "img-left"
+      },
+      "styles": {
+        "padding": "60px 0",
+        "width": "100%"
+      }
+    },
+    "FORM": {
+      "content": {
+        "title": "<h3>Contact Us</h3>",
+        "email": "",
+        "btnText": "Send",
+        "successMsg": "Sent!",
+        "fields": [
+          {
+            "label": "Name",
+            "type": "text",
+            "required": true
+          },
+          {
+            "label": "Email",
+            "type": "email",
+            "required": true
+          },
+          {
+            "label": "Message",
+            "type": "textarea",
+            "required": true
+          }
+        ]
+      },
+      "styles": {
+        "padding": "40px",
+        "backgroundColor": "#f8fafc",
+        "borderRadius": "12px",
+        "width": "100%"
+      }
+    },
+    "HTML": {
+      "content": {
+        "code": "<p>Custom HTML</p>"
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "VIDEO": {
+      "content": {
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+      },
+      "styles": {
+        "borderRadius": "12px",
+        "width": "100%"
+      }
+    },
+    "ICON_BOX": {
+      "content": {
+        "title": "Feature",
+        "description": "Desc.",
+        "icon": "\u26a1"
+      },
+      "styles": {
+        "padding": "30px",
+        "backgroundColor": "#f8fafc",
+        "borderRadius": "12px",
+        "textAlign": "center",
+        "width": "100%"
+      }
+    },
+    "TESTIMONIAL": {
+      "content": {
+        "quote": "Great!",
+        "author": "User",
+        "role": "CEO"
+      },
+      "styles": {
+        "padding": "40px",
+        "backgroundColor": "#f8fafc",
+        "borderRadius": "16px",
+        "width": "100%"
+      }
+    },
+    "FAQ": {
+      "content": {
+        "items": [
+          {
+            "q": "Question 1?",
+            "a": "Answer 1"
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "SLIDER": {
+      "content": {
+        "effect": "slide",
+        "autoplay": true,
+        "delay": 3000,
+        "aspectRatio": "16 / 9",
+        "objectFit": "cover",
+        "objectPosition": "center",
+        "images": [
+          {
+            "src": "https://via.placeholder.com/800x400",
+            "alt": "S1"
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "MAPS": {
+      "content": {
+        "address": "Rome, Italy",
+        "zoom": 15
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "COLLECTION_LIST": {
+      "content": {
+        "collectionId": "",
+        "collectionSlug": "",
+        "collectionName": "",
+        "limit": 6,
+        "columns": 3,
+        "showExcerpt": true,
+        "showDate": true,
+        "showCover": true
+      },
+      "styles": {
+        "padding": "20px 0",
+        "width": "100%"
+      }
+    },
+    "ACCORDION": {
+      "content": {
+        "allowMultiple": false,
+        "openFirst": true,
+        "icon": "plus",
+        "variant": "card",
+        "items": [
+          {
+            "title": "What is included?",
+            "content": "<p>Write the answer here. You can use <strong>HTML</strong> formatting.</p>"
+          },
+          {
+            "title": "How does it work?",
+            "content": "<p>Describe the process in a few lines.</p>"
+          },
+          {
+            "title": "Can I cancel anytime?",
+            "content": "<p>Yes, there are no long-term commitments.</p>"
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "TABS": {
+      "content": {
+        "variant": "underline",
+        "tabAlign": "left",
+        "items": [
+          {
+            "title": "Overview",
+            "content": "<p>First tab content.</p>"
+          },
+          {
+            "title": "Details",
+            "content": "<p>Second tab content.</p>"
+          },
+          {
+            "title": "Reviews",
+            "content": "<p>Third tab content.</p>"
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "PRICING": {
+      "content": {
+        "columns": 0,
+        "plans": [
+          {
+            "name": "Starter",
+            "price": "$0",
+            "period": "/month",
+            "description": "For trying things out.",
+            "features": [
+              "1 project",
+              "Community support",
+              "Basic analytics"
+            ],
+            "buttonText": "Get started",
+            "buttonUrl": "#",
+            "highlighted": false,
+            "badge": ""
+          },
+          {
+            "name": "Pro",
+            "price": "$19",
+            "period": "/month",
+            "description": "For growing teams.",
+            "features": [
+              "Unlimited projects",
+              "Priority support",
+              "Custom domain"
+            ],
+            "buttonText": "Start free trial",
+            "buttonUrl": "#",
+            "highlighted": true,
+            "badge": "Most popular"
+          },
+          {
+            "name": "Business",
+            "price": "$49",
+            "period": "/month",
+            "description": "For larger organizations.",
+            "features": [
+              "Everything in Pro",
+              "Advanced permissions",
+              "Dedicated manager"
+            ],
+            "buttonText": "Contact sales",
+            "buttonUrl": "#",
+            "highlighted": false,
+            "badge": ""
+          }
+        ]
+      },
+      "styles": {
+        "padding": "20px 0",
+        "width": "100%"
+      }
+    },
+    "GALLERY": {
+      "content": {
+        "layout": "grid",
+        "columns": 3,
+        "gap": 12,
+        "aspectRatio": "1 / 1",
+        "borderRadius": "8px",
+        "lightbox": true,
+        "showCaptions": false,
+        "images": [
+          {
+            "src": "https://via.placeholder.com/800x600",
+            "alt": "Image 1",
+            "caption": ""
+          },
+          {
+            "src": "https://via.placeholder.com/800x800",
+            "alt": "Image 2",
+            "caption": ""
+          },
+          {
+            "src": "https://via.placeholder.com/800x500",
+            "alt": "Image 3",
+            "caption": ""
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "DIVIDER": {
+      "content": {
+        "style": "line",
+        "color": "#cbd5e1",
+        "thickness": 2,
+        "width": 100,
+        "height": 80,
+        "flip": false
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "CALLOUT": {
+      "content": {
+        "variant": "info",
+        "title": "Good to know",
+        "text": "<p>Write your message here. You can use <strong>HTML</strong> formatting.</p>",
+        "showIcon": true
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "STEPS": {
+      "content": {
+        "layout": "horizontal",
+        "items": [
+          {
+            "title": "Tell us what you need",
+            "text": "Share your goals and timeline."
+          },
+          {
+            "title": "We build it",
+            "text": "A first version in a few days."
+          },
+          {
+            "title": "You go live",
+            "text": "Review, adjust and publish."
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "COUNTERS": {
+      "content": {
+        "columns": 0,
+        "animate": true,
+        "duration": 1800,
+        "items": [
+          {
+            "value": 120,
+            "prefix": "",
+            "suffix": "+",
+            "decimals": 0,
+            "label": "Happy clients"
+          },
+          {
+            "value": 98,
+            "prefix": "",
+            "suffix": "%",
+            "decimals": 0,
+            "label": "Satisfaction"
+          },
+          {
+            "value": 15,
+            "prefix": "",
+            "suffix": "",
+            "decimals": 0,
+            "label": "Years of experience"
+          },
+          {
+            "value": 4.9,
+            "prefix": "",
+            "suffix": "",
+            "decimals": 1,
+            "label": "Average rating"
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "PROGRESS": {
+      "content": {
+        "height": 10,
+        "showValue": true,
+        "animate": true,
+        "items": [
+          {
+            "label": "Design",
+            "value": 90,
+            "color": ""
+          },
+          {
+            "label": "Development",
+            "value": 75,
+            "color": ""
+          },
+          {
+            "label": "Marketing",
+            "value": 60,
+            "color": ""
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "TABLE": {
+      "content": {
+        "data": "Plan | Users | Storage\nStarter | 1 | 5 GB\nPro | 10 | 100 GB\nBusiness | Unlimited | 1 TB",
+        "caption": "",
+        "headerRow": true,
+        "striped": true,
+        "bordered": false,
+        "compact": false,
+        "rowHeaders": false,
+        "stickyHeader": false,
+        "maxHeight": 0
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "COUNTDOWN": {
+      "content": {
+        "datetime": "2030-01-01T00:00",
+        "utcOffset": "local",
+        "endAction": "message",
+        "endMessage": "It's here!",
+        "showSeconds": true,
+        "showDate": true,
+        "labelDays": "Days",
+        "labelHours": "Hours",
+        "labelMinutes": "Minutes",
+        "labelSeconds": "Seconds"
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "TIMELINE": {
+      "content": {
+        "layout": "left",
+        "items": [
+          {
+            "date": "2021",
+            "title": "Founded",
+            "text": "The first line of code."
+          },
+          {
+            "date": "2023",
+            "title": "First 100 customers",
+            "text": "Growing faster than expected."
+          },
+          {
+            "date": "2025",
+            "title": "Going international",
+            "text": "New markets, new team."
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "10px 0"
+      }
+    },
+    "LOGOS": {
+      "content": {
+        "layout": "grid",
+        "title": "Trusted by",
+        "columns": 5,
+        "height": 48,
+        "gap": 40,
+        "grayscale": true,
+        "speed": 30,
+        "logos": [
+          {
+            "src": "https://via.placeholder.com/160x60?text=Logo+1",
+            "alt": "Logo 1",
+            "href": ""
+          },
+          {
+            "src": "https://via.placeholder.com/160x60?text=Logo+2",
+            "alt": "Logo 2",
+            "href": ""
+          },
+          {
+            "src": "https://via.placeholder.com/160x60?text=Logo+3",
+            "alt": "Logo 3",
+            "href": ""
+          },
+          {
+            "src": "https://via.placeholder.com/160x60?text=Logo+4",
+            "alt": "Logo 4",
+            "href": ""
+          },
+          {
+            "src": "https://via.placeholder.com/160x60?text=Logo+5",
+            "alt": "Logo 5",
+            "href": ""
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "TEAM": {
+      "content": {
+        "columns": 0,
+        "layout": "card",
+        "photoShape": "circle",
+        "members": [
+          {
+            "name": "Anna Rossi",
+            "role": "CEO",
+            "bio": "Leads the company vision.",
+            "photo": "",
+            "email": "",
+            "linkedin": "",
+            "twitter": "",
+            "website": ""
+          },
+          {
+            "name": "Marco Bianchi",
+            "role": "CTO",
+            "bio": "Builds things that last.",
+            "photo": "",
+            "email": "",
+            "linkedin": "",
+            "twitter": "",
+            "website": ""
+          },
+          {
+            "name": "Giulia Verdi",
+            "role": "Design",
+            "bio": "Makes it beautiful and usable.",
+            "photo": "",
+            "email": "",
+            "linkedin": "",
+            "twitter": "",
+            "website": ""
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "BEFORE_AFTER": {
+      "content": {
+        "startPosition": 50,
+        "aspectRatio": "16 / 9",
+        "showLabels": true,
+        "before": {
+          "src": "https://via.placeholder.com/1200x675?text=Before",
+          "alt": "Before",
+          "label": "Before"
+        },
+        "after": {
+          "src": "https://via.placeholder.com/1200x675?text=After",
+          "alt": "After",
+          "label": "After"
+        }
+      },
+      "styles": {
+        "width": "100%"
+      }
+    },
+    "BUSINESS": {
+      "content": {
+        "name": "Your Business",
+        "businessType": "LocalBusiness",
+        "address": "Via Roma 1\n00100 Roma",
+        "phone": "+39 06 1234567",
+        "email": "info@example.com",
+        "website": "",
+        "mapsLink": true,
+        "directionsLabel": "Get directions",
+        "hoursTitle": "Opening hours",
+        "closedLabel": "Closed",
+        "note": "",
+        "jsonLd": true,
+        "hours": [
+          {
+            "day": "Monday",
+            "open": "09:00",
+            "close": "18:00",
+            "closed": false
+          },
+          {
+            "day": "Tuesday",
+            "open": "09:00",
+            "close": "18:00",
+            "closed": false
+          },
+          {
+            "day": "Wednesday",
+            "open": "09:00",
+            "close": "18:00",
+            "closed": false
+          },
+          {
+            "day": "Thursday",
+            "open": "09:00",
+            "close": "18:00",
+            "closed": false
+          },
+          {
+            "day": "Friday",
+            "open": "09:00",
+            "close": "18:00",
+            "closed": false
+          },
+          {
+            "day": "Saturday",
+            "open": "09:00",
+            "close": "13:00",
+            "closed": false
+          },
+          {
+            "day": "Sunday",
+            "open": "",
+            "close": "",
+            "closed": true
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    }
+  }
+}

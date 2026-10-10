@@ -1,0 +1,66 @@
+[
+  {
+    "id": "blank",
+    "name": "Blank",
+    "description": "Start from an empty page.",
+    "blocks": []
+  },
+  {
+    "id": "landing",
+    "name": "Landing Page",
+    "description": "Hero, features and a call to action — a classic product landing.",
+    "blocks": [
+      { "id": "s1", "type": "SECTION", "styles": { "padding": "0", "backgroundColor": "#0f172a", "width": "100%" }, "children": [
+        { "id": "h1", "type": "HERO", "styles": { "padding": "120px 20px", "backgroundColor": "#0f172a", "color": "#ffffff", "textAlign": "center", "width": "100%", "minHeight": "60vh" }, "content": { "title": "<h1>Build something people love</h1>", "subtitle": "<p>A clean, fast starting point for your next project.</p>", "bgImage": "", "buttons": [ { "text": "Get Started", "url": "#", "bgColor": "#3b82f6", "textColor": "#ffffff", "borderRadius": "8px" }, { "text": "Learn more", "url": "#", "bgColor": "transparent", "textColor": "#ffffff", "borderRadius": "8px" } ] } }
+      ] },
+      { "id": "s2", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "c2", "type": "CONTAINER", "styles": { "maxWidth": "1100px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "cards1", "type": "CARDS", "styles": { "padding": "0", "width": "100%" }, "content": { "items": [ "<h3>⚡ Fast</h3><p>Static output, instant loads.</p>", "<h3>🎨 Flexible</h3><p>Compose pages with blocks.</p>", "<h3>🔒 Secure</h3><p>Hardened by default.</p>" ] } }
+        ] }
+      ] },
+      { "id": "s3", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "c3", "type": "CONTAINER", "styles": { "maxWidth": "800px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "t3", "type": "TEXT", "styles": { "padding": "0 0 20px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Ready to start?</h2><p>Create your first page in minutes.</p>" } },
+          { "id": "b3", "type": "BUTTON", "styles": { "textAlign": "center", "padding": "14px 32px", "backgroundColor": "#3b82f6", "color": "#ffffff", "borderRadius": "8px" }, "content": { "text": "Start now", "url": "#", "useGlobal": true } }
+        ] }
+      ] }
+    ]
+  },
+  {
+    "id": "about",
+    "name": "About",
+    "description": "Hero, image + text story and a testimonial.",
+    "blocks": [
+      { "id": "a1", "type": "SECTION", "styles": { "padding": "90px 20px", "backgroundColor": "#1e293b", "color": "#ffffff", "width": "100%" }, "children": [
+        { "id": "ah", "type": "HERO", "styles": { "padding": "40px 0", "backgroundColor": "transparent", "color": "#ffffff", "textAlign": "center", "width": "100%" }, "content": { "title": "<h1>About us</h1>", "subtitle": "<p>Who we are and what we do.</p>", "buttons": [] } }
+      ] },
+      { "id": "a2", "type": "SECTION", "styles": { "padding": "70px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "ac", "type": "CONTAINER", "styles": { "maxWidth": "1000px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "ait", "type": "IMAGE_TEXT", "styles": { "padding": "0", "width": "100%" }, "content": { "src": "https://via.placeholder.com/600x400", "text": "<h2>Our story</h2><p>Tell your story here. Replace this text and the image with your own content.</p>", "layout": "img-left" } }
+        ] }
+      ] },
+      { "id": "a3", "type": "SECTION", "styles": { "padding": "70px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "acc", "type": "CONTAINER", "styles": { "maxWidth": "720px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "atest", "type": "TESTIMONIAL", "styles": { "padding": "40px", "backgroundColor": "#ffffff", "borderRadius": "16px", "width": "100%" }, "content": { "quote": "This product changed how we work.", "author": "Jane Doe", "role": "CEO, Acme" } }
+        ] }
+      ] }
+    ]
+  },
+  {
+    "id": "contact",
+    "name": "Contact",
+    "description": "A compact hero with a contact form.",
+    "blocks": [
+      { "id": "k1", "type": "SECTION", "styles": { "padding": "70px 20px 30px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "kc", "type": "CONTAINER", "styles": { "maxWidth": "680px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "kt", "type": "TEXT", "styles": { "width": "100%", "textAlign": "center", "padding": "0 0 10px 0" }, "content": { "text": "<h1>Get in touch</h1><p>We usually reply within one business day.</p>" } }
+        ] }
+      ] },
+      { "id": "k2", "type": "SECTION", "styles": { "padding": "0 20px 80px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "kc2", "type": "CONTAINER", "styles": { "maxWidth": "560px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "kform", "type": "FORM", "styles": { "padding": "32px", "backgroundColor": "#f8fafc", "borderRadius": "12px", "width": "100%" }, "content": { "title": "<h3>Contact us</h3>", "email": "", "btnText": "Send", "successMsg": "Thanks! We'll be in touch.", "fields": [ { "label": "Name", "type": "text", "required": true }, { "label": "Email", "type": "email", "required": true }, { "label": "Message", "type": "textarea", "required": true } ] } }
+        ] }
+      ] }
+    ]
+  }
+]
