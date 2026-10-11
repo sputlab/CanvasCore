@@ -18,7 +18,7 @@ const getIconForType = (type) => {
   }
 };
 
-// Tutti gli id in ordine di visita (per il SortableContext piatto)
+// All ids in visit order (for the flat SortableContext)
 const flattenIds = (blocks) => {
   const out = [];
   const walk = (list) => list.forEach(b => { out.push(b.id); if (b.children) walk(b.children); });

@@ -1,7 +1,7 @@
-# Normalizza i fine riga: LF nel repository e nella working copy
+# Normalize line endings: LF in the repository and in the working copy
 * text=auto eol=lf
 
-# Sorgenti
+# Sources
 *.php   text diff=php
 *.js    text
 *.mjs   text
@@ -12,10 +12,10 @@
 *.md    text diff=markdown
 *.svg   text
 
-# Lockfile: niente diff rumorosi nelle review
+# Lockfile: no noisy diffs in reviews
 package-lock.json  -diff linguist-generated
 
-# Binari
+# Binaries
 *.png     binary
 *.jpg     binary
 *.jpeg    binary

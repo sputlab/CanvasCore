@@ -31,7 +31,7 @@ export default function App() {
     checkAuth().then(() => setLoading(false));
   }, [checkAuth, fetchVersion]);
 
-  // Il gestore di sessione lavora finche' si e' autenticati (anche a login-overlay mostrato).
+  // The session manager runs while authenticated (even with the login overlay shown).
   useEffect(() => {
     const session = getSession();
     if (isAuthenticated) { session.start(); purgeOldDrafts(); } else { session.stop(); }
@@ -53,7 +53,7 @@ export default function App() {
 
   return (
     <>
-      {/* Con la sessione scaduta l'app resta MONTATA (nessuno stato perso) ma inerte: il login e' sopra di essa. */}
+      {/* With the session expired the app stays MOUNTED (no state lost) but inert: the login sits on top of it. */}
       <div style={{ display: 'contents' }} inert={sessionExpired ? true : undefined} aria-hidden={sessionExpired ? true : undefined}>
         {view}
       </div>

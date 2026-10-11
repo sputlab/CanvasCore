@@ -1,12 +1,12 @@
 // tests/parity.mjs
-// Verifica di PARITÀ tra il renderer canonico JS (src/render/renderBlock.mjs)
-// e il compiler PHP (canvascore-admin/compiler.php).
+// PARITY check between the canonical JS renderer (src/render/renderBlock.mjs)
+// and the PHP compiler (canvascore-admin/compiler.php).
 //
-// Confronta STRUTTURA e STILI dell'HTML prodotto dai due renderer, ignorando:
-//  - il testo/HTML rich-text interno (sanitizzato diversamente lato server),
-//  - gli <script>/<style> di comodità (autoplay slider, media query) che non
-//    cambiano il layout del box.
-// Esce con codice != 0 se trova divergenze (usabile in CI).
+// Compares the STRUCTURE and STYLES of the HTML produced by the two renderers, ignoring:
+//  - the inner rich-text text/HTML (sanitized differently on the server),
+//  - convenience <script>/<style> tags (slider autoplay, media queries) that don't
+//    change the box layout.
+// Exits with a non-zero code if it finds differences (usable in CI).
 
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -16,7 +16,7 @@ import { renderBlock } from '../src/render/renderBlock.mjs';
 
 const phpScript = fileURLToPath(new URL('./render_php.php', import.meta.url));
 
-// --- Fixtures: un blocco rappresentativo per tipo, con stili/contenuti significativi ---
+// --- Fixtures: one representative block per type, with meaningful styles/content ---
 const fixtures = [
   { id: 'f1', type: 'SECTION', styles: { padding: '80px 20px', backgroundColor: '#fff', width: '100%', margin: '10px' }, children: [] },
   { id: 'f2', type: 'CONTAINER', styles: { maxWidth: '1200px', margin: '0 auto', width: '100%' }, children: [] },
@@ -39,7 +39,7 @@ const fixtures = [
   { id: 'f17', type: 'HTML', styles: { width: '100%' }, content: { code: '<p>raw</p>' } },
   { id: 'f18', type: 'FAQ', styles: { width: '100%' }, content: { items: [{ q: 'Q1?', a: 'A1' }, { q: 'Q2?', a: 'riga1\nriga2' }] } },
   { id: 'f19', type: 'FORM', styles: { padding: '40px', width: '100%' }, content: { title: '<h3>Contatti</h3>', btnText: 'Invia', successMsg: 'Grazie', email: 'a@b.it', customId: 'myform', fields: [{ label: 'Nome', type: 'text', required: true }, { label: 'Msg', type: 'textarea' }] } },
-  // ---- test incrociati: container con blocchi dentro ----
+  // ---- cross tests: containers with blocks inside ----
   { id: 'fx1', type: 'FLEX_ROW', styles: { display: 'flex', gap: '20px', flexWrap: 'wrap', width: '100%' }, children: [
       { id: 'fx1a', type: 'IMAGE', styles: { width: '50%' }, content: { src: 'a.jpg', aspectRatio: '1 / 1' } },
       { id: 'fx1b', type: 'TEXT', styles: { width: '50%', padding: '10px' }, content: { text: '<p>col</p>' } },
@@ -52,7 +52,7 @@ const fixtures = [
           { id: 'fx2c1', type: 'BUTTON', styles: {}, content: { text: 'X', url: '#' } },
       ] },
   ] },
-  // ---- nuovi blocchi (0.11.0) ----
+  // ---- new blocks (0.11.0) ----
   { id: 'n1', type: 'ACCORDION', styles: { width: '100%' }, content: { allowMultiple: false, openFirst: true, icon: 'plus', variant: 'card', items: [{ title: 'Prima', content: '<p>uno</p>' }, { title: 'Seconda', content: '<p>due</p>' }] } },
   { id: 'n1b', type: 'ACCORDION', styles: { width: '100%' }, content: { allowMultiple: true, openFirst: false, icon: 'chevron', variant: 'flat', items: [{ title: 'A', content: '<p>x</p>' }] } },
   { id: 'n1c', type: 'ACCORDION', styles: {}, content: { icon: 'none', items: [] } },
@@ -64,7 +64,7 @@ const fixtures = [
   { id: 'n4', type: 'GALLERY', styles: { width: '100%' }, content: { layout: 'grid', columns: 3, gap: 12, aspectRatio: '1 / 1', borderRadius: '8px', lightbox: true, showCaptions: false, images: [{ src: 'a.jpg', alt: 'A', caption: 'Cap A' }, { src: 'b.jpg', alt: 'B', caption: '' }] } },
   { id: 'n4b', type: 'GALLERY', styles: { width: '100%' }, content: { layout: 'masonry', columns: 4, gap: 8, lightbox: false, showCaptions: true, images: [{ src: 'a.jpg', alt: 'A', caption: 'Didascalia' }, { src: 'b.jpg', alt: 'B', caption: 'Altra' }] } },
 
-  // ---- 12 nuovi blocchi (0.13.0): varianti e casi limite ----
+  // ---- 12 new blocks (0.13.0): variants and edge cases ----
   { id: 'd1', type: 'DIVIDER', styles: { width: '100%' }, content: { style: 'line', color: '#ff0000', thickness: 4, width: 60 } },
   { id: 'd2', type: 'DIVIDER', styles: {}, content: { style: 'gradient', color: 'rgb(10, 20, 30)', thickness: 3, width: 80 } },
   { id: 'd3', type: 'DIVIDER', styles: {}, content: { style: 'dots', color: 'tomato', thickness: 5 } },
@@ -103,18 +103,18 @@ const fixtures = [
   { id: 'bz2', type: 'BUSINESS', styles: {}, content: { name: '', address: '', phone: '', email: 'sbagliata', hours: [] } },
 ];
 
-// Fixture dai DEFAULT REALI (blocks.json): e' esattamente cio' che l'editor crea con addBlock.
+// Fixtures from the REAL DEFAULTS (blocks.json): exactly what the editor creates with addBlock.
 {
   const defs = JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks.json', import.meta.url)), 'utf-8'));
   for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS']) {
     const def = defs.types[type];
-    if (!def) { console.error(`blocks.json: manca il tipo ${type}`); process.exit(1); }
+    if (!def) { console.error(`blocks.json: type ${type} is missing`); process.exit(1); }
     fixtures.push({ id: 'def_' + type.toLowerCase(), type, styles: { ...(defs._baseStyles || {}), ...(def.styles || {}) }, content: JSON.parse(JSON.stringify(def.content || {})) });
   }
 }
 
-// Normalizza un albero HTML in una rappresentazione confrontabile:
-// tag + classi + stile normalizzato, scartando testo e nodi <script>.
+// Normalizes an HTML tree into a comparable representation:
+// tag + classes + normalized style, discarding text and <script> nodes.
 function normalizeStyle(style) {
   if (!style) return '';
   return style.split(';').map(s => s.trim()).filter(Boolean)
@@ -124,10 +124,10 @@ function normalizeStyle(style) {
 function skeleton($, el) {
   const node = $(el);
   const tag = el.tagName ? el.tagName.toLowerCase() : '';
-  if (tag === 'script' || tag === 'style') return null; // ignora comportamento JS/CSS testuale
+  if (tag === 'script' || tag === 'style') return null; // ignore textual JS/CSS behavior
   const cls = (node.attr('class') || '').split(/\s+/).filter(Boolean).sort().join('.');
   const style = normalizeStyle(node.attr('style'));
-  // attributi strutturali rilevanti
+  // relevant structural attributes
   const attrs = {};
   for (const a of ['href', 'src', 'object-fit']) { const v = node.attr(a); if (v) attrs[a] = v; }
   const children = [];
@@ -149,8 +149,8 @@ function diff(a, b, path = '') {
     const out = [];
     const n = Math.max(a.length, b.length);
     for (let i = 0; i < n; i++) {
-      if (!a[i]) { out.push(`${path}[${i}]: manca in JS`); continue; }
-      if (!b[i]) { out.push(`${path}[${i}]: manca in PHP`); continue; }
+      if (!a[i]) { out.push(`${path}[${i}]: missing in JS`); continue; }
+      if (!b[i]) { out.push(`${path}[${i}]: missing in PHP`); continue; }
       out.push(...diff(a[i], b[i], `${path}[${i}]`));
     }
     return out;
@@ -168,8 +168,8 @@ function diff(a, b, path = '') {
   return [`${path}: JS=${JSON.stringify(a)} PHP=${JSON.stringify(b)}`];
 }
 
-// Per questi blocchi il CSS generato porta LOGICA (tab radio, stato open, responsive):
-// oltre alla struttura confrontiamo anche il testo degli <style>.
+// For these blocks the generated CSS carries LOGIC (radio tabs, open state, responsive):
+// besides the structure we also compare the text of the <style> tags.
 const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS']);
 function styleTexts(html) {
   const $ = load(`<div id="__root__">${html}</div>`, null, false);
@@ -183,22 +183,22 @@ for (const fx of fixtures) {
   try {
     phpHtml = execFileSync('php', [phpScript], { input: JSON.stringify(fx) }).toString();
   } catch (e) {
-    console.error(`[${fx.type}] errore PHP:`, e.message);
+    console.error(`[${fx.type}] PHP error:`, e.message);
     failures++; continue;
   }
   const d = diff(toSkeleton(jsHtml), toSkeleton(phpHtml));
   if (STRICT_STYLE.has(fx.type)) {
     const a = styleTexts(jsHtml), b = styleTexts(phpHtml);
-    if (JSON.stringify(a) !== JSON.stringify(b)) d.push(`<style> diverge: JS=${JSON.stringify(a).slice(0, 160)}…  PHP=${JSON.stringify(b).slice(0, 160)}…`);
+    if (JSON.stringify(a) !== JSON.stringify(b)) d.push(`<style> differs: JS=${JSON.stringify(a).slice(0, 160)}…  PHP=${JSON.stringify(b).slice(0, 160)}…`);
   }
   if (d.length) {
     failures++;
-    console.error(`\n✗ PARITÀ FALLITA — ${fx.type} (${fx.id})`);
+    console.error(`\n✗ PARITY FAILED — ${fx.type} (${fx.id})`);
     for (const line of d.slice(0, 20)) console.error('   ' + line);
   } else {
     console.log(`✓ ${fx.type}`);
   }
 }
 
-console.log(`\n${failures === 0 ? 'PARITÀ OK' : failures + ' blocchi divergenti'}`);
+console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);
 process.exit(failures === 0 ? 0 : 1);

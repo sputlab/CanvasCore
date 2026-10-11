@@ -9,7 +9,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  // Se la sessione e' scaduta e la pagina e' stata ricaricata, lo si dice chiaramente.
+  // If the session expired and the page was reloaded, say so clearly.
   const notice = useMemo(() => readExpiredNotice(), []);
 
   const handleSubmit = async (e) => {

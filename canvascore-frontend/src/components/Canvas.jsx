@@ -37,7 +37,7 @@ export default function Canvas() {
   return (
     <div style={{ padding: viewport !== 'desktop' ? '40px 0' : '0', minHeight: '100%', display: 'flex', justifyContent: 'center' }} onClick={() => setSelectedBlockId(null)}>
       <div style={wrapperStyle} onClick={(e) => {
-        // Se si clicca nell'area vuota della pagina, si deseleziona
+        // Clicking the empty area of the page clears the selection
         if(e.target === e.currentTarget) setSelectedBlockId(null);
       }}>
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

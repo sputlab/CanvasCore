@@ -1,13 +1,13 @@
 // canvascore-frontend/src/session/fetchGuard.js
-// Avvolge fetch() per le chiamate all'API del pannello:
-//  - inietta il token CSRF (X-CSRF-Token) nelle richieste same-origin
-//  - 401 (sessione scaduta): mostra il login, ATTENDE il re-login e RIESEGUE la richiesta, cosi' un
-//    salvataggio/pubblicazione interrotto dalla scadenza viene completato senza perdere nulla
-//  - 403 "CSRF": distingue una sessione scaduta da un token da rinfrescare e, se serve, riprova
-// Una richiesta viene rieseguita UNA sola volta: niente cicli infiniti.
+// Wraps fetch() for calls to the panel's API:
+//  - injects the CSRF token (X-CSRF-Token) into same-origin requests
+//  - 401 (session expired): shows the login, WAITS for re-login and RETRIES the request, so a
+//    save/publish interrupted by the expiry completes without losing anything
+//  - 403 "CSRF": tells an expired session apart from a token to refresh and retries if needed
+// A request is retried only ONCE: no infinite loops.
 
 const API_RE = /(?:^|\/)(?:api|rebuild_all)\.php(?:\?|$)/;
-// Azioni che non devono mai essere intercettate (nessuna sessione richiesta o gia' gestite a parte).
+// Actions that must never be intercepted (no session required, or already handled separately).
 const EXEMPT_ACTIONS = new Set(['login', 'logout', 'check_auth', 'session_status', 'version']);
 
 const urlOf = (input) => {
@@ -30,7 +30,7 @@ export function createGuardedFetch({ originalFetch, session, getToken, baseHref 
 
   return async function guardedFetch(input, init = {}) {
     const url = urlOf(input);
-    // Il token viene riletto ad ogni invio: dopo un re-login la riesecuzione usa quello NUOVO.
+    // The token is re-read on every send: after a re-login the retry uses the NEW one.
     const send = () => originalFetch(input, withToken(init, url));
     const res = await send();
 

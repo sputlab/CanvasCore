@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS = {
   mobileThreshold: '768', burgerIcon: '☰',
 };
 
-// ---- utilità sull'albero (immutabili) ----
+// ---- tree utilities (immutable) ----
 const clone = (t) => JSON.parse(JSON.stringify(t));
 const newNode = () => ({ id: 'm_' + Date.now() + Math.floor(Math.random() * 1000), title: 'New Link', url: '', children: [] });
 
@@ -31,7 +31,7 @@ function locate(list, id, parent = null) {
   return null;
 }
 
-// retrocompat: converte eventuale formato piatto (parentId) in albero
+// backward compat: converts a legacy flat format (parentId) into a tree
 function flatToTree(list) {
   if (!list.length) return [];
   const nested = list.some(it => Object.prototype.hasOwnProperty.call(it, 'children'));
@@ -47,14 +47,14 @@ export default function MenuBuilder() {
   const [items, setItems] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
-  // Backup locale del lavoro non salvato (vedi src/session/)
+  // Local backup of unsaved work (see src/session/)
   const draftValue = useMemo(() => ({ items, settings }), [items, settings]);
   const draft = useDraftSync('menu', draftValue);
   const [restoredAt, setRestoredAt] = useState(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const logoInputRef = useRef(null);
 
-  // Frecce su/giù per regolare il radius numerico
+  // Up/down arrows to adjust the numeric radius
   const radiusKey = (e) => {
     const m = String(settings.borderRadius || '').match(/^(\d+)(px|rem|em|%)?$/);
     if (!m) return;
@@ -65,7 +65,7 @@ export default function MenuBuilder() {
     setSettings({ ...settings, borderRadius: n + unit });
   };
 
-  // Upload del logo nel media manager; usa l'URL restituito
+  // Upload the logo to the media manager; uses the returned URL
   const uploadLogo = async (file) => {
     if (!file) return;
     const fd = new FormData(); fd.append('file', file);
@@ -77,7 +77,7 @@ export default function MenuBuilder() {
     } catch { alert('Upload error.'); }
   };
 
-  // Preset dei bordi voce
+  // Item border presets
   const BORDER_PRESETS = [
     { label: 'None', value: 'none' },
     { label: 'Thin solid', value: '1px solid #e2e8f0' },
@@ -95,7 +95,7 @@ export default function MenuBuilder() {
         if (data && !Array.isArray(data)) { loaded = data.items || []; loadedSettings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) }; }
         else if (Array.isArray(data)) loaded = data;
         const server = { items: flatToTree(loaded), settings: loadedSettings };
-        // Se esiste una bozza locale non salvata (sessione scaduta, refresh...) la si riapplica
+        // If an unsaved local draft exists (expired session, refresh...) it is re-applied
         const pending = draft.loaded(server);
         const v = pending ? pending.value : server;
         setSettings(v.settings); setItems(v.items);
@@ -122,7 +122,7 @@ export default function MenuBuilder() {
     setIsSaving(false);
   };
 
-  // ---- operazioni ----
+  // ---- operations ----
   const addTop = () => setItems([...items, newNode()]);
   const addChild = (id) => { const t = clone(items); const l = locate(t, id); if (l) l.list[l.index].children.push(newNode()); setItems(t); };
   const removeItem = (id) => { const t = clone(items); const l = locate(t, id); if (l) l.list.splice(l.index, 1); setItems(t); };
@@ -136,7 +136,7 @@ export default function MenuBuilder() {
     setItems(t);
   };
 
-  // indent: diventa figlio del fratello precedente
+  // indent: becomes a child of the previous sibling
   const indent = (id) => {
     const t = clone(items); const l = locate(t, id); if (!l || l.index === 0) return;
     const prev = l.list[l.index - 1];
@@ -145,7 +145,7 @@ export default function MenuBuilder() {
     setItems(t);
   };
 
-  // outdent: risale al livello del genitore, subito dopo di esso
+  // outdent: moves up to the parent's level, right after it
   const outdent = (id) => {
     const t = clone(items); const l = locate(t, id); if (!l || !l.parent) return;
     const [node] = l.list.splice(l.index, 1);
@@ -154,14 +154,14 @@ export default function MenuBuilder() {
     setItems(t);
   };
 
-  // drag&drop: riordina tra fratelli dello stesso livello
+  // drag&drop: reorders among siblings at the same level
   const onDragEnd = ({ active, over }) => {
     if (!over || active.id === over.id) return;
     const t = clone(items);
     const a = locate(t, active.id); const o = locate(t, over.id);
     if (!a || !o) return;
     if (a.list === o.list || a.parent?.id === o.parent?.id) {
-      // stessi fratelli: riordina
+      // same siblings: reorder
       const reordered = arrayMove(a.list, a.index, o.index);
       a.list.length = 0; a.list.push(...reordered);
       setItems(t);
@@ -190,7 +190,7 @@ export default function MenuBuilder() {
 
       <LivePreview items={items} settings={settings} />
 
-      {/* ---- Impostazioni ---- */}
+      {/* ---- Settings ---- */}
       <div style={card}>
         <SectionTitle icon={Palette} color="#38bdf8">Items & Colors</SectionTitle>
         <Grid cols={3}>
@@ -261,7 +261,7 @@ export default function MenuBuilder() {
         </Grid>
       </div>
 
-      {/* ---- Struttura menu ---- */}
+      {/* ---- Menu structure ---- */}
       <div style={card}>
         <h3 style={{ margin: '0 0 6px 0', fontSize: '15px' }}>Navigation Structure</h3>
         <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px' }}>
@@ -324,7 +324,7 @@ function MenuRow({ item, index, total, depth, pages, onUpdate, onRemove, onAddCh
   );
 }
 
-// Anteprima AUTENTICA: usa il vero compiler (endpoint preview_menu) in un iframe isolato.
+// AUTHENTIC preview: uses the real compiler (preview_menu endpoint) in an isolated iframe.
 function LivePreview({ items, settings }) {
   const [html, setHtml] = useState('');
   const [loading, setLoading] = useState(false);
@@ -357,7 +357,7 @@ function LivePreview({ items, settings }) {
 }
 
 
-// ---- piccoli componenti UI ----
+// ---- small UI components ----
 const SectionTitle = ({ icon: Icon, color, border, children }) => (
   <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px', ...(border ? { borderTop: '1px solid #334155', paddingTop: '20px', marginTop: '20px' } : {}) }}>
     <Icon size={16} color={color} /> {children}

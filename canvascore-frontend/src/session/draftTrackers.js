@@ -1,12 +1,12 @@
 // canvascore-frontend/src/session/draftTrackers.js
-// Logica (pura, senza React) che decide QUANDO c'e' lavoro non salvato e lo scrive nel backup locale.
-//  - createEditorDraftTracker: editor a blocchi (pagine, voci di collezione, header/footer, master)
-//  - createDraftChannel:       viste con stato locale (menu, impostazioni globali)
-//  - applyDraftToStore:        ripristino di una bozza nello store
+// Logic (pure, no React) that decides WHEN there is unsaved work and writes it to the local backup.
+//  - createEditorDraftTracker: block editor (pages, collection items, header/footer, masters)
+//  - createDraftChannel:       views with local state (menu, global settings)
+//  - applyDraftToStore:        restores a draft into the store
 
 import { canon, saveDraft, clearDraft, readDraft } from './drafts.js';
 
-// Campi della pagina che contano per "ho modificato qualcosa" (esclude updated_at, content_json, ...)
+// Page fields that count for "I changed something" (excludes updated_at, content_json, ...)
 const PAGE_KEYS = ['id', 'title', 'slug', 'seo_title', 'seo_description', 'seo_image', 'layout', 'bg_color', 'boxed_width',
   'is_home', 'excerpt', 'cover_image', 'date', 'archived', 'status', 'collection_id', '__part', '__item'];
 
@@ -17,14 +17,14 @@ export function pickPage(p) {
   return r;
 }
 
-// Pagina senza i campi pesanti (il contenuto sta in "blocks"): evita di triplicare la dimensione del backup.
+// Page without the heavy fields (the content lives in "blocks"): avoids tripling the backup size.
 export function slimPage(p) {
   if (!p) return p;
   const { content_json, draft_copy, ...rest } = p; // eslint-disable-line no-unused-vars
   return rest;
 }
 
-// In modalita' Master "blocks" contiene il master; la pagina vera sta in editingMaster.pageBackup.
+// In Master mode "blocks" holds the master; the real page lives in editingMaster.pageBackup.
 export function editorSnapshot(s) {
   const master = !!(s.isEditingMaster && s.editingMaster);
   const page = master ? s.editingMaster.activePageBackup : s.activePage;
@@ -53,8 +53,8 @@ const realSetTimeout = (f, ms) => setTimeout(f, ms);
 const realClearTimeout = (t) => clearTimeout(t);
 
 export function createEditorDraftTracker({ getState, setState, debounceMs = 600, setTimeoutFn = realSetTimeout, clearTimeoutFn = realClearTimeout }) {
-  // base.x: undefined = baseline non ancora catturata | null = "considera sempre modificato"
-  // (stato ripristinato da una bozza: la versione del server non e' nota) | string = firma dello stato salvato
+  // base.x: undefined = baseline not captured yet | null = "always treat as modified"
+  // (state restored from a draft: the server version is unknown) | string = signature of the saved state
   const base = { page: undefined, master: undefined };
   let timer = null;
   let lastMasterId = null;
@@ -75,13 +75,13 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
     clearTimeoutFn(timer); timer = null;
     if (!started) return;
     const s = getState();
-    if (!s.activePage) return;              // stato azzerato (logout/uscita dall'editor): non toccare le bozze
+    if (!s.activePage) return;              // state reset (logout/leaving the editor): don't touch the drafts
     const scope = editorScope(s);
     if (dirtyState(s)) {
       const r = saveDraft(scope, editorPayload(s));
       setState({ editorDirty: true, draftBackupFailed: !r.ok });
     } else {
-      clearDraft(scope);                    // tornato allo stato salvato (salvataggio o undo): niente da proteggere
+      clearDraft(scope);                    // back to the saved state (save or undo): nothing to protect
       setState({ editorDirty: false, draftBackupFailed: false });
     }
   }
@@ -96,13 +96,13 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
     setState({ editorDirty: restored });
   }
 
-  // Da chiamare ad ogni cambio dello store (subscribe). Il lavoro pesante e' in debounce.
+  // Call on every store change (subscribe). The heavy work is debounced.
   function onChange(s, prev) {
     if (!started) return;
     if (s.blocks === prev.blocks && s.activePage === prev.activePage
       && s.isEditingMaster === prev.isEditingMaster && s.editingMaster === prev.editingMaster) return;
     const mid = masterId(s);
-    if (mid !== lastMasterId) {             // ingresso/uscita dalla modifica di un master
+    if (mid !== lastMasterId) {             // entering/leaving master editing
       lastMasterId = mid;
       base.master = mid ? sigMaster(s) : undefined;
     }
@@ -110,7 +110,7 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
     timer = setTimeoutFn(evaluate, debounceMs);
   }
 
-  // Dopo un salvataggio riuscito della pagina: lo stato corrente diventa la nuova baseline.
+  // After a successful page save: the current state becomes the new baseline.
   function markSaved() {
     const s = getState();
     base.page = sigPage(s);
@@ -118,8 +118,8 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
     evaluate();
   }
 
-  // Scarta il lavoro non salvato ("annulla le modifiche ripristinate", "scarta bozza" sul server):
-  // lo stato corrente diventa la baseline, quindi la bozza locale viene eliminata e non riscritta.
+  // Discards unsaved work ("undo restored changes", "discard draft" on the server):
+  // the current state becomes the baseline, so the local draft is deleted and not rewritten.
   function discard() {
     const s = getState();
     base.page = sigPage(s);
@@ -132,7 +132,7 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
 }
 
 // ---------------------------------------------------------------------------
-// Canale per viste con stato locale (menu, impostazioni): confronto col valore caricato dal server.
+// Channel for views with local state (menu, settings): compared with the value loaded from the server.
 // ---------------------------------------------------------------------------
 export function createDraftChannel(scope, { debounceMs = 600, setTimeoutFn = realSetTimeout, clearTimeoutFn = realClearTimeout, onBackupStatus = () => {} } = {}) {
   let ready = false;
@@ -143,18 +143,18 @@ export function createDraftChannel(scope, { debounceMs = 600, setTimeoutFn = rea
 
   function evaluate() {
     clearTimeoutFn(timer); timer = null;
-    if (!ready) return;                     // prima del caricamento dal server NON si scrive (e non si cancella) nulla
+    if (!ready) return;                     // before loading from the server nothing is written (or deleted)
     if (canon(current) === base) { clearDraft(scope); onBackupStatus(true); }
     else { const r = saveDraft(scope, current); onBackupStatus(r.ok); }
   }
 
   return {
-    // Chiamare quando i dati arrivano dal server. Restituisce l'eventuale bozza da riapplicare.
+    // Call when the data arrives from the server. Returns the draft to re-apply, if any.
     loaded(serverValue) {
       server = serverValue; current = serverValue; base = canon(serverValue); ready = true;
       const d = readDraft(scope);
       if (!d) return null;
-      if (canon(d.payload) === base) { clearDraft(scope); return null; }   // coincide col server: inutile
+      if (canon(d.payload) === base) { clearDraft(scope); return null; }   // matches the server: not needed
       return { value: d.payload, savedAt: d.savedAt };
     },
     update(value) {
@@ -172,7 +172,7 @@ export function createDraftChannel(scope, { debounceMs = 600, setTimeoutFn = rea
 }
 
 // ---------------------------------------------------------------------------
-// Ripristino di una bozza nello store. Restituisce la vista di destinazione.
+// Restores a draft into the store. Returns the target view.
 // ---------------------------------------------------------------------------
 export function applyDraftToStore(entry, setState) {
   const scope = entry.scope || '';

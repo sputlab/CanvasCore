@@ -1,14 +1,14 @@
 # canvascore-frontend
 
-Editor visuale di CanvasCore (React 19, Vite, Zustand, dnd-kit).
-Vedi il [README principale](../README.md) per struttura, sviluppo e deploy.
+CanvasCore visual editor (React 19, Vite, Zustand, dnd-kit).
+See the [main README](../README.md) for structure, development and deploy.
 
-| Comando          | Descrizione                                                    |
-| ---------------- | -------------------------------------------------------------- |
-| `npm run dev`    | Server di sviluppo Vite                                        |
-| `npm run build`  | Build in `dist/` (prima incrementa il build in `version.json`) |
-| `npm run lint`   | oxlint                                                         |
-| `npm test`       | Tutti i test (richiede il PHP CLI per la parità JS↔PHP)       |
+| Command          | Description                                                       |
+| ---------------- | ----------------------------------------------------------------- |
+| `npm run dev`    | Vite development server                                           |
+| `npm run build`  | Build into `dist/` (first increments the build in `version.json`) |
+| `npm run lint`   | oxlint                                                            |
+| `npm test`       | All tests (needs the PHP CLI for the JS↔PHP parity test)         |
 
-Versione e default dei blocchi sono letti da `../canvascore-admin/version.json` e
-`../canvascore-admin/blocks.json` (vedi `vite.config.js`).
+The version and the block defaults are read from `../canvascore-admin/version.json` and
+`../canvascore-admin/blocks.json` (see `vite.config.js`).

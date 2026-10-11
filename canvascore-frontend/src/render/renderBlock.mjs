@@ -1,12 +1,12 @@
 // canvascore-frontend/src/render/renderBlock.mjs
-// Renderer CANONICO dei blocchi, in JS puro (nessuna dipendenza da React/DOM).
-// È il contratto unico di rendering: deve produrre lo STESSO HTML di compiler.php.
-// La parità è verificata automaticamente da tests/parity.mjs (npm run test:parity).
+// CANONICAL block renderer, in plain JS (no React/DOM dependency).
+// It is the single rendering contract: it must produce the SAME HTML as compiler.php.
+// Parity is checked automatically by tests/parity.mjs (npm run test:parity).
 //
-// Nota: i contenuti rich-text (text/title/subtitle/items...) qui vengono passati
-// COSÌ COME SONO. La sanitizzazione XSS avviene lato server nel compiler; nel test
-// di parità il contenuto interno viene normalizzato, quindi non incide sul confronto
-// di struttura e stili.
+// Note: rich-text content (text/title/subtitle/items...) is passed through here
+// AS IS. XSS sanitization happens server-side in the compiler; in the parity
+// test the inner content is normalized, so it does not affect the comparison
+// of structure and styles.
 
 export function escapeHtml(s) {
   return String(s ?? '')
@@ -14,7 +14,7 @@ export function escapeHtml(s) {
     .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Speculare a build_inline_style() del compiler: camelCase -> kebab, salta '' e 'animation'.
+// Mirrors the compiler's build_inline_style(): camelCase -> kebab, skips '' and 'animation'.
 export function buildInlineStyle(styles) {
   if (!styles || typeof styles !== 'object') return '';
   let str = '';
@@ -37,8 +37,8 @@ function resolveInternalUrl(url) {
   return '{{BASE_URL}}' + clean.replace(/^\/+/, '');
 }
 
-// Radice canonica di un blocco (fonte unica condivisa editor<->compiler per i container).
-// Restituisce tag + id + className + style (oggetto camelCase, pronto per React).
+// Canonical root of a block (single source shared editor<->compiler for containers).
+// Returns tag + id + className + style (camelCase object, ready for React).
 export function blockRoot(block) {
   const styles = block.styles || {};
   const content = block.content || {};
@@ -59,7 +59,7 @@ export function blockRoot(block) {
   }
 }
 
-// URL per i link dei blocchi (specchio di cc_block_url del compiler; mailto:/tel: intatti)
+// URL for block links (mirror of the compiler's cc_block_url; mailto:/tel: left intact)
 function resolveBlockUrl(url) {
   url = String(url ?? '').trim();
   if (url === '') return '#';
@@ -74,13 +74,13 @@ function toInt(v, d) {
   return Number.isFinite(n) ? n : d;
 }
 
-// ---- helper condivisi dai blocchi "contenuto" (gemelli di cc_* in compiler.php) ----
+// ---- helpers shared by the "content" blocks (twins of cc_* in compiler.php) ----
 const COLOR_RE = /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}|(?:rgb|rgba|hsl|hsla)\([0-9.,%\s/]+\)|var\(--[a-zA-Z0-9-]+(?:,\s*[#0-9a-zA-Z.,%()\s-]+)?\))$/;
 function ccColor(v, d) { v = String(v ?? '').trim(); if (v === '') return d; return COLOR_RE.test(v) ? v : d; }
 const ccIsNum = (v) => (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)));
 function ccNum(v, min, max, d) { return ccIsNum(v) ? Math.max(min, Math.min(max, Number(v))) : d; }
 function ccFmtNum(v, dec) {
-  // Stesso arrotondamento esplicito del compiler PHP (cc_fmt_num).
+  // Same explicit rounding as the PHP compiler (cc_fmt_num).
   v = Number(v);
   const m = 10 ** dec;
   let r = Math.floor(Math.abs(v) * m + 0.5 + 1e-9) / m;
@@ -132,7 +132,7 @@ export function renderBlock(block) {
   let html = '';
 
   if (t === 'MASTER') {
-    // I master vengono risolti dal compiler via DB; in editor sono gestiti a parte.
+    // Masters are resolved by the compiler via the DB; in the editor they are handled separately.
     return `<!-- Master: ${escapeHtml(content.name ?? '')} -->\n`;
   }
 
@@ -275,7 +275,7 @@ export function renderBlock(block) {
         });
       }
       html += `  </div>\n</div>\n`;
-      // nota: lo <style>/<script> di autoplay del compiler non incide su struttura/stili
+      // note: the compiler's autoplay <style>/<script> does not affect structure/styles
       return customCss + html;
     }
 
@@ -461,7 +461,7 @@ export function renderBlock(block) {
           + `<div class="cc-lb-cap" style="color:#e2e8f0; font-size:14px; margin-top:12px; text-align:center; padding:0 60px;"></div>`
           + `<button type="button" class="cc-lb-next" aria-label="Next" style="${btn} right:16px; top:50%; margin-top:-22px;">&#8250;</button>`
           + `</div>\n`;
-        // lo <script> della lightbox e' emesso solo dal compiler (comportamento, non struttura)
+        // the lightbox <script> is emitted only by the compiler (behavior, not structure)
       }
       h += `</div>\n`;
       return customCss + h;

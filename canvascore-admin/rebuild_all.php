@@ -1,6 +1,6 @@
 <?php
 // canvascore-admin/rebuild_all.php
-// Genera gli HTML statici a partire dalle pagine pubblicate. Richiede login.
+// Generates the static HTML from the published pages. Requires login.
 require_once __DIR__ . '/config.php';
 error_reporting(0);
 ini_set('display_errors', 0);
@@ -23,7 +23,7 @@ try {
     if ($base_dir === '\\' || $base_dir === '/') $base_dir = '';
     $base_url = $base_dir . '/';
 
-    // Impostazioni globali: caricate prima di tutto (menu e header/footer le leggono subito sotto).
+    // Global settings: loaded first of all (menu and header/footer read them right below).
     $settings_file = $data_dir . '/settings.json';
     $settings = file_exists($settings_file) ? json_decode(file_get_contents($settings_file), true) : [];
     if (!is_array($settings)) $settings = [];
@@ -32,7 +32,7 @@ try {
     $menu_json = file_exists($menu_file) ? file_get_contents($menu_file) : '{"items":[], "settings":{}}';
     $menu_html = render_menu_html($menu_json, ['inheritTheme' => !empty($settings['menuInheritTheme'])]);
 
-    // Header/Footer globali (blocchi applicati a tutte le pagine)
+    // Global header/footer (blocks applied to every page)
     $header_html = '';
     $footer_html = '';
     try {
@@ -70,12 +70,12 @@ try {
     if (!file_exists($master_file)) die(json_encode(['success' => false, 'message' => 'Error: master.html missing!']));
     $template = file_get_contents($master_file);
 
-    // Solo pagine pubblicate/modificate (la versione live è sempre la riga madre).
+    // Only published/modified pages (the live version is always the parent row).
     $stmt = $pdo->query("SELECT * FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified')");
     $pages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $count = 0;
 
-    // Esiste una homepage designata esplicitamente?
+    // Is there an explicitly designated homepage?
     $homeExists = false;
     try {
         $homeExists = (int)$pdo->query("SELECT COUNT(*) FROM pages WHERE is_draft_copy = 0 AND is_home = 1 AND status IN ('published','modified')")->fetchColumn() > 0;
@@ -107,7 +107,7 @@ try {
         $html = str_replace('{{META_DESCRIPTION}}', $seo_description, $html);
         $generator = '<meta name="generator" content="CanvasCore ' . htmlspecialchars(cc_version()['app']) . '">';
 
-        // Percorso pubblico della pagina (per og:url e sitemap)
+        // Public path of the page (for og:url and sitemap)
         $page_path = ($slug === 'index' || $slug === 'home' || $is_home_pg) ? '/' : '/' . $slug . '/';
         $page_abs  = $site_url ? $site_url . $page_path : '';
         $og_image  = $abs(!empty($page['seo_image']) ? $page['seo_image'] : $default_og);
@@ -131,11 +131,11 @@ try {
         $html = str_replace('{{PAGE_CONTENT}}', $content_wrapped, $html);
         $html = str_replace('{{BASE_URL}}', $base_url, $html);
 
-        // Routing intelligente della homepage:
-        // - la pagina con is_home=1 viene scritta nella root (index.html)
-        // - in assenza di un flag esplicito, resta valida la convenzione slug index/home
-        // - ogni pagina non-root ottiene comunque la sua cartella /slug/index.html,
-        //   cosi' qualunque forma di link interno continua a funzionare.
+        // Smart homepage routing:
+        // - the page with is_home=1 is written to the root (index.html)
+        // - without an explicit flag, the index/home slug convention still applies
+        // - every non-root page still gets its own /slug/index.html folder,
+        //   so any form of internal link keeps working.
         $is_home = (int)($page['is_home'] ?? 0) === 1;
         $isRootSlug = ($slug === 'index' || $slug === 'home');
         $writeRoot = $is_home || (!$homeExists && $isRootSlug);
@@ -147,7 +147,7 @@ try {
             if (!is_dir($dir)) mkdir($dir, 0755, true);
             $targets[] = $dir . '/index.html';
         }
-        if (empty($targets)) { // slug 'index'/'home' non-home mentre un'altra pagina e' la home
+        if (empty($targets)) { // slug 'index'/'home' that is not home while another page is the home
             $dir = __DIR__ . '/../' . $slug;
             if (!is_dir($dir)) mkdir($dir, 0755, true);
             $targets[] = $dir . '/index.html';
@@ -155,7 +155,7 @@ try {
         foreach ($targets as $fp) file_put_contents($fp, $html);
         $count++;
     }
-    // --- Voci delle collezioni: una pagina statica per ogni voce pubblicata ---
+    // --- Collection items: one static page per published item ---
     try {
         $cols = $pdo->query("SELECT id, slug FROM collections")->fetchAll(PDO::FETCH_ASSOC);
         foreach ($cols as $col) {
@@ -204,7 +204,7 @@ try {
         }
     } catch (Exception $e) {}
 
-    // Registry dei destinatari dei form (per-form, lato server: niente email nel client)
+    // Form recipient registry (per form, server-side: no email addresses in the client)
     $forms = function_exists('cc_form_registry') ? cc_form_registry() : [];
     @file_put_contents($data_dir . '/forms.json', json_encode($forms, JSON_UNESCAPED_UNICODE));
 
@@ -231,7 +231,7 @@ try {
                       ['', $menu_html, $google_fonts_link, $brand_color, $font_family, $nf_content, $base_url], $nf);
     @file_put_contents(__DIR__ . '/../404.html', $nf);
 
-    // ErrorDocument per Apache (best effort; su Nginx va configurato a mano)
+    // ErrorDocument for Apache (best effort; on Nginx it must be configured by hand)
     $root_ht = __DIR__ . '/../.htaccess';
     if (!file_exists($root_ht)) @file_put_contents($root_ht, "ErrorDocument 404 " . $base_url . "404.html\n");
 

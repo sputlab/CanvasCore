@@ -1,6 +1,6 @@
 // canvascore-frontend/src/session/runtime.js
-// Collega i moduli di sessione al browser: installa la guardia sulle fetch, ascolta l'attivita'
-// dell'utente e i cambi di visibilita' della scheda. Una sola installazione per pagina.
+// Connects the session modules to the browser: installs the fetch guard, listens for user
+// activity and tab visibility changes. Installed only once per page.
 import { useStore } from '../store/useStore';
 import { createSessionManager } from './sessionManager';
 import { createGuardedFetch } from './fetchGuard';
@@ -14,12 +14,12 @@ export function installSession(win = window) {
     const m = win.document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
     return m ? decodeURIComponent(m[1]) : '';
   };
-  // Token da memoria (impostato da login/check_auth) con fallback al cookie double-submit.
+  // Token from memory (set by login/check_auth) with fallback to the double-submit cookie.
   const getToken = () => win.__CC_CSRF || readCookie('cc_csrf');
 
   const session = createSessionManager({
     store: useStore,
-    fetchFn: originalFetch,                       // le chiamate del gestore NON passano dalla guardia
+    fetchFn: originalFetch,                       // the manager's calls do NOT go through the guard
     onFlush: flushDrafts,
     onExpired: (info) => setExpiredNotice(info),
     onReauthenticated: () => clearExpiredNotice(),
@@ -31,15 +31,15 @@ export function installSession(win = window) {
   win.__CC_FETCH_WRAPPED = true;
   win.__CC_SESSION = session;
 
-  // Attivita' dell'utente: tiene viva la sessione SOLO mentre si lavora davvero.
+  // User activity: keeps the session alive ONLY while actually working.
   ['mousemove', 'mousedown', 'keydown', 'touchstart', 'wheel', 'scroll'].forEach((ev) => {
     win.addEventListener(ev, () => session.noteActivity(), { passive: true, capture: true });
   });
-  // Ritorno sulla scheda, ripresa dalla sospensione, rete tornata: controllo immediato (senza attendere i timer).
+  // Back to the tab, resume from sleep, network restored: immediate check (without waiting for timers).
   win.document.addEventListener('visibilitychange', () => { if (win.document.visibilityState === 'visible') session.recheck(); });
   win.addEventListener('focus', () => session.recheck());
   win.addEventListener('online', () => session.recheck());
-  // Chiusura/ricarica della scheda: ultimo salvataggio dei backup locali.
+  // Tab close/reload: last save of the local backups.
   win.addEventListener('pagehide', () => flushDrafts());
 
   return session;

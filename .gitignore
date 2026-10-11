@@ -1,18 +1,18 @@
 # =====================================================================
 #  CanvasCore — .gitignore
-#  Editor React (Vite, Zustand) + compiler PHP (SQLite) → HTML statico
-#  NB: version.json è la fonte di verità della versione → resta TRACCIATO
-#      (viene aggiornato da scripts/bump.mjs a ogni `npm run build`).
+#  React editor (Vite, Zustand) + PHP compiler (SQLite) → static HTML
+#  NB: version.json is the source of truth for the version → stays TRACKED
+#      (updated by scripts/bump.mjs on every `npm run build`).
 # =====================================================================
 
 # ---------------------------------------------------------------------
-#  Radice = webroot del sito pubblicato
-#  rebuild_all.php / api.php scrivono il sito statico nella cartella
-#  SOPRA canvascore-admin/, cioè qui: index.html, 404.html, sitemap.xml,
-#  robots.txt, .htaccess, uploads/ e una cartella per ogni slug di pagina
-#  o voce di collezione (nomi arbitrari). Per non committare mai l'output
-#  si ignora tutto in radice tranne ciò che è elencato qui sotto.
-#  → Se aggiungi un nuovo file/cartella in radice, aggiungilo qui.
+#  Root = web root of the published site
+#  rebuild_all.php / api.php write the static site into the folder
+#  ABOVE canvascore-admin/, i.e. here: index.html, 404.html, sitemap.xml,
+#  robots.txt, .htaccess, uploads/ and one folder per page slug or
+#  collection item (arbitrary names). So the output is never committed,
+#  everything at the root is ignored except what is listed below.
+#  → If you add a new file/folder at the root, add it here.
 # ---------------------------------------------------------------------
 /*
 !/.gitignore
@@ -22,16 +22,16 @@
 !/docs/
 !/canvascore-admin/
 !/canvascore-frontend/
-# Una pagina o collezione con slug "docs" verrebbe pubblicata qui dentro
+# A page or collection with the slug "docs" would be published in here
 /docs/**/index.html
 
 # ---------------------------------------------------------------------
-#  Backend PHP: dati locali e artefatti di deploy
+#  PHP backend: local data and deploy artifacts
 # ---------------------------------------------------------------------
-# Data dir "legacy" dentro la webroot (DB SQLite, settings.json, menu.json,
-# forms.json, sessions/). Quella consigliata è ../../canvascore-data, già fuori repo.
+# "Legacy" data dir inside the web root (SQLite DB, settings.json, menu.json,
+# forms.json, sessions/). The recommended one is ../../canvascore-data, already outside the repo.
 /canvascore-admin/data/
-# Build del frontend copiata in canvascore-admin/ per il deploy (vedi FASE-0)
+# Frontend build copied into canvascore-admin/ for deployment (see docs/PHASE-0.md)
 /canvascore-admin/index.html
 /canvascore-admin/assets/
 /canvascore-admin/favicon.svg
@@ -52,10 +52,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-# package-lock.json va committato: NON ignorarlo
+# package-lock.json must be committed: do NOT ignore it
 
 # ---------------------------------------------------------------------
-#  PHP / Composer (se in futuro verrà introdotto)
+#  PHP / Composer (if introduced in the future)
 # ---------------------------------------------------------------------
 vendor/
 .phpunit.result.cache
@@ -63,7 +63,7 @@ vendor/
 .php-cs-fixer.cache
 
 # ---------------------------------------------------------------------
-#  Database SQLite e journal (ovunque si trovino)
+#  SQLite databases and journals (wherever they are)
 # ---------------------------------------------------------------------
 *.sqlite
 *.sqlite3
@@ -73,7 +73,7 @@ vendor/
 *-shm
 
 # ---------------------------------------------------------------------
-#  Variabili d'ambiente e segreti
+#  Environment variables and secrets
 # ---------------------------------------------------------------------
 .env
 .env.*
@@ -83,7 +83,7 @@ vendor/
 config.local.php
 
 # ---------------------------------------------------------------------
-#  Log, cache, temporanei
+#  Logs, cache, temporary files
 # ---------------------------------------------------------------------
 *.log
 *.tmp
@@ -104,7 +104,7 @@ config.local.php
 .history/
 
 # ---------------------------------------------------------------------
-#  Sistema operativo
+#  Operating system
 # ---------------------------------------------------------------------
 .DS_Store
 .AppleDouble
@@ -114,7 +114,7 @@ Thumbs.db
 Desktop.ini
 
 # ---------------------------------------------------------------------
-#  Archivi di release / backup (es. export_site)
+#  Release archives / backups (e.g. export_site)
 # ---------------------------------------------------------------------
 *.zip
 *.tar.gz

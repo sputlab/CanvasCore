@@ -1,7 +1,7 @@
 // tests/panels-ui.mjs
-// Test di INTEGRAZIONE dell'editor sui 12 nuovi blocchi, con i componenti VERI montati in jsdom
-// (caricati con Vite in modalità SSR): addBlock → PropertyPanel → modifica dei campi → store,
-// e SortableBlock (canvas) per ogni blocco.
+// Editor INTEGRATION tests for the 12 new blocks, with the REAL components mounted in jsdom
+// (loaded through Vite in SSR mode): addBlock → PropertyPanel → field edits → store,
+// and SortableBlock (canvas) for each block.
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +24,7 @@ async function waitFor(fn, timeout = 3000) {
   for (;;) { let v; try { v = fn(); } catch { v = null; } if (v) return v; if (Date.now() - t0 > timeout) return null; await sleep(20); }
 }
 
-// ---- ambiente jsdom come "window" globale
+// ---- jsdom environment as the global "window"
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'http://localhost/canvascore-admin/', pretendToBeVisual: true });
 const w = dom.window;
 for (const k of ['document', 'localStorage', 'location', 'history', 'navigator', 'getComputedStyle', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'HTMLIFrameElement', 'Element', 'Node', 'Event', 'KeyboardEvent', 'MouseEvent', 'FocusEvent', 'InputEvent', 'CustomEvent', 'MutationObserver', 'SVGElement', 'DocumentFragment', 'Text']) {
@@ -59,7 +59,7 @@ function setValue(el, value) {
   Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, String(value));
   el.dispatchEvent(new w.Event(el instanceof w.HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
 }
-// campo associato a un'etichetta: <div><label>testo</label><input/select/textarea></div>
+// field tied to a label: <div><label>text</label><input/select/textarea></div>
 const field = (labelText) => {
   const lab = $$('label').find((l) => l.textContent.trim().startsWith(labelText));
   return lab ? lab.parentElement.querySelector('input,select,textarea') : null;
@@ -91,140 +91,140 @@ const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', '
 const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details' };
 let failedRun = false;
 try {
-  console.log('\nADD BLOCK — i default di blocks.json arrivano nell\'editor');
+  console.log('\nADD BLOCK — the blocks.json defaults reach the editor');
   for (const t of TYPES) {
     const b = addAndSelect(t);
     const def = blockDefs.types[t];
-    check(`${t}: addBlock crea il blocco con il contenuto di default`, b.type === t && JSON.stringify(b.content) === JSON.stringify(def.content));
+    check(`${t}: addBlock creates the block with the default content`, b.type === t && JSON.stringify(b.content) === JSON.stringify(def.content));
   }
 
-  console.log('\nPANNELLI — montati e modificabili');
+  console.log('\nPANELS — mounted and editable');
   for (const t of TYPES) {
     addAndSelect(t);
     mount(React.createElement(PropertyPanel));
     const ok = await waitFor(() => $$('button').some((b) => b.textContent.includes(PANEL[t])));
-    check(`${t}: il pannello "${PANEL[t]}" compare (nessun errore di rendering)`, !!ok);
+    check(`${t}: the "${PANEL[t]}" panel appears (no rendering error)`, !!ok);
   }
 
-  // --- interazioni per tipo
+  // --- interactions per type
   addAndSelect('DIVIDER'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Style'));
-  check('DIVIDER: con "line" non c\'è il campo altezza', !field('Height px'));
+  check('DIVIDER: with "line" there is no height field', !field('Height px'));
   setValue(field('Style'), 'wave'); await sleep(40);
-  check('DIVIDER: cambiare stile aggiorna lo store', content().style === 'wave');
-  check('DIVIDER: con "wave" compaiono altezza e capovolgi, scompare la larghezza', !!field('Height px') && !!checkbox('Flip vertically') && !field('Width %'));
+  check('DIVIDER: changing the style updates the store', content().style === 'wave');
+  check('DIVIDER: with "wave" height and flip appear, width disappears', !!field('Height px') && !!checkbox('Flip vertically') && !field('Width %'));
   click(checkbox('Flip vertically')); await sleep(40);
-  check('DIVIDER: la casella aggiorna lo store', content().flip === true);
+  check('DIVIDER: the checkbox updates the store', content().flip === true);
   setValue(field('Color'), '#ff0000'); await sleep(40);
-  check('DIVIDER: il colore aggiorna lo store', content().color === '#ff0000');
+  check('DIVIDER: the color updates the store', content().color === '#ff0000');
 
   addAndSelect('CALLOUT'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Text'));
   setValue(field('Text'), '<p>nuovo</p>'); setValue(field('Type'), 'danger'); await sleep(40);
-  check('CALLOUT: testo e tipo aggiornano lo store', content().text === '<p>nuovo</p>' && content().variant === 'danger');
+  check('CALLOUT: text and type update the store', content().text === '<p>nuovo</p>' && content().variant === 'danger');
 
   addAndSelect('STEPS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add step'));
   click(buttonByText('+ Add step')); await sleep(40);
-  check('STEPS: "+ Add step" aggiunge un passo', content().items.length === 4);
+  check('STEPS: "+ Add step" adds a step', content().items.length === 4);
   const firstTitle = content().items[0].title;
   click($$('button[title="Move down"]')[0]); await sleep(40);
-  check('STEPS: "Move down" scambia i primi due passi', content().items[1].title === firstTitle);
+  check('STEPS: "Move down" swaps the first two steps', content().items[1].title === firstTitle);
   click($$('button[title="Remove"]')[0]); await sleep(40);
-  check('STEPS: "Remove" elimina il passo', content().items.length === 3);
-  check('STEPS: i pulsanti ai bordi sono disattivati (non si esce dalla lista)', $$('button[title="Move up"]')[0].disabled === true);
+  check('STEPS: "Remove" deletes the step', content().items.length === 3);
+  check('STEPS: the buttons at the edges are disabled (you cannot move out of the list)', $$('button[title="Move up"]')[0].disabled === true);
 
   addAndSelect('COUNTERS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add counter'));
   const valInput = field('Value');
   setValue(valInput, '250'); await sleep(40);
-  check('COUNTERS: il valore è salvato come NUMERO (non stringa)', content().items[0].value === 250);
+  check('COUNTERS: the value is saved as a NUMBER (not a string)', content().items[0].value === 250);
   setValue(valInput, ''); await sleep(40);
-  check('COUNTERS: campo svuotato → stringa vuota (il compiler la tratta come 0)', content().items[0].value === '');
+  check('COUNTERS: cleared field → empty string (the compiler treats it as 0)', content().items[0].value === '');
   click(buttonByText('+ Add counter')); await sleep(40);
-  check('COUNTERS: aggiunta di un contatore', content().items.length === 5);
+  check('COUNTERS: adding a counter', content().items.length === 5);
 
   addAndSelect('PROGRESS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add bar'));
   setValue(field('Value %'), '42'); await sleep(40);
-  check('PROGRESS: valore percentuale numerico', content().items[0].value === 42);
+  check('PROGRESS: numeric percentage value', content().items[0].value === 42);
   click(buttonByText('+ Add bar')); await sleep(40);
-  check('PROGRESS: aggiunta di una barra', content().items.length === 4);
+  check('PROGRESS: adding a bar', content().items.length === 4);
 
   addAndSelect('TABLE'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Data'));
   setValue(field('Data'), 'A | B\n1 | 2'); await sleep(40);
-  check('TABLE: i dati incollati finiscono nello store così come sono', content().data === 'A | B\n1 | 2');
+  check('TABLE: pasted data ends up in the store as is', content().data === 'A | B\n1 | 2');
 
   addAndSelect('COUNTDOWN'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Target date'));
   setValue(field('Target date'), '2031-02-03T04:05'); setValue(field('Time zone'), '+02:00'); await sleep(40);
-  check('COUNTDOWN: data/ora e fuso aggiornano lo store nel formato atteso dal compiler', content().datetime === '2031-02-03T04:05' && content().utcOffset === '+02:00');
-  check('COUNTDOWN: il menu dei fusi contiene "ora locale del visitatore" e offset da -12:00 a +14:00', (() => { const o = [...field('Time zone').options].map((x) => x.value); return o[0] === 'local' && o.includes('-12:00') && o.includes('+14:00') && o.includes('+05:30'); })());
+  check('COUNTDOWN: date/time and time zone update the store in the format the compiler expects', content().datetime === '2031-02-03T04:05' && content().utcOffset === '+02:00');
+  check('COUNTDOWN: the time zone menu contains "visitor local time" and offsets from -12:00 to +14:00', (() => { const o = [...field('Time zone').options].map((x) => x.value); return o[0] === 'local' && o.includes('-12:00') && o.includes('+14:00') && o.includes('+05:30'); })());
   setValue(field('When it ends'), 'hide'); await sleep(40);
-  check('COUNTDOWN: con "hide" scompare il campo messaggio', content().endAction === 'hide' && !field('Message'));
+  check('COUNTDOWN: with "hide" the message field disappears', content().endAction === 'hide' && !field('Message'));
 
   addAndSelect('TIMELINE'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add event'));
   click(buttonByText('+ Add event')); await sleep(40);
-  check('TIMELINE: aggiunta di un evento', content().items.length === 4);
+  check('TIMELINE: adding an event', content().items.length === 4);
 
   addAndSelect('LOGOS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add empty slot'));
   click(buttonByText('+ Add empty slot')); await sleep(40);
-  check('LOGOS: aggiunta di uno slot vuoto', content().logos.length === 6 && content().logos[5].src === '');
-  check('LOGOS: il pulsante "da media" apre il selettore (non genera errori)', (() => { try { click(buttonByText('+ Add logo from media')); return true; } catch { return false; } })());
+  check('LOGOS: adding an empty slot', content().logos.length === 6 && content().logos[5].src === '');
+  check('LOGOS: the "from media" button opens the picker (no errors)', (() => { try { click(buttonByText('+ Add logo from media')); return true; } catch { return false; } })());
   await sleep(60);
 
   addAndSelect('TEAM'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add member'));
   click(buttonByText('+ Add member')); await sleep(40);
-  check('TEAM: aggiunta di un membro con tutti i campi previsti', content().members.length === 4 && ['name', 'role', 'bio', 'photo', 'email', 'linkedin', 'twitter', 'website'].every((k) => k in content().members[3]));
+  check('TEAM: adding a member with all expected fields', content().members.length === 4 && ['name', 'role', 'bio', 'photo', 'email', 'linkedin', 'twitter', 'website'].every((k) => k in content().members[3]));
 
   addAndSelect('BEFORE_AFTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('button').some((b) => b.textContent.includes('Before / After')));
   const imgs = $$('input[placeholder="Image URL"]');
   setValue(imgs[0], 'https://x.example/prima.jpg'); setValue(imgs[1], 'https://x.example/dopo.jpg'); await sleep(40);
-  check('BEFORE_AFTER: le due immagini vanno su before/after (senza perdere alt e label)', content().before.src === 'https://x.example/prima.jpg' && content().after.src === 'https://x.example/dopo.jpg' && content().before.label === 'Before' && content().after.label === 'After');
+  check('BEFORE_AFTER: the two images go to before/after (keeping alt and label)', content().before.src === 'https://x.example/prima.jpg' && content().after.src === 'https://x.example/dopo.jpg' && content().before.label === 'Before' && content().after.label === 'After');
 
   addAndSelect('BUSINESS'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Business name'));
   setValue(field('Business name'), 'Bar Roma'); await sleep(40);
-  check('BUSINESS: il nome aggiorna lo store', content().name === 'Bar Roma');
+  check('BUSINESS: the name updates the store', content().name === 'Bar Roma');
   click($$('button').find((b) => b.textContent.includes('Opening Hours'))); await sleep(60);
   const times = $$('input[type="time"]');
-  check('BUSINESS: 7 righe di orari (14 campi ora)', times.length === 14);
+  check('BUSINESS: 7 rows of hours (14 time fields)', times.length === 14);
   setValue(times[0], '07:30'); await sleep(40);
-  check('BUSINESS: modificare l\'apertura del lunedì aggiorna solo quella riga', content().hours[0].open === '07:30' && content().hours[1].open === '09:00' && content().hours.length === 7);
+  check('BUSINESS: changing Monday opening time updates only that row', content().hours[0].open === '07:30' && content().hours[1].open === '09:00' && content().hours.length === 7);
   const closedBoxes = $$('input[type="checkbox"][title="Closed"]');
-  check('BUSINESS: domenica segnata come chiusa, con i campi ora disattivati', closedBoxes[6].checked === true && times[12].disabled === true);
+  check('BUSINESS: Sunday marked as closed, with the time fields disabled', closedBoxes[6].checked === true && times[12].disabled === true);
   click(closedBoxes[0]); await sleep(40);
-  check('BUSINESS: spuntare "chiuso" sul lunedì', content().hours[0].closed === true);
+  check('BUSINESS: ticking "closed" on Monday', content().hours[0].closed === true);
   click(buttonByText('Remove opening hours')); await sleep(40);
-  check('BUSINESS: "Remove opening hours" svuota gli orari', content().hours.length === 0 && !!buttonByText('+ Add weekly hours'));
+  check('BUSINESS: "Remove opening hours" clears the hours', content().hours.length === 0 && !!buttonByText('+ Add weekly hours'));
   click(buttonByText('+ Add weekly hours')); await sleep(40);
-  check('BUSINESS: "+ Add weekly hours" ripristina i 7 giorni', content().hours.length === 7 && content().hours[0].day === 'Monday');
+  check('BUSINESS: "+ Add weekly hours" restores the 7 days', content().hours.length === 7 && content().hours[0].day === 'Monday');
 
-  console.log('\nCANVAS — ogni blocco si disegna nell\'editor (renderer canonico)');
+  console.log('\nCANVAS — every block is drawn in the editor (canonical renderer)');
   const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business' };
   for (const t of TYPES) {
     const b = addAndSelect(t);
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));
     const el = await waitFor(() => doc.querySelector('.' + CLS[t]));
-    check(`${t}: disegnato nel canvas (.${CLS[t]}), senza "Unknown element"`, !!el && !/Unknown element/.test(doc.body.innerHTML));
+    check(`${t}: drawn in the canvas (.${CLS[t]}), without "Unknown element"`, !!el && !/Unknown element/.test(doc.body.innerHTML));
   }
-  // prima/dopo nel canvas: il cursore deve muovere la linea anche senza lo <script> pubblicato
+  // before/after in the canvas: the slider must move the line even without the published <script>
   {
     const b = addAndSelect('BEFORE_AFTER');
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));
     const range = await waitFor(() => doc.querySelector('.cc-ba-range'));
     const ba = doc.querySelector('.cc-ba');
-    check('BEFORE_AFTER canvas: posizione iniziale 50%', ba.style.getPropertyValue('--pos') === '50%');
+    check('BEFORE_AFTER canvas: start position 50%', ba.style.getPropertyValue('--pos') === '50%');
     range.value = '80'; range.dispatchEvent(new w.Event('input', { bubbles: true }));
-    check('BEFORE_AFTER canvas: spostare il cursore aggiorna la posizione (anteprima fedele)', ba.style.getPropertyValue('--pos') === '80%', ba.style.getPropertyValue('--pos'));
-    check('BEFORE_AFTER canvas: il blocco riceve i clic (cursore utilizzabile)', doc.querySelector('.cc-ba').parentElement.style.pointerEvents === 'auto');
+    check('BEFORE_AFTER canvas: moving the slider updates the position (faithful preview)', ba.style.getPropertyValue('--pos') === '80%', ba.style.getPropertyValue('--pos'));
+    check('BEFORE_AFTER canvas: the block receives clicks (usable slider)', doc.querySelector('.cc-ba').parentElement.style.pointerEvents === 'auto');
   }
-  // tabella/accordion come controllo: i blocchi statici non intercettano il mouse (si selezionano)
+  // table/accordion as a control: static blocks don't capture the mouse (they get selected)
   {
     const b = addAndSelect('DIVIDER');
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));
     await waitFor(() => doc.querySelector('.cc-divider'));
-    check('DIVIDER canvas: non intercetta il mouse (si seleziona/trascina normalmente)', doc.querySelector('.cc-divider').parentElement.style.pointerEvents === 'none');
+    check('DIVIDER canvas: does not capture the mouse (selects/drags normally)', doc.querySelector('.cc-divider').parentElement.style.pointerEvents === 'none');
   }
 } catch (e) {
   failedRun = true; fails++; total++;
-  console.error('  ✗ ECCEZIONE: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));
+  console.error('  ✗ EXCEPTION: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));
 }
 
 try { root?.unmount(); } catch { /* noop */ }
 await vite.close();
-console.log(`\n${fails === 0 ? 'PANNELLI UI OK' : fails + ' controlli falliti'} (${total} controlli)${failedRun ? ' — interrotto da un\'eccezione' : ''}`);
+console.log(`\n${fails === 0 ? 'PANELS UI OK' : fails + ' checks failed'} (${total} checks)${failedRun ? ' — aborted by an exception' : ''}`);
 process.exit(fails === 0 ? 0 : 1);

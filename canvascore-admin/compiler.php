@@ -2,10 +2,10 @@
 // canvascore-admin/compiler.php
 require_once __DIR__ . '/config.php';
 
-// Registry dei form raccolta durante la build (formId => email destinatario)
+// Registry of the forms collected during the build (formId => recipient email)
 function &cc_form_registry() { static $r = []; return $r; }
 
-// URL per i link dei blocchi (stessa logica del BUTTON, con mailto:/tel: lasciati intatti)
+// URL for block links (same logic as BUTTON, with mailto:/tel: left intact)
 function cc_block_url($url) {
     $url = trim((string)$url);
     if ($url === '') return '#';
@@ -16,10 +16,10 @@ function cc_block_url($url) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper condivisi dai blocchi "contenuto" (Divider, Callout, Steps, Counters, ...).
-// Ogni helper ha un gemello identico in src/render/renderBlock.mjs.
+// Helpers shared by the "content" blocks (Divider, Callout, Steps, Counters, ...).
+// Each helper has an identical twin in src/render/renderBlock.mjs.
 // ---------------------------------------------------------------------------
-// Colori: finiscono dentro style="" e <style>, quindi solo valori CSS "sicuri" (niente ; { } url() ...).
+// Colors: they end up inside style="" and <style>, so only "safe" CSS values (no ; { } url() ...).
 function cc_color($v, $default) {
     $v = trim((string)$v);
     if ($v === '') return $default;
@@ -30,8 +30,8 @@ function cc_num($v, $min, $max, $default) {
     return is_numeric($v) ? max($min, min($max, (float)$v)) : $default;
 }
 function cc_fmt_num($v, $dec) {
-    // Arrotondamento ESPLICITO (identico in JS): ne' number_format() ne' toFixed() concordano su casi come 2.675,
-    // e il comportamento di round() cambia tra versioni di PHP.
+    // EXPLICIT rounding (identical in JS): neither number_format() nor toFixed() agree on cases like 2.675,
+    // and the behavior of round() changes between PHP versions.
     $dec = (int)$dec;
     $v = (float)$v;
     $m = pow(10, $dec);
@@ -40,7 +40,7 @@ function cc_fmt_num($v, $dec) {
     if ($r == 0) $r = 0.0;
     return number_format($r, $dec, '.', ',');
 }
-// Link esterno (social, sito): sempre http(s). "linkedin.com/in/x" diventa "https://linkedin.com/in/x".
+// External link (social, website): always http(s). "linkedin.com/in/x" becomes "https://linkedin.com/in/x".
 function cc_ext_url($v) {
     $v = trim((string)$v);
     if ($v === '') return '';
@@ -52,12 +52,12 @@ function cc_lines($s) {
     foreach (preg_split('/\r\n|\r|\n/', (string)$s) as $l) { $l = trim($l); if ($l !== '') $out[] = $l; }
     return $out;
 }
-// Testo con a-capo -> righe separate da <br>, tutto escapato.
+// Text with line breaks -> lines separated by <br>, everything escaped.
 function cc_br($s) {
     return implode('<br>', array_map('htmlspecialchars', cc_lines($s)));
 }
 function cc_initials($name) {
-    // Niente mbstring (non sempre installata): primo carattere Unicode via PCRE; la maiuscola la fa il CSS.
+    // No mbstring (not always installed): first Unicode character via PCRE; CSS does the uppercasing.
     $parts = preg_split('/\s+/', trim((string)$name), -1, PREG_SPLIT_NO_EMPTY);
     $out = '';
     foreach (array_slice($parts, 0, 2) as $p) {
@@ -65,10 +65,10 @@ function cc_initials($name) {
     }
     return $out;
 }
-// Query per Google Maps (rawurlencode == encodeURIComponent + !'()* codificati)
+// Google Maps query (rawurlencode == encodeURIComponent + !'()* encoded)
 function cc_enc($s) { return rawurlencode((string)$s); }
 
-// Script dei blocchi (nowdoc: nessuna interpolazione/escape). Placeholder __ID__ / __DUR__.
+// Block scripts (nowdoc: no interpolation/escaping). Placeholders __ID__ / __DUR__.
 function cc_script_counters($id, $dur) {
     $js = <<<'JS'
 (function(){var root=document.getElementById('__ID__'); if(!root) return;
@@ -132,7 +132,7 @@ JS;
     return str_replace('__ID__', $id, $js);
 }
 
-// Cache delle collezioni + voci pubblicate (per il blocco COLLECTION_LIST)
+// Cache of collections + published items (for the COLLECTION_LIST block)
 function cc_collections_data() {
     static $d = null;
     if ($d !== null) return $d;
@@ -167,7 +167,7 @@ function build_inline_style($styles) {
 }
 
 // ---------------------------------------------------------------------------
-// MENU — modello ad albero annidato (children), con retrocompatibilità flat
+// MENU — nested tree model (children), backward compatible with the flat format
 // ---------------------------------------------------------------------------
 function cc_menu_url($url) {
     $url = trim((string)$url);
@@ -188,7 +188,7 @@ function cc_menu_ensure_children($items) {
     return $out;
 }
 
-// Converte il vecchio formato piatto (parentId) in albero annidato, preservando l'ordine.
+// Convert the old flat format (parentId) into a nested tree, preserving the order.
 function cc_menu_flat_to_tree($items) {
     $nodes = [];
     foreach ($items as $it) {
@@ -203,7 +203,7 @@ function cc_menu_flat_to_tree($items) {
         if ($pid && isset($nodes[$pid])) $nodes[$pid]['children'][] = &$nodes[$id];
         else $roots[] = &$nodes[$id];
     }
-    return json_decode(json_encode($roots), true); // risolve i riferimenti
+    return json_decode(json_encode($roots), true); // resolve the references
 }
 
 function cc_menu_items($data) {
@@ -237,7 +237,7 @@ function cc_render_menu_items($items) {
         if ($isLink) {
             $html .= "<a href=\"$href\" class=\"cc-menu-link\">$title$caret</a>";
         } else {
-            // Voce senza link: apre solo il sottomenu (nessun href)
+            // Item without a link: only opens the submenu (no href)
             $html .= "<button type=\"button\" class=\"cc-menu-link cc-menu-toggle\" aria-haspopup=\"true\" aria-expanded=\"false\">$title$caret</button>";
         }
         if ($hasKids) {
@@ -256,7 +256,7 @@ function render_menu_html($menu_json_str, $opts = []) {
     $inheritTheme = !empty($opts['inheritTheme']);
     $preview = !empty($opts['preview']);
 
-    // --- Impostazioni (con default) ---
+    // --- Settings (with defaults) ---
     $align          = $settings['align'] ?? 'flex-end';                 // flex-start|center|flex-end
     $styleType      = $settings['styleType'] ?? 'link';                 // link|pill|box
     $textColor      = htmlspecialchars($settings['textColor'] ?? '#334155');
@@ -287,7 +287,7 @@ function render_menu_html($menu_json_str, $opts = []) {
     $hasLogo = ($logoUrl !== '');
     $logoSrc = htmlspecialchars($logoUrl);
 
-    // --- Ombra ---
+    // --- Shadow ---
     $shadowMap = [
         'none' => 'none',
         'soft' => '0 2px 8px rgba(0,0,0,0.06)',
@@ -296,7 +296,7 @@ function render_menu_html($menu_json_str, $opts = []) {
     ];
     $boxShadow = $shadowMap[$shadow] ?? 'none';
 
-    // --- Layout logo/pulsanti ---
+    // --- Logo/buttons layout ---
     $buttonsSide = $align === 'flex-start' ? 'left' : ($align === 'center' ? 'center' : 'right');
     $innerExtra = ''; $logoStyle = "display:inline-flex; align-items:center; flex:0 0 auto;"; $menuWrapStyle = '';
     $justify = $align;
@@ -306,12 +306,12 @@ function render_menu_html($menu_json_str, $opts = []) {
             $innerExtra = 'position:relative;';
             $logoStyle .= 'position:absolute; top:50%; transform:translateY(-50%);' . ($logoAlign === 'right' ? "right:0;" : "left:0;");
         } elseif ($logoAlign === $buttonsSide) {
-            // stesso lato: logo e pulsanti insieme, a distanza logoGap
+            // same side: logo and buttons together, logoGap apart
             $justify = $buttonsSide === 'left' ? 'flex-start' : 'flex-end';
             if ($buttonsSide === 'left') { $logoStyle .= "order:1;"; $menuWrapStyle .= "order:2; margin-left:$logoGap;"; }
             else { $menuWrapStyle .= "order:1;"; $logoStyle .= "order:2; margin-left:$logoGap;"; }
         } else {
-            // lati opposti: estremi
+            // opposite sides: at the edges
             $justify = 'space-between';
             if ($logoAlign === 'left') { $logoStyle .= "order:1;"; $menuWrapStyle .= "order:2;"; }
             else { $menuWrapStyle .= "order:1;"; $logoStyle .= "order:2;"; }
@@ -320,7 +320,7 @@ function render_menu_html($menu_json_str, $opts = []) {
 
     $stickyCss = ($isSticky && !$preview) ? "position:fixed; top:0; left:0; right:0; z-index:9999;" : "position:relative;";
 
-    // --- Effetti ---
+    // --- Effects ---
     $navEffect = '';
     if ($effect === 'glass') {
         $navEffect = "backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);";
@@ -363,7 +363,7 @@ function render_menu_html($menu_json_str, $opts = []) {
         $effectCss = ".cc-navigation .cc-menu-link { transition: transform .2s ease, color .2s ease, background .2s ease; }"
           . ".cc-navigation .cc-main-menu > .cc-item > .cc-menu-link:hover { transform: translateY(-2px); }";
     } elseif ($effect === 'glare') {
-        // Overlay clippato solo alla barra: lo sheen non taglia i dropdown
+        // Overlay clipped to the bar only: the sheen does not cut off the dropdowns
         $effectCss = ".cc-navigation .cc-glare { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }"
           . ".cc-navigation .cc-glare::before { content:''; position:absolute; top:0; left:-150%; width:60%; height:100%; background:linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent); transform:skewX(-20deg); animation: ccGlare 6s ease-in-out infinite; }"
           . "@keyframes ccGlare { 0%,60% { left:-150%; } 100% { left:150%; } }";
@@ -381,7 +381,7 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "    .cc-navigation .cc-dropdown .cc-item { width:100%; }\n";
     $html .= "    .cc-navigation .cc-dropdown .cc-menu-link { color:$textColor !important; width:100%; padding:9px 18px; border-radius:0; border:none; background:transparent; }\n";
     $html .= "    .cc-navigation .cc-dropdown .cc-menu-link:hover { color:$hoverColorVal !important; background:" . ($hoverBg !== 'transparent' ? "$hoverBg" : "rgba(0,0,0,0.05)") . " !important; }\n";
-    $html .= "    .cc-navigation .cc-dropdown .cc-dropdown { top:0; left:100%; }\n"; // sotto-sottomenu a lato
+    $html .= "    .cc-navigation .cc-dropdown .cc-dropdown { top:0; left:100%; }\n"; // sub-submenu to the side
     $html .= "    $effectCss\n";
     $html .= "    @media (max-width: {$mobileThreshold}px) {\n";
     $html .= "      .cc-mobile-toggle { display:block !important; margin-left:auto; order:99 !important; }\n";
@@ -395,7 +395,7 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "    }\n";
     $html .= "  </style>\n";
 
-    // --- Script: burger + espansione sottomenu su mobile + sticky padding ---
+    // --- Script: burger + submenu expansion on mobile + sticky padding ---
     $html .= "  <script>\n";
     $html .= "  (function(){\n";
     $html .= "    var nav = document.currentScript ? document.currentScript.closest('.cc-navigation') : document.querySelector('.cc-navigation');\n";
@@ -459,7 +459,7 @@ function render_block($block) {
     $customCss = "";
     if (!empty($block['content']['customCss'])) {
         $cssCode = str_replace('__THIS__', '#' . $innerId, $block['content']['customCss']);
-        $cssCode = preg_replace('#</\s*(style|script)#i', '', $cssCode); // blocca il breakout dal tag <style>
+        $cssCode = preg_replace('#</\s*(style|script)#i', '', $cssCode); // prevent breaking out of the <style> tag
         $customCss = "<style>\n" . $cssCode . "\n</style>\n";
     }
 
@@ -521,8 +521,8 @@ function render_block($block) {
             $align = htmlspecialchars($block['styles']['textAlign'] ?? 'center');
             $margin = htmlspecialchars($block['styles']['margin'] ?? '0');
             $useGlobal = $block['content']['useGlobal'] ?? true;
-            // Stili del bottone = base + (global PRIMA) + stili utente DOPO (che quindi vincono),
-            // escludendo margin/textAlign che gestisce il contenitore.
+            // Button styles = base + (global FIRST) + user styles AFTER (which therefore win),
+            // excluding margin/textAlign, which the container handles.
             $btnOwn = $block['styles'] ?? [];
             unset($btnOwn['margin'], $btnOwn['textAlign'], $btnOwn['animation']);
             $globalStyle = $useGlobal ? "background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; " : "";
@@ -600,7 +600,7 @@ function render_block($block) {
             $btnText = htmlspecialchars($block['content']['btnText'] ?? 'Send Message');
             $successMsg = htmlspecialchars($block['content']['successMsg'] ?? 'Sent!');
             $title = cc_sanitize_html($block['content']['title'] ?? '<h3>Contact Us</h3>');
-            // ID stabile del form + registrazione del destinatario lato server (niente email nel client)
+            // Stable form ID + server-side recipient registration (no email addresses in the client)
             $form_id = !empty($block['content']['customId'])
                 ? 'f_' . preg_replace('/[^a-zA-Z0-9_-]/', '', $block['content']['customId'])
                 : 'f_' . substr(sha1(($block['id'] ?? '') . '|' . $raw_email), 0, 16);
@@ -1188,7 +1188,7 @@ function render_block($block) {
             $coll = $data['by_id'][$cid] ?? ($data['by_slug'][$cslugRaw] ?? null);
             $cslug = $coll ? cc_safe_slug($coll['slug']) : cc_safe_slug($cslugRaw);
             $all = $coll ? $coll['items'] : [];
-            // Filtro per stato di archiviazione
+            // Filter by archive status
             $items = array_values(array_filter($all, function ($it) use ($source) {
                 $arch = !empty($it['archived']);
                 if ($source === 'archived') return $arch;
@@ -1282,8 +1282,8 @@ function render_block($block) {
             $isFade = $effect === 'fade';
             $fit = htmlspecialchars($block['content']['objectFit'] ?? 'cover');
             $opos = htmlspecialchars($block['content']['objectPosition'] ?? 'center');
-            // Box con rapporto definito: tutte le immagini riempiono lo stesso riquadro
-            // con lo zoom corretto (cover), indipendentemente dal loro rapporto.
+            // Box with a set aspect ratio: every image fills the same frame
+            // with the right zoom (cover), regardless of its own aspect ratio.
             $ar = htmlspecialchars($block['content']['aspectRatio'] ?? '16 / 9');
             $hasHeight = !empty($block['styles']['height']) && $block['styles']['height'] !== 'auto';
             $boxSize = $hasHeight ? "" : " aspect-ratio:$ar;";

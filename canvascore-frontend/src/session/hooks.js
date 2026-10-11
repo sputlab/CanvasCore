@@ -1,12 +1,12 @@
 // canvascore-frontend/src/session/hooks.js
-// Hook React sottili: tutta la logica sta nei moduli puri (draftTrackers.js), testati in Node.
+// Thin React hooks: all the logic lives in the pure modules (draftTrackers.js), tested in Node.
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { createEditorDraftTracker, createDraftChannel } from './draftTrackers';
 import { registerFlusher } from './drafts';
 
-// Editor a blocchi: traccia il lavoro non salvato e lo copia nel backup locale.
-// Restituisce { markSaved, discard }: markSaved va chiamato dopo OGNI salvataggio riuscito.
+// Block editor: tracks unsaved work and copies it to the local backup.
+// Returns { markSaved, discard }: markSaved must be called after EVERY successful save.
 export function useEditorDraft() {
   const trackerRef = useRef(null);
   const [api] = useState(() => ({
@@ -18,16 +18,16 @@ export function useEditorDraft() {
     trackerRef.current = tracker;
     tracker.start();
     const unsub = useStore.subscribe((s, prev) => tracker.onChange(s, prev));
-    const unreg = registerFlusher(() => tracker.evaluate());   // anche alla scadenza / chiusura scheda
+    const unreg = registerFlusher(() => tracker.evaluate());   // also on expiry / tab close
     return () => { unsub(); unreg(); tracker.dispose(); trackerRef.current = null; };
   }, []);
   return api;
 }
 
-// Viste con stato locale (menu, impostazioni): confronta col valore del server e salva il backup.
-//   draft.loaded(valoreDalServer) -> eventuale bozza da riapplicare | null
-//   draft.saved(valore)           -> dopo un salvataggio riuscito
-//   draft.discard()               -> scarta la bozza, restituisce il valore del server
+// Views with local state (menu, settings): compares with the server value and saves the backup.
+//   draft.loaded(serverValue) -> draft to re-apply, if any | null
+//   draft.saved(value)        -> after a successful save
+//   draft.discard()           -> discards the draft, returns the server value
 export function useDraftSync(scope, value) {
   const [ch] = useState(() => createDraftChannel(scope, {
     onBackupStatus: (ok) => { if (useStore.getState().draftBackupFailed === ok) useStore.setState({ draftBackupFailed: !ok }); },

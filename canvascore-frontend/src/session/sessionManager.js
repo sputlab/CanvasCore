@@ -1,24 +1,24 @@
 // canvascore-frontend/src/session/sessionManager.js
-// Gestione della sessione lato client. Il SERVER e' l'unica autorita' sulla scadenza: il client
-// la rileva subito (non solo quando fallisce un salvataggio) e protegge il lavoro dell'utente.
+// Client-side session handling. The SERVER is the only authority on expiry: the client
+// detects it right away (not only when a save fails) and protects the user's work.
 //
-//  - polling di sola lettura (session_status): non allunga la sessione
-//  - keepalive: solo se l'utente e' stato attivo nell'interfaccia (cosi' chi lavora a lungo senza
-//    salvare non viene disconnesso, e chi e' davvero inattivo scade puntualmente)
-//  - avviso prima della scadenza
-//  - alla scadenza: backup locale, schermata di login SOPRA l'app (che resta montata) e, dopo il
-//    re-login, le richieste fallite vengono rieseguite
-//  - un errore di rete NON e' una scadenza; un altro utente loggato in un'altra scheda NON viene
-//    scambiato per il vecchio
+//  - read-only polling (session_status): does not extend the session
+//  - keepalive: only if the user has been active in the interface (so someone working for a long
+//    time without saving is not signed out, and someone truly idle expires on time)
+//  - warning before expiry
+//  - on expiry: local backup, login screen ON TOP of the app (which stays mounted) and, after
+//    re-login, the failed requests are retried
+//  - a network error is NOT an expiry; another user signed in on another tab is NOT
+//    mistaken for the old one
 //
-// Nessuna dipendenza da React/DOM: tutto e' iniettabile, quindi testabile in Node.
+// No React/DOM dependency: everything is injectable, hence testable in Node.
 
 export const DEFAULTS = {
   tickMs: 1000,
-  statusPollMs: 30000,       // ogni quanto chiedere lo stato al server
-  keepaliveMinMs: 60000,     // al massimo un keepalive al minuto, e solo se c'e' stata attivita'
-  reauthPollMs: 4000,        // a login mostrato: controlla se l'utente ha gia' fatto login in un'altra scheda
-  warnMs: 120000,            // avviso a 2 minuti dalla scadenza (al massimo 1/3 del timeout)
+  statusPollMs: 30000,       // how often to ask the server for the status
+  keepaliveMinMs: 60000,     // at most one keepalive per minute, and only if there was activity
+  reauthPollMs: 4000,        // with the login shown: checks whether the user already signed in on another tab
+  warnMs: 120000,            // warn 2 minutes before expiry (at most 1/3 of the timeout)
   localExpiryRecheckMs: 3000,
 };
 
@@ -30,12 +30,12 @@ function makeDeferred() {
 export function createSessionManager(deps) {
   const {
     store,                                   // { getState(), setState(partial) }
-    fetchFn,                                 // fetch NON protetto dalla guardia (evita ricorsione)
+    fetchFn,                                 // fetch NOT wrapped by the guard (avoids recursion)
     now = () => Date.now(),
     setIntervalFn = (f, ms) => setInterval(f, ms),
     clearIntervalFn = (id) => clearInterval(id),
-    onFlush = () => {},                      // salva subito i backup locali
-    onExpired = () => {},                    // avviso persistente per la pagina di login
+    onFlush = () => {},                      // saves the local backups immediately
+    onExpired = () => {},                    // persistent notice for the login page
     onReauthenticated = () => {},
     reload = () => { if (typeof window !== 'undefined') window.location.reload(); },
     setCsrf = () => {},
@@ -77,8 +77,8 @@ export function createSessionManager(deps) {
     if (should !== !!s.sessionWarning) store.setState({ sessionWarning: should });
   }
 
-  // Un altro utente ha fatto login in un'altra scheda dello stesso browser: questa scheda NON deve
-  // continuare ad agire a nome del vecchio utente.
+  // Another user signed in on another tab of the same browser: this tab must NOT
+  // keep acting on behalf of the old user.
   function userChanged(body) {
     const s = store.getState();
     return !!(body && body.authenticated && body.username && s.username && body.username !== s.username);
@@ -87,7 +87,7 @@ export function createSessionManager(deps) {
   function expire(reason) {
     const s = store.getState();
     if (s.sessionExpired || !s.isAuthenticated) return false;
-    try { onFlush(); } catch { /* il backup non deve impedire di mostrare il login */ }
+    try { onFlush(); } catch { /* the backup must not prevent showing the login */ }
     store.setState({ sessionExpired: true, expiredUser: s.username, expiredAt: now(), expiredReason: reason, sessionWarning: false });
     try { onExpired({ user: s.username, at: now(), reason }); } catch { /* noop */ }
     if (!deferred) deferred = makeDeferred();
@@ -100,12 +100,12 @@ export function createSessionManager(deps) {
       try {
         const { body } = await getJson('session_status');
         lastStatusAt = now();
-        if (!body) return;                                  // risposta illeggibile: non e' una scadenza
+        if (!body) return;                                  // unreadable response: not an expiry
         if (userChanged(body)) { reload(); return; }
         if (body.authenticated === false) { expire('status'); return; }
         if (body.authenticated) { applyTiming(body); evaluateWarning(); }
       } catch {
-        lastStatusAt = now();                               // rete assente/errore: NON e' una scadenza
+        lastStatusAt = now();                               // no network/error: NOT an expiry
       } finally { statusInFlight = null; }
     })();
     return statusInFlight;
@@ -121,12 +121,12 @@ export function createSessionManager(deps) {
           lastKeepaliveAt = now(); lastStatusAt = now(); activitySince = false;
           applyTiming(body); evaluateWarning();
         }
-      } catch { /* rete assente: riproverà al prossimo giro */ } finally { keepaliveInFlight = null; }
+      } catch { /* no network: will retry on the next round */ } finally { keepaliveInFlight = null; }
     })();
     return keepaliveInFlight;
   }
 
-  // A schermata di login mostrata: se la sessione e' tornata valida (login fatto in un'altra scheda) riprende da sola.
+  // With the login screen shown: if the session is valid again (signed in on another tab) it resumes by itself.
   function checkReauth() {
     if (reauthInFlight) return reauthInFlight;
     lastReauthPollAt = now();
@@ -143,25 +143,25 @@ export function createSessionManager(deps) {
     const s = store.getState();
     if (!s.sessionExpired) return true;
     const same = !info.username || info.username === s.expiredUser;
-    if (!same) { reload(); return false; }                  // utente diverso: ripartire da zero, senza ereditare lo stato
+    if (!same) { reload(); return false; }                  // different user: start from scratch, without inheriting the state
     if (info.csrf) setCsrf(info.csrf);
     store.setState({ sessionExpired: false, expiredUser: null, expiredAt: null, expiredReason: null, sessionWarning: false });
     lastKeepaliveAt = now(); lastStatusAt = now(); activitySince = false;
     try { onReauthenticated(); } catch { /* noop */ }
     const d = deferred; deferred = null;
-    if (d) d.resolve(true);                                 // riesegue le richieste rimaste in attesa
+    if (d) d.resolve(true);                                 // retries the requests left waiting
     pollStatus();
     return true;
   }
 
-  // Richiesta API respinta con 401: mostra il login e attende il re-login.
-  // Restituisce true se si e' ri-autenticato lo STESSO utente (la richiesta puo' essere rieseguita).
+  // API request rejected with 401: shows the login and waits for the re-login.
+  // Returns true if the SAME user re-authenticated (the request can be retried).
   function handleUnauthorized() {
     expire('401');
     return deferred ? deferred.promise : Promise.resolve(false);
   }
 
-  // 403 "CSRF": puo' essere una sessione scaduta oppure solo un token da rinfrescare. Lo si verifica.
+  // 403 "CSRF": may be an expired session or just a token to refresh. Check which.
   async function handleCsrfFailure() {
     let body = null;
     try { ({ body } = await getJson('check_auth')); } catch { return 'unknown'; }
@@ -178,7 +178,7 @@ export function createSessionManager(deps) {
   function noteActivity() {
     activitySince = true;
     const s = store.getState();
-    if (s.sessionWarning && !s.sessionExpired) keepalive();   // "sono ancora qui": risposta immediata
+    if (s.sessionWarning && !s.sessionExpired) keepalive();   // "I'm still here": immediate response
   }
 
   function tick() {
@@ -188,12 +188,12 @@ export function createSessionManager(deps) {
     if (s.sessionExpired) { if (t - lastReauthPollAt >= cfg.reauthPollMs) checkReauth(); return; }
     if (activitySince && t - lastKeepaliveAt >= cfg.keepaliveMinMs) keepalive();
     else if (t - lastStatusAt >= cfg.statusPollMs) pollStatus();
-    // scaduta secondo l'orologio locale: si CONFERMA col server (un'altra scheda potrebbe averla allungata)
+    // expired by the local clock: CONFIRM with the server (another tab may have extended it)
     if (s.sessionExpiresAt && t >= s.sessionExpiresAt && !statusInFlight && t - lastStatusAt >= cfg.localExpiryRecheckMs) pollStatus();
     evaluateWarning();
   }
 
-  // Al ritorno sulla scheda / ripresa dalla sospensione / rete tornata: controllo immediato.
+  // On return to the tab / resume from sleep / network restored: immediate check.
   function recheck() {
     const s = store.getState();
     if (!s.isAuthenticated) return;

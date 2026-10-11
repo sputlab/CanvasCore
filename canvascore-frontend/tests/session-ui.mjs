@@ -1,8 +1,8 @@
 // tests/session-ui.mjs
-// Test di INTEGRAZIONE della sessione sull'interfaccia vera: la vera <App /> montata in jsdom
-// (caricata con Vite in modalita' SSR) contro un backend finto con scadenza per inattivita'.
-// Si guida l'interfaccia come farebbe un utente: si scrive, si preme Save, la sessione scade,
-// compare il login SOPRA l'app, ci si ri-autentica e il salvataggio viene completato.
+// Session INTEGRATION tests on the real interface: the real <App /> mounted in jsdom
+// (loaded through Vite in SSR mode) against a fake backend with inactivity expiry.
+// The interface is driven the way a user would: type, press Save, the session expires,
+// the login appears ON TOP of the app, the user re-authenticates and the save completes.
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -31,7 +31,7 @@ async function waitFor(fn, { timeout = 4000 } = {}) {
   }
 }
 
-// ------------------------------------------------------------------ ambiente jsdom come "window" globale
+// ------------------------------------------------------------------ jsdom environment as the global "window"
 const reloads = [];
 const alerts = [];
 let dom = null;
@@ -69,7 +69,7 @@ function newDom(storageSnapshot = null) {
 }
 const snapshotStorage = () => { const out = []; const ls = dom.window.localStorage; for (let i = 0; i < ls.length; i++) { const k = ls.key(i); out.push([k, ls.getItem(k)]); } return out; };
 
-// ------------------------------------------------------------------ backend finto
+// ------------------------------------------------------------------ fake backend
 function makeBackend({ authenticated = true, username = 'ann' } = {}) {
   const b = { authenticated, username, passwords: { ann: 'pw', bob: 'pw2' }, csrf: 'T1', n: 1,
     menu: { items: [{ id: 'm1', title: 'Home', url: '', children: [] }], settings: {} },
@@ -112,7 +112,7 @@ function makeBackend({ authenticated = true, username = 'ann' } = {}) {
   return b;
 }
 
-// ------------------------------------------------------------------ helpers UI
+// ------------------------------------------------------------------ UI helpers
 const $ = (sel) => dom.window.document.querySelector(sel);
 const $$ = (sel) => [...dom.window.document.querySelectorAll(sel)];
 const buttonByText = (txt) => $$('button').find((b) => b.textContent.trim().includes(txt));
@@ -139,14 +139,14 @@ const vite = await createServer({
 let root = null;
 async function boot(backend, storageSnapshot = null) {
   installEnv(newDom(storageSnapshot));
-  globalThis.fetch = backend.fetch;                         // come in un browser: window.fetch === fetch
-  vite.moduleGraph.invalidateAll();                         // store e moduli ricreati: e' un "refresh" vero
-  await vite.ssrLoadModule('/src/apiClient.js');           // installa la guardia PRIMA di React
+  globalThis.fetch = backend.fetch;                         // as in a browser: window.fetch === fetch
+  vite.moduleGraph.invalidateAll();                         // store and modules recreated: a real "refresh"
+  await vite.ssrLoadModule('/src/apiClient.js');           // installs the guard BEFORE React
   const App = (await vite.ssrLoadModule('/src/App.jsx')).default;
   const { createRoot } = await import('react-dom/client');
   const React = await import('react');
   root = createRoot(dom.window.document.getElementById('root'));
-  root.render(React.createElement(React.StrictMode, null, React.createElement(App)));   // StrictMode: effetti eseguiti due volte
+  root.render(React.createElement(React.StrictMode, null, React.createElement(App)));   // StrictMode: effects run twice
 }
 async function shutdown() {
   try { globalThis.__CC_SESSION?.stop(); } catch { /* noop */ }
@@ -157,82 +157,82 @@ async function shutdown() {
 
 let failedRun = false;
 try {
-  // ================================================================== SCENARIO 1: scadenza durante la modifica del menu
-  section('SCENARIO 1 — modifico il menu, la sessione scade, premo Save');
+  // ================================================================== SCENARIO 1: expiry while editing the menu
+  section('SCENARIO 1 — I edit the menu, the session expires, I press Save');
   const be = makeBackend();
   await boot(be);
   const dash = await waitFor(() => buttonByText('Menu') && bodyText().includes('Pages'));
-  check('la dashboard si carica per l\'utente loggato', !!dash && bodyText().includes('ann'));
+  check('the dashboard loads for the signed-in user', !!dash && bodyText().includes('ann'));
 
   click(buttonByText('Menu'));
   const labelInput = await waitFor(() => $('input[placeholder="Label"]'));
-  check('Menu Builder aperto con i dati dal server', !!labelInput && labelInput.value === 'Home');
+  check('Menu Builder open with the data from the server', !!labelInput && labelInput.value === 'Home');
 
   setInput(labelInput, 'Modified');
   const hasDraft = await waitFor(() => draftKeys().some((k) => k.endsWith(':menu')), { timeout: 3000 });
-  check('la modifica viene copiata nel backup locale (entro ~1 s)', !!hasDraft);
-  check('il backup è nella chiave dell\'utente ann', draftKeys().includes('cc_draft:v1:ann:menu'));
+  check('the edit is copied to the local backup (within ~1 s)', !!hasDraft);
+  check('the backup is under user ann\'s key', draftKeys().includes('cc_draft:v1:ann:menu'));
 
-  // la sessione scade lato server mentre l'utente non ha ancora salvato
+  // the session expires on the server while the user hasn't saved yet
   be.authenticated = false;
   click(buttonByText('Save & Publish'));
   const overlay = await waitFor(() => $('[role="alertdialog"]'));
-  check('Save con sessione scaduta: compare il login SOPRA l\'app (overlay)', !!overlay && /Session expired/.test(overlay.textContent));
-  check('NESSUN messaggio d\'errore o falso successo mostrato all\'utente', alerts.length === 0, JSON.stringify(alerts));
-  check('l\'app NON è stata sostituita dalla pagina di login', !bodyText().includes('Enter your credentials'));
+  check('Save with an expired session: the login appears ON TOP of the app (overlay)', !!overlay && /Session expired/.test(overlay.textContent));
+  check('NO error message or false success shown to the user', alerts.length === 0, JSON.stringify(alerts));
+  check('the app was NOT replaced by the login page', !bodyText().includes('Enter your credentials'));
   const stillThere = $('input[placeholder="Label"]');
-  check('il Menu Builder è ancora montato e conserva la modifica non salvata', !!stillThere && stillThere.value === 'Modified');
+  check('the Menu Builder is still mounted and keeps the unsaved edit', !!stillThere && stillThere.value === 'Modified');
   const wrapper = [...dom.window.document.querySelectorAll('[inert]')][0];
-  check('l\'app sottostante è resa inerte (non si può scrivere "dietro" il login)', !!wrapper && wrapper.contains(stillThere));
-  check('l\'overlay elenca il backup del Menu', /Menu/.test(overlay.textContent) && /backed up/i.test(overlay.textContent));
+  check('the app underneath is made inert (you cannot type "behind" the login)', !!wrapper && wrapper.contains(stillThere));
+  check('the overlay lists the Menu backup', /Menu/.test(overlay.textContent) && /backed up/i.test(overlay.textContent));
   const userField = $('#cc-exp-user');
-  check('lo username è precompilato con quello della sessione scaduta', userField && userField.value === 'ann');
-  check('il salvataggio NON è stato eseguito dal server mentre è scaduta', be.savedMenus.length === 0);
+  check('the username is prefilled with the one from the expired session', userField && userField.value === 'ann');
+  check('the save was NOT performed by the server while expired', be.savedMenus.length === 0);
 
-  // password sbagliata
+  // wrong password
   setInput($('#cc-exp-pw'), 'sbagliata');
   submit($('[role="alertdialog"] form'));
   const err = await waitFor(() => $('[role="alertdialog"] [role="alert"]'));
-  check('password sbagliata → errore mostrato, l\'overlay resta', !!err && /Invalid credentials/.test(err.textContent) && !!$('[role="alertdialog"]'));
-  check('…e il lavoro è ancora lì', $('input[placeholder="Label"]').value === 'Modified');
+  check('wrong password → error shown, the overlay stays', !!err && /Invalid credentials/.test(err.textContent) && !!$('[role="alertdialog"]'));
+  check('…and the work is still there', $('input[placeholder="Label"]').value === 'Modified');
 
-  // password corretta
+  // correct password
   setInput($('#cc-exp-pw'), 'pw');
   submit($('[role="alertdialog"] form'));
   const closed = await waitFor(() => !$('[role="alertdialog"]'), { timeout: 5000 });
-  check('login corretto → l\'overlay sparisce', !!closed);
+  check('correct login → the overlay disappears', !!closed);
   const saved = await waitFor(() => be.savedMenus.length >= 1, { timeout: 5000 });
-  check('il SALVATAGGIO INTERROTTO viene completato in automatico dopo il re-login', !!saved);
+  check('the INTERRUPTED SAVE is completed automatically after re-login', !!saved);
   await sleep(100);
-  check('…è stato eseguito UNA sola volta', be.savedMenus.length === 1);
-  check('…con la modifica dell\'utente ("Modified")', be.savedMenus[0] && be.savedMenus[0].items[0].title === 'Modified');
+  check('…it ran only ONCE', be.savedMenus.length === 1);
+  check('…with the user\'s edit ("Modified")', be.savedMenus[0] && be.savedMenus[0].items[0].title === 'Modified');
   const saveCalls = be.log.filter((l) => l.action === 'save_menu');
-  check('…il primo tentativo con il token vecchio (rifiutato), la riesecuzione con quello NUOVO', saveCalls.length === 2 && saveCalls[0].csrf === 'T1' && saveCalls[1].csrf === be.csrf && be.csrf !== 'T1');
+  check('…the first attempt with the old token (rejected), the retry with the NEW one', saveCalls.length === 2 && saveCalls[0].csrf === 'T1' && saveCalls[1].csrf === be.csrf && be.csrf !== 'T1');
   const okAlert = await waitFor(() => alerts.length >= 1, { timeout: 4000 });
-  check('l\'utente vede il successo vero ("Menu saved and site updated")', !!okAlert && /Menu saved and site updated/.test(alerts[0]) && !/NOT saved/.test(alerts[0]), JSON.stringify(alerts));
-  check('il backup locale viene eliminato dopo il salvataggio riuscito', !(await waitFor(() => draftKeys().some((k) => k.endsWith(':menu')), { timeout: 1200 })));
-  check('la modifica è ancora a schermo e l\'app non è inerte', $('input[placeholder="Label"]').value === 'Modified' && !$('[inert]'));
+  check('the user sees the real success ("Menu saved and site updated")', !!okAlert && /Menu saved and site updated/.test(alerts[0]) && !/NOT saved/.test(alerts[0]), JSON.stringify(alerts));
+  check('the local backup is deleted after the successful save', !(await waitFor(() => draftKeys().some((k) => k.endsWith(':menu')), { timeout: 1200 })));
+  check('the edit is still on screen and the app is not inert', $('input[placeholder="Label"]').value === 'Modified' && !$('[inert]'));
 
-  // ================================================================== SCENARIO 2: ritorno sulla scheda dopo inattività
-  section('SCENARIO 2 — torno sulla scheda dopo una lunga inattività (nessuna azione)');
+  // ================================================================== SCENARIO 2: back to the tab after inactivity
+  section('SCENARIO 2 — I return to the tab after a long period of inactivity (no action)');
   alerts.length = 0;
   setInput($('input[placeholder="Label"]'), 'Altra modifica');
   await waitFor(() => draftKeys().some((k) => k.endsWith(':menu')), { timeout: 3000 });
-  be.authenticated = false;                                    // scaduta mentre la scheda era in background
-  dom.window.dispatchEvent(new dom.window.Event('focus'));     // l'utente torna sulla scheda
+  be.authenticated = false;                                    // expired while the tab was in the background
+  dom.window.dispatchEvent(new dom.window.Event('focus'));     // the user returns to the tab
   const ov2 = await waitFor(() => $('[role="alertdialog"]'), { timeout: 3000 });
-  check('al ritorno sulla scheda la scadenza è rilevata SUBITO, senza premere nulla', !!ov2);
-  check('…il lavoro non salvato è nel backup', draftKeys().some((k) => k.endsWith(':menu')));
+  check('on returning to the tab the expiry is detected RIGHT AWAY, without pressing anything', !!ov2);
+  check('…the unsaved work is in the backup', draftKeys().some((k) => k.endsWith(':menu')));
 
-  // login fatto in un'altra scheda: questa riprende da sola
+  // login done in another tab: this one resumes on its own
   be.authenticated = true; be.username = 'ann'; be.csrf = 'TX';
   dom.window.dispatchEvent(new dom.window.Event('focus'));
   const gone = await waitFor(() => !$('[role="alertdialog"]'), { timeout: 3000 });
-  check('login fatto in un\'altra scheda → l\'overlay si chiude da solo', !!gone);
-  check('…senza perdere la modifica', $('input[placeholder="Label"]').value === 'Altra modifica');
+  check('login done in another tab → the overlay closes on its own', !!gone);
+  check('…without losing the edit', $('input[placeholder="Label"]').value === 'Altra modifica');
 
-  // ================================================================== SCENARIO 3: re-login come ALTRO utente
-  section('SCENARIO 3 — alla scadenza fa login un utente diverso');
+  // ================================================================== SCENARIO 3: re-login as ANOTHER user
+  section('SCENARIO 3 — a different user logs in at expiry');
   be.savedMenus.length = 0; be.authenticated = false;
   click(buttonByText('Save & Publish'));
   await waitFor(() => $('[role="alertdialog"]'));
@@ -240,86 +240,86 @@ try {
   reloads.length = 0;
   submit($('[role="alertdialog"] form'));
   const reloaded = await waitFor(() => reloads.length >= 1, { timeout: 4000 });
-  check('login di un altro utente → la pagina viene ricaricata da zero (non si eredita lo stato di ann)', !!reloaded);
+  check('login by another user → the page is reloaded from scratch (ann\'s state is not inherited)', !!reloaded);
   await sleep(150);
-  check('…e il salvataggio di ann NON viene eseguito a nome di bob', be.savedMenus.length === 0);
-  check('questa scheda NON ha adottato l\'identità di bob (resta bloccata fino al reload)', !!$('[role="alertdialog"]') && /different user/.test(bodyText()));
-  dom.window.dispatchEvent(new dom.window.Event('pagehide'));       // è ciò che accade in un vero reload
+  check('…and ann\'s save is NOT performed on behalf of bob', be.savedMenus.length === 0);
+  check('this tab did NOT adopt bob\'s identity (it stays blocked until the reload)', !!$('[role="alertdialog"]') && /different user/.test(bodyText()));
+  dom.window.dispatchEvent(new dom.window.Event('pagehide'));       // this is what happens in a real reload
   await sleep(150);
-  check('il lavoro non salvato di ann NON finisce nell\'account di bob (nemmeno allo scaricamento della pagina)', !draftKeys().some((k) => k.includes(':bob:')), JSON.stringify(draftKeys()));
-  check('…resta nel backup di ann', draftKeys().includes('cc_draft:v1:ann:menu'));
+  check('ann\'s unsaved work does NOT end up in bob\'s account (not even on page unload)', !draftKeys().some((k) => k.includes(':bob:')), JSON.stringify(draftKeys()));
+  check('…it stays in ann\'s backup', draftKeys().includes('cc_draft:v1:ann:menu'));
   await shutdown();
 
-  // ================================================================== SCENARIO 4: refresh dopo la scadenza
-  section('SCENARIO 4 — ricarico la pagina con lavoro non salvato nel backup');
-  const be2 = makeBackend({ authenticated: false });        // sessione scaduta: dopo il refresh si va al login
+  // ================================================================== SCENARIO 4: refresh after expiry
+  section('SCENARIO 4 — I reload the page with unsaved work in the backup');
+  const be2 = makeBackend({ authenticated: false });        // expired session: after the refresh you go to the login
   const stor = snapshotStorage();
-  check('(prerequisito) il backup di ann esiste ancora dopo la scadenza', stor.some(([k]) => k === 'cc_draft:v1:ann:menu'));
+  check('(prerequisite) ann\'s backup still exists after expiry', stor.some(([k]) => k === 'cc_draft:v1:ann:menu'));
   await boot(be2, stor);
   const loginPage = await waitFor(() => bodyText().includes('Enter your credentials'));
-  check('dopo il refresh con sessione scaduta si arriva al login', !!loginPage);
-  check('…che spiega chiaramente che la sessione è scaduta e che il lavoro è al sicuro', /Your session expired/.test(bodyText()) && /backed up on this device/.test(bodyText()));
+  check('after refreshing with an expired session you land on the login', !!loginPage);
+  check('…which clearly explains that the session expired and the work is safe', /Your session expired/.test(bodyText()) && /backed up on this device/.test(bodyText()));
 
   const inputs = $$('input');
   setInput(inputs[0], 'ann'); setInput(inputs[1], 'pw');
   submit($('form'));
   const prompt = await waitFor(() => $('[role="dialog"]#x') || $$('[role="dialog"]').find((d) => /Unsaved work found/.test(d.textContent)), { timeout: 5000 });
-  check('dopo il login compare "Unsaved work found" con il backup da recuperare', !!prompt && /Menu/.test(prompt.textContent));
-  check('l\'avviso persistente della scadenza è stato rimosso', !dom.window.localStorage.getItem('cc_expired_notice:v1'));
+  check('after login "Unsaved work found" appears with the backup to recover', !!prompt && /Menu/.test(prompt.textContent));
+  check('the persistent expiry notice was removed', !dom.window.localStorage.getItem('cc_expired_notice:v1'));
 
   click([...prompt.querySelectorAll('button')].find((b) => /Restore/.test(b.textContent)));
   const restoredInput = await waitFor(() => $('input[placeholder="Label"]'), { timeout: 4000 });
-  check('Restore → si apre il Menu Builder', !!restoredInput);
-  check('…con il contenuto non salvato ripristinato', restoredInput.value === 'Altra modifica', restoredInput && restoredInput.value);
-  check('…e un banner avvisa che NON è ancora salvato sul sito', /Restored unsaved changes/.test(bodyText()) && /not saved to the site yet/.test(bodyText()));
-  check('il backup resta finché non si salva', draftKeys().some((k) => k.endsWith(':menu')));
+  check('Restore → the Menu Builder opens', !!restoredInput);
+  check('…with the unsaved content restored', restoredInput.value === 'Altra modifica', restoredInput && restoredInput.value);
+  check('…and a banner warns that it is NOT saved to the site yet', /Restored unsaved changes/.test(bodyText()) && /not saved to the site yet/.test(bodyText()));
+  check('the backup stays until you save', draftKeys().some((k) => k.endsWith(':menu')));
 
   click(buttonByText('Discard'));
   const reset = await waitFor(() => $('input[placeholder="Label"]') && $('input[placeholder="Label"]').value === 'Home');
-  check('Discard → torna al menu salvato sul server', !!reset && !/Restored unsaved changes/.test(bodyText()));
-  check('…e il backup viene eliminato (e non riscritto)', !(await waitFor(() => draftKeys().some((k) => k.endsWith(':menu')), { timeout: 1500 })));
+  check('Discard → back to the menu saved on the server', !!reset && !/Restored unsaved changes/.test(bodyText()));
+  check('…and the backup is deleted (and not rewritten)', !(await waitFor(() => draftKeys().some((k) => k.endsWith(':menu')), { timeout: 1500 })));
   await shutdown();
 
-  // ================================================================== SCENARIO 5: backup per utente
-  section('SCENARIO 5 — i backup sono separati per utente');
+  // ================================================================== SCENARIO 5: per-user backups
+  section('SCENARIO 5 — backups are kept separate per user');
   const stor5 = [['cc_draft:v1:ann:menu', JSON.stringify({ v: 1, user: 'ann', scope: 'menu', savedAt: Date.now(), payload: { items: [{ id: 'x', title: 'DI ANN', url: '', children: [] }], settings: {} } })]];
   const be5 = makeBackend({ authenticated: true, username: 'bob' });
   await boot(be5, stor5);
   await waitFor(() => bodyText().includes('Pages'));
   await sleep(300);
-  check('un altro utente (bob) NON vede il backup di ann', !$$('[role="dialog"]').some((d) => /Unsaved work found/.test(d.textContent)));
+  check('another user (bob) does NOT see ann\'s backup', !$$('[role="dialog"]').some((d) => /Unsaved work found/.test(d.textContent)));
   click(buttonByText('Menu'));
   const bobInput = await waitFor(() => $('input[placeholder="Label"]'));
-  check('…né se lo ritrova applicato nel menu', bobInput && bobInput.value === 'Home' && !/Restored unsaved changes/.test(bodyText()));
+  check('…nor finds it applied to the menu', bobInput && bobInput.value === 'Home' && !/Restored unsaved changes/.test(bodyText()));
   await shutdown();
 
-  // ================================================================== SCENARIO 6: impostazioni globali
-  section('SCENARIO 6 — impostazioni globali: salvataggio con esito reale');
+  // ================================================================== SCENARIO 6: global settings
+  section('SCENARIO 6 — global settings: save with the real outcome');
   const be6 = makeBackend();
   await boot(be6);
   await waitFor(() => buttonByText('Global Options'));
   click(buttonByText('Global Options'));
   const brand = await waitFor(() => $$('input[type="text"]').find((i) => i.value === '#112233'));
-  check('Global Options carica i dati dal server', !!brand);
+  check('Global Options loads the data from the server', !!brand);
   setInput(brand, '#abcdef');
-  check('la modifica finisce nel backup locale', !!(await waitFor(() => draftKeys().some((k) => k.endsWith(':settings')), { timeout: 3000 })));
+  check('the edit ends up in the local backup', !!(await waitFor(() => draftKeys().some((k) => k.endsWith(':settings')), { timeout: 3000 })));
   alerts.length = 0; be6.authenticated = false;
   click(buttonByText('Save & Publish'));
   await waitFor(() => $('[role="alertdialog"]'));
-  check('Save con sessione scaduta: overlay, nessun falso "saved successfully"', alerts.length === 0 && !!$('[role="alertdialog"]'));
+  check('Save with an expired session: overlay, no false "saved successfully"', alerts.length === 0 && !!$('[role="alertdialog"]'));
   setInput($('#cc-exp-pw'), 'pw');
   submit($('[role="alertdialog"] form'));
   await waitFor(() => be6.savedSettings.length >= 1, { timeout: 5000 });
-  check('dopo il re-login le impostazioni vengono salvate (una volta, con il valore dell\'utente)', be6.savedSettings.length === 1 && be6.savedSettings[0].brandColor === '#abcdef');
+  check('after re-login the settings are saved (once, with the user\'s value)', be6.savedSettings.length === 1 && be6.savedSettings[0].brandColor === '#abcdef');
   await waitFor(() => alerts.length >= 1, { timeout: 4000 });
-  check('esito mostrato: successo vero', /saved and site updated/.test(alerts[0] || ''), JSON.stringify(alerts));
+  check('outcome shown: real success', /saved and site updated/.test(alerts[0] || ''), JSON.stringify(alerts));
   await shutdown();
 } catch (e) {
   failedRun = true; fails++; total++;
-  console.error('  ✗ ECCEZIONE durante i test UI: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));
+  console.error('  ✗ EXCEPTION during the UI tests: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));
   try { await shutdown(); } catch { /* noop */ }
 }
 
 await vite.close();
-console.log(`\n${fails === 0 ? 'SESSIONE UI OK' : fails + ' controlli falliti'} (${total} controlli)${failedRun ? ' — interrotto da un\'eccezione' : ''}`);
+console.log(`\n${fails === 0 ? 'SESSION UI OK' : fails + ' checks failed'} (${total} checks)${failedRun ? ' — aborted by an exception' : ''}`);
 process.exit(fails === 0 ? 0 : 1);
