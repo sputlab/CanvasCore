@@ -310,6 +310,73 @@ try {
     globalThis.fetch = realFetch;
   }
 
+  // Menu Builder: tabs, themes, stackable effects (legacy single `effect` is migrated on load)
+  console.log('\nMENU BUILDER — tabs, themes, effects');
+  {
+    const realFetch = globalThis.fetch;
+    const saved = [];
+    globalThis.fetch = async (url, init = {}) => {
+      const u = String(url);
+      if (u.includes('get_menu')) return new Response(JSON.stringify({ items: [{ id: 'm1', title: 'Home', url: '', children: [] }], settings: { effect: 'glare', textColor: '#111111' } }));
+      if (u.includes('save_menu')) { saved.push(JSON.parse(init.body)); return new Response(JSON.stringify({ success: true })); }
+      return new Response(JSON.stringify({ success: true, html: '' }));
+    };
+    useStore.setState({ pages: [] });
+    const MenuBuilder = (await vite.ssrLoadModule('/src/components/MenuBuilder.jsx')).default;
+    mount(React.createElement(MenuBuilder));
+    const tab = (name) => $$('[role="tab"]').find((b) => b.textContent.includes(name));
+    const pressed = () => $$('button[aria-pressed="true"]').map((b) => b.textContent.trim());
+    check('menu: opens on the Structure tab with the items', !!(await waitFor(() => doc.querySelector('input[placeholder="Label"]'))) && tab('Structure').getAttribute('aria-selected') === 'true');
+    check('menu: six tabs (Structure, Themes, Style, Effects, Layout & Logo, Mobile)', ['Structure', 'Themes', 'Style', 'Effects', 'Layout & Logo', 'Mobile'].every((n) => !!tab(n)));
+    check('menu: the Effects tab shows a count of the active effects (legacy effect migrated)', /Effects\s*1/.test(tab('Effects').textContent), tab('Effects').textContent);
+
+    click(tab('Effects')); await waitFor(() => buttonByText('Underline'));
+    check('menu: the legacy "glare" effect is shown as on', pressed().some((t) => t.includes('Glare')), pressed().join('|'));
+    click(buttonByText('Underline')); await sleep(30);
+    click(buttonByText('Glass')); await sleep(30);
+    check('menu: effects from different groups stack', ['Glare', 'Underline', 'Glass'].every((n) => pressed().some((t) => t.includes(n))), pressed().join('|'));
+    click(buttonByText('Dot')); await sleep(30);
+    check('menu: in a "pick one" group the new effect replaces the old one', pressed().some((t) => t.includes('Dot')) && !pressed().some((t) => t.includes('Underline')), pressed().join('|'));
+    check('menu: scroll effects warn while the bar is not sticky', /Turn on "Fixed on top"/.test(doc.body.textContent));
+
+    click(tab('Themes')); await waitFor(() => $$('button[aria-label^="Apply the"]').length);
+    check('menu: at least 10 theme cards', $$('button[aria-label^="Apply the"]').length >= 10);
+    click($$('button[aria-label="Apply the Warm theme"]')[0]); await sleep(30);
+    check('menu: the applied theme is marked as in use', $$('button[aria-label="Apply the Warm theme"]')[0].getAttribute('aria-pressed') === 'true');
+    check('menu: an Undo bar appears', !!buttonByText('Undo'));
+    click(buttonByText('Undo')); await sleep(30);
+    check('menu: Undo restores the previous settings', $$('button[aria-label="Apply the Warm theme"]')[0].getAttribute('aria-pressed') === 'false' && !buttonByText('Undo'));
+    click($$('button[aria-label="Apply the Midnight theme"]')[0]); await sleep(30);
+
+    click(tab('Style')); await waitFor(() => field('FONT WEIGHT'));
+    check('menu: Style tab has Items, Typography and Bar fields', !!field('TEXT COLOR') && !!field('LETTER CASE') && !!field('BAR HEIGHT'));
+    setValue(field('LETTER CASE'), 'uppercase'); await sleep(30);
+    click(tab('Themes')); await sleep(30);
+    check('menu: customizing a value clears the "in use" mark', $$('button[aria-pressed="true"][aria-label^="Apply the"]').length === 0);
+
+    click(tab('Mobile')); await waitFor(() => field('MOBILE BREAKPOINT'));
+    check('menu: Mobile tab has breakpoint, burger icons, burger position and logo toggle', !!field('MOBILE BREAKPOINT') && $$('[aria-label="Burger icon"] button').length === 10 && !!$$('[aria-label="Burger position"]')[0] && !!checkbox('Show the logo'));
+    check('menu: a legacy ☰ menu starts on the Classic icon', doc.querySelector('[aria-label="Burger icon"] button[aria-pressed="true"]')?.title === 'Classic');
+    click(doc.querySelector('[aria-label="Burger icon"] button[title="Dots"]')); await sleep(30);
+    click($$('[aria-label="Burger position"] button').find((b) => b.textContent === 'Left')); await sleep(30);
+    click(checkbox('Show the logo')); await sleep(30);
+    check('menu: picking icon, side and logo visibility updates the controls', doc.querySelector('[aria-label="Burger icon"] button[aria-pressed="true"]')?.title === 'Dots'
+      && $$('[aria-label="Burger position"] button[aria-pressed="true"]')[0]?.textContent === 'Left' && checkbox('Show the logo').checked === false);
+    check('menu: no custom character field unless Custom is chosen', !field('CUSTOM CHARACTER'));
+    click(doc.querySelector('[aria-label="Burger icon"] button[title="Custom character"]')); await sleep(30);
+    setValue(field('CUSTOM CHARACTER'), '≡'); await sleep(30);
+    check('menu: Custom shows the character field', field('CUSTOM CHARACTER')?.value === '≡');
+    click(doc.querySelector('button[title="Mobile"]')); await sleep(30);
+    check('menu: the preview can switch to a mobile width', doc.querySelector('iframe[title="menu-preview"]').style.width === '390px');
+
+    click(buttonByText('Save & Publish'));
+    await waitFor(() => saved.length);
+    const s = saved[0] && saved[0].settings;
+    check('menu: saves `effects` (Midnight) + the custom letter case, without the legacy `effect` key', !!s && Array.isArray(s.effects) && s.effects.includes('glass') && s.textTransform === 'uppercase' && !('effect' in s), JSON.stringify(s && s.effects));
+    check('menu: saves the mobile settings', !!s && s.burgerStyle === 'custom' && s.burgerIcon === '≡' && s.mobileBurgerSide === 'left' && s.mobileShowLogo === false, JSON.stringify(s && [s.burgerStyle, s.burgerIcon, s.mobileBurgerSide, s.mobileShowLogo]));
+    globalThis.fetch = realFetch;
+  }
+
   // The canvas uses the published pages' box model: padded full-width blocks (e.g. forms) must not overflow
   console.log('\nCANVAS — same box model as the published page');
   {

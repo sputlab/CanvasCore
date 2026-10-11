@@ -5,18 +5,10 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  ChevronLeft, Save, Trash2, ListTree, Palette, Smartphone, LayoutPanelTop,
-  ArrowUp, ArrowDown, IndentIncrease, IndentDecrease, Plus, GripVertical, Image as ImageIcon, Sparkles, Upload
+  ChevronLeft, Save, Trash2, ListTree, Palette, Smartphone, LayoutPanelTop, Monitor, SwatchBook, Undo2, Check,
+  ArrowUp, ArrowDown, IndentIncrease, IndentDecrease, Plus, GripVertical, Image as ImageIcon, Sparkles, Upload, Type
 } from 'lucide-react';
-
-const DEFAULT_SETTINGS = {
-  align: 'flex-end', styleType: 'link', textColor: '#334155', hoverTextColor: '#3b82f6',
-  hoverBgColor: 'transparent', bgColor: '#3b82f6', borderRadius: '6px', itemGap: '20px',
-  itemBorder: 'none', menuBgColor: 'transparent', menuBgOpacity: 100, barHeight: '64px',
-  barPadding: '0 24px', isSticky: false, shadow: 'none', effect: 'none',
-  logoUrl: '', logoAlign: 'left', logoHeight: '40px', logoGap: '24px', logoLink: 'index.html',
-  mobileThreshold: '768', burgerIcon: '☰',
-};
+import { DEFAULT_SETTINGS, BURGER_ICONS, EFFECT_GROUPS, THEMES, applyTheme, matchingTheme, normalizeSettings, toggleEffect, cleanEffects } from '../menu/menuThemes';
 
 // ---- tree utilities (immutable) ----
 const clone = (t) => JSON.parse(JSON.stringify(t));
@@ -51,6 +43,12 @@ export default function MenuBuilder() {
   const draftValue = useMemo(() => ({ items, settings }), [items, settings]);
   const draft = useDraftSync('menu', draftValue);
   const [restoredAt, setRestoredAt] = useState(null);
+  const [tab, setTab] = useState('structure');
+  const [device, setDevice] = useState('desktop');
+  const [themeUndo, setThemeUndo] = useState(null); // { name, settings } of the last theme applied
+  const set = (patch) => setSettings(s => ({ ...s, ...patch }));
+  const effectsOn = cleanEffects(settings.effects);
+  const activeTheme = matchingTheme(settings);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const logoInputRef = useRef(null);
 
@@ -92,13 +90,13 @@ export default function MenuBuilder() {
       .then(res => res.json())
       .then(data => {
         let loaded = []; let loadedSettings = DEFAULT_SETTINGS;
-        if (data && !Array.isArray(data)) { loaded = data.items || []; loadedSettings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) }; }
+        if (data && !Array.isArray(data)) { loaded = data.items || []; loadedSettings = normalizeSettings(data.settings); }
         else if (Array.isArray(data)) loaded = data;
         const server = { items: flatToTree(loaded), settings: loadedSettings };
         // If an unsaved local draft exists (expired session, refresh...) it is re-applied
         const pending = draft.loaded(server);
         const v = pending ? pending.value : server;
-        setSettings(v.settings); setItems(v.items);
+        setSettings(normalizeSettings(v.settings)); setItems(v.items);
         if (pending) setRestoredAt(pending.savedAt);
       })
       .catch(console.error);
@@ -183,101 +181,248 @@ export default function MenuBuilder() {
           <span><strong>Restored unsaved changes</strong> from {new Date(restoredAt).toLocaleString()}. They are <strong>not saved to the site yet</strong>: click Save &amp; Publish to keep them.</span>
           <button onClick={() => {
             if (!window.confirm('Discard the restored changes and reload the saved menu?')) return;
-            const srv = draft.discard(); setItems(srv.items); setSettings(srv.settings); setRestoredAt(null);
+            const srv = draft.discard(); setItems(srv.items); setSettings(normalizeSettings(srv.settings)); setRestoredAt(null);
           }} style={{ background: 'transparent', color: '#bae6fd', border: '1px solid #0369a1', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12px' }}>Discard</button>
         </div>
       )}
 
-      <LivePreview items={items} settings={settings} />
+      <LivePreview items={items} settings={settings} device={device} onDevice={setDevice} />
 
-      {/* ---- Settings ---- */}
-      <div style={card}>
-        <SectionTitle icon={Palette} color="#38bdf8">Items & Colors</SectionTitle>
-        <Grid cols={3}>
-          <Field label="ITEM STYLE"><select style={input} value={settings.styleType} onChange={e => setSettings({ ...settings, styleType: e.target.value })}>
-            <option value="link">Classic Link</option><option value="pill">Pill (Rounded)</option><option value="box">Box</option></select></Field>
-          <Field label="BUTTONS ALIGNMENT"><select style={input} value={settings.align} onChange={e => setSettings({ ...settings, align: e.target.value })}>
-            <option value="flex-start">Left</option><option value="center">Center</option><option value="flex-end">Right</option></select></Field>
-          <Field label="SPACING BETWEEN ITEMS"><input style={input} value={settings.itemGap} onChange={e => setSettings({ ...settings, itemGap: e.target.value })} placeholder="20px" /></Field>
-          <Field label="TEXT COLOR"><ColorInput value={settings.textColor} onChange={v => setSettings({ ...settings, textColor: v })} /></Field>
-          <Field label="HOVER TEXT COLOR"><ColorInput value={settings.hoverTextColor} onChange={v => setSettings({ ...settings, hoverTextColor: v })} /></Field>
-          <Field label="HOVER BACKGROUND"><ColorInput value={settings.hoverBgColor} onChange={v => setSettings({ ...settings, hoverBgColor: v })} allowTransparent /></Field>
-          {settings.styleType !== 'link' && <Field label="BUTTON BACKGROUND"><ColorInput value={settings.bgColor} onChange={v => setSettings({ ...settings, bgColor: v })} /></Field>}
-          <Field label="ITEM BORDER">
-            <select style={input} value={isCustomBorder ? '__custom__' : (settings.itemBorder || 'none')} onChange={e => { if (e.target.value !== '__custom__') setSettings({ ...settings, itemBorder: e.target.value }); else setSettings({ ...settings, itemBorder: '1px solid #cccccc' }); }}>
-              {BORDER_PRESETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
-              <option value="__custom__">Custom…</option>
-            </select>
-            {isCustomBorder && <input style={{ ...input, marginTop: '6px' }} value={settings.itemBorder} onChange={e => setSettings({ ...settings, itemBorder: e.target.value })} placeholder="1px solid #ccc" />}
-          </Field>
-          <Field label="ITEM RADIUS (↑/↓)"><input style={input} value={settings.borderRadius} onChange={e => setSettings({ ...settings, borderRadius: e.target.value })} onKeyDown={radiusKey} placeholder="6px" /></Field>
-        </Grid>
-
-        <SectionTitle icon={LayoutPanelTop} color="#a78bfa" border>Bar & Background</SectionTitle>
-        <Grid cols={3}>
-          <Field label="BAR HEIGHT"><input style={input} value={settings.barHeight} onChange={e => setSettings({ ...settings, barHeight: e.target.value })} placeholder="64px" /></Field>
-          <Field label="BAR PADDING"><input style={input} value={settings.barPadding} onChange={e => setSettings({ ...settings, barPadding: e.target.value })} placeholder="0 24px" /></Field>
-          <Field label="BACKGROUND COLOR"><ColorInput value={settings.menuBgColor} onChange={v => setSettings({ ...settings, menuBgColor: v })} allowTransparent /></Field>
-          <Field label={`BACKGROUND OPACITY (${settings.menuBgOpacity}%)`}>
-            <input type="range" min="0" max="100" value={settings.menuBgOpacity} onChange={e => setSettings({ ...settings, menuBgOpacity: parseInt(e.target.value) })} style={{ width: '100%' }} /></Field>
-          <Field label="SHADOW"><select style={input} value={settings.shadow} onChange={e => setSettings({ ...settings, shadow: e.target.value })}>
-            <option value="none">None</option><option value="soft">Soft</option><option value="medium">Medium</option><option value="strong">Strong</option></select></Field>
-          <Field label="STICKY"><label style={checkRow}><input type="checkbox" checked={settings.isSticky} onChange={e => setSettings({ ...settings, isSticky: e.target.checked })} style={{ width: 18, height: 18 }} /> Fixed on top</label></Field>
-        </Grid>
-
-        <SectionTitle icon={Sparkles} color="#fbbf24" border>Premium Effects</SectionTitle>
-        <Grid cols={3}>
-          <Field label="HOVER EFFECT"><select style={input} value={settings.effect} onChange={e => setSettings({ ...settings, effect: e.target.value })}>
-            <option value="none">None</option>
-            <option value="underline">Animated underline</option>
-            <option value="lift">Lift on hover</option>
-            <option value="glass">Glassmorphism (blur)</option>
-            <option value="glare">Glare (animated sheen)</option>
-          </select></Field>
-        </Grid>
-
-        <SectionTitle icon={ImageIcon} color="#10b981" border>Logo</SectionTitle>
-        <Grid cols={3}>
-          <Field label="LOGO IMAGE">
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input style={{ ...input, flex: 1 }} value={settings.logoUrl} onChange={e => setSettings({ ...settings, logoUrl: e.target.value })} placeholder="/uploads/logo.png" />
-              <button onClick={() => logoInputRef.current && logoInputRef.current.click()} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 12px', background: '#334155', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', whiteSpace: 'nowrap' }}><Upload size={14} /> Upload</button>
-              <input ref={logoInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { uploadLogo(e.target.files[0]); e.target.value = ''; }} />
-            </div>
-          </Field>
-          <Field label="LOGO ALIGNMENT"><select style={input} value={settings.logoAlign} onChange={e => setSettings({ ...settings, logoAlign: e.target.value })}>
-            <option value="left">Left</option><option value="right">Right</option></select></Field>
-          <Field label="LOGO HEIGHT"><input style={input} value={settings.logoHeight} onChange={e => setSettings({ ...settings, logoHeight: e.target.value })} placeholder="40px" /></Field>
-          <Field label="LOGO / BUTTONS GAP"><input style={input} value={settings.logoGap} onChange={e => setSettings({ ...settings, logoGap: e.target.value })} placeholder="24px" /></Field>
-          <Field label="LOGO LINK"><select style={input} value={settings.logoLink} onChange={e => setSettings({ ...settings, logoLink: e.target.value })}>
-            <option value="index.html">Homepage</option><option value="">No link</option>
-            {pages.map(p => <option key={p.id} value={p.clean_slug ? p.clean_slug + '/index.html' : 'index.html'}>{p.title}</option>)}</select></Field>
-        </Grid>
-
-        <SectionTitle icon={Smartphone} color="#10b981" border>Mobile (Hamburger)</SectionTitle>
-        <Grid cols={2}>
-          <Field label="MOBILE BREAKPOINT (px)"><input type="number" style={input} value={settings.mobileThreshold} onChange={e => setSettings({ ...settings, mobileThreshold: e.target.value })} /></Field>
-          <Field label="BURGER ICON"><input style={input} value={settings.burgerIcon} onChange={e => setSettings({ ...settings, burgerIcon: e.target.value })} /></Field>
-        </Grid>
+      <div role="tablist" aria-label="Menu settings" style={tabBar}>
+        {TABS.map(t => (
+          <button key={t.id} role="tab" id={`menu-tab-${t.id}`} aria-selected={tab === t.id} aria-controls="menu-tabpanel"
+            onClick={() => setTab(t.id)} style={tab === t.id ? { ...tabBtn, ...tabBtnOn } : tabBtn}>
+            <t.icon size={15} /> {t.label}
+            {t.id === 'effects' && effectsOn.length > 0 && <span style={badge}>{effectsOn.length}</span>}
+          </button>
+        ))}
       </div>
 
-      {/* ---- Menu structure ---- */}
-      <div style={card}>
-        <h3 style={{ margin: '0 0 6px 0', fontSize: '15px' }}>Navigation Structure</h3>
-        <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px' }}>
-          Drag <GripVertical size={12} style={{ verticalAlign: 'middle' }} /> to reorder. Use ⇥ / ⇤ to nest or un-nest a submenu item.
-          Leave the URL empty for a parent that only opens its submenu (no link).
-        </p>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <MenuLevel items={items} depth={0} pages={pages}
-            onUpdate={updateItem} onRemove={removeItem} onAddChild={addChild}
-            onMove={moveUpDown} onIndent={indent} onOutdent={outdent} />
-        </DndContext>
-        <button onClick={addTop} style={addBtn}><Plus size={16} /> Add top-level item</button>
+      <div role="tabpanel" id="menu-tabpanel" aria-labelledby={`menu-tab-${tab}`} style={card}>
+        {tab === 'structure' && (
+          <>
+            <PanelIntro title="Navigation structure">
+              Drag <GripVertical size={12} style={{ verticalAlign: 'middle' }} /> to reorder. Use ⇥ / ⇤ to nest or un-nest a submenu item.
+              Leave the URL empty for a parent that only opens its submenu (no link).
+            </PanelIntro>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <MenuLevel items={items} depth={0} pages={pages}
+                onUpdate={updateItem} onRemove={removeItem} onAddChild={addChild}
+                onMove={moveUpDown} onIndent={indent} onOutdent={outdent} />
+            </DndContext>
+            <button onClick={addTop} style={addBtn}><Plus size={16} /> Add top-level item</button>
+          </>
+        )}
+
+        {tab === 'themes' && (
+          <>
+            <PanelIntro title="Themes">
+              A theme sets colors, item shape, typography and effects in one click. Your links, logo, alignment and
+              mobile settings stay as they are, and you can fine-tune everything afterwards in Style and Effects.
+            </PanelIntro>
+            {themeUndo && (
+              <div role="status" style={undoBar}>
+                <span>Applied <strong>{themeUndo.name}</strong>.</span>
+                <button onClick={() => { setSettings(themeUndo.settings); setThemeUndo(null); }} style={ghostBtn}><Undo2 size={13} /> Undo</button>
+              </div>
+            )}
+            <div style={themeGrid}>
+              {THEMES.map(t => {
+                const current = !!activeTheme && activeTheme.id === t.id;
+                return (
+                  <button key={t.id} onClick={() => { if (!current) { setThemeUndo({ name: t.name, settings }); setSettings(applyTheme(settings, t)); } }}
+                    aria-pressed={current} aria-label={`Apply the ${t.name} theme`} style={{ ...themeCard, ...(current ? themeCardOn : {}) }}>
+                    <ThemeSwatch theme={t} />
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', fontWeight: 700, fontSize: '13px' }}>
+                      {t.name}{current && <span style={{ ...badge, display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Check size={11} /> In use</span>}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', lineHeight: 1.4 }}>{t.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {tab === 'style' && (
+          <>
+            <SectionTitle icon={Palette} color="#38bdf8">Items</SectionTitle>
+            <Grid>
+              <Field label="ITEM STYLE"><select style={input} value={settings.styleType} onChange={e => set({ styleType: e.target.value })}>
+                <option value="link">Classic Link</option><option value="pill">Pill (Rounded)</option><option value="box">Box</option></select></Field>
+              <Field label="TEXT COLOR"><ColorInput value={settings.textColor} onChange={v => set({ textColor: v })} /></Field>
+              <Field label="HOVER TEXT COLOR"><ColorInput value={settings.hoverTextColor} onChange={v => set({ hoverTextColor: v })} /></Field>
+              <Field label="HOVER BACKGROUND"><ColorInput value={settings.hoverBgColor} onChange={v => set({ hoverBgColor: v })} allowTransparent /></Field>
+              {settings.styleType !== 'link' && <Field label="BUTTON BACKGROUND"><ColorInput value={settings.bgColor} onChange={v => set({ bgColor: v })} /></Field>}
+              {settings.styleType !== 'link' && <Field label="BUTTON TEXT"><ColorInput value={settings.buttonTextColor} onChange={v => set({ buttonTextColor: v })} /></Field>}
+              <Field label="ITEM BORDER">
+                <select style={input} value={isCustomBorder ? '__custom__' : (settings.itemBorder || 'none')} onChange={e => set({ itemBorder: e.target.value !== '__custom__' ? e.target.value : '1px solid #cccccc' })}>
+                  {BORDER_PRESETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+                  <option value="__custom__">Custom…</option>
+                </select>
+                {isCustomBorder && <input style={{ ...input, marginTop: '6px' }} value={settings.itemBorder} onChange={e => set({ itemBorder: e.target.value })} placeholder="1px solid #ccc" />}
+              </Field>
+              <Field label="ITEM RADIUS (↑/↓)"><input style={input} value={settings.borderRadius} onChange={e => set({ borderRadius: e.target.value })} onKeyDown={radiusKey} placeholder="6px" /></Field>
+              <Field label="CURRENT PAGE"><label style={checkRow}><input type="checkbox" checked={!!settings.highlightCurrent} onChange={e => set({ highlightCurrent: e.target.checked })} style={{ width: 18, height: 18 }} /> Highlight the current page</label></Field>
+            </Grid>
+
+            <SectionTitle icon={Type} color="#f472b6" border>Typography</SectionTitle>
+            <Grid>
+              <Field label="FONT SIZE"><input style={input} value={settings.fontSize} onChange={e => set({ fontSize: e.target.value })} placeholder="15px" /></Field>
+              <Field label="FONT WEIGHT"><select style={input} value={settings.fontWeight} onChange={e => set({ fontWeight: e.target.value })}>
+                <option value="300">Light</option><option value="400">Regular</option><option value="500">Medium</option>
+                <option value="600">Semibold</option><option value="700">Bold</option><option value="800">Extra bold</option></select></Field>
+              <Field label="LETTER CASE"><select style={input} value={settings.textTransform} onChange={e => set({ textTransform: e.target.value })}>
+                <option value="none">As typed</option><option value="uppercase">UPPERCASE</option><option value="capitalize">Capitalize Words</option></select></Field>
+              <Field label="LETTER SPACING"><input style={input} value={settings.letterSpacing} onChange={e => set({ letterSpacing: e.target.value })} placeholder="0px" /></Field>
+              <Field label="SPACING BETWEEN ITEMS"><input style={input} value={settings.itemGap} onChange={e => set({ itemGap: e.target.value })} placeholder="20px" /></Field>
+            </Grid>
+
+            <SectionTitle icon={LayoutPanelTop} color="#a78bfa" border>Bar</SectionTitle>
+            <Grid>
+              <Field label="BACKGROUND COLOR"><ColorInput value={settings.menuBgColor} onChange={v => set({ menuBgColor: v })} allowTransparent /></Field>
+              <Field label={`BACKGROUND OPACITY (${settings.menuBgOpacity}%)`}>
+                <input type="range" min="0" max="100" value={settings.menuBgOpacity} onChange={e => set({ menuBgOpacity: parseInt(e.target.value, 10) })} style={{ width: '100%' }} /></Field>
+              <Field label="SHADOW"><select style={input} value={settings.shadow} onChange={e => set({ shadow: e.target.value })}>
+                <option value="none">None</option><option value="soft">Soft</option><option value="medium">Medium</option><option value="strong">Strong</option></select></Field>
+              <Field label="BAR HEIGHT"><input style={input} value={settings.barHeight} onChange={e => set({ barHeight: e.target.value })} placeholder="64px" /></Field>
+              <Field label="BAR PADDING"><input style={input} value={settings.barPadding} onChange={e => set({ barPadding: e.target.value })} placeholder="0 24px" /></Field>
+            </Grid>
+          </>
+        )}
+
+        {tab === 'effects' && (
+          <>
+            <PanelIntro title="Effects" action={effectsOn.length > 0 && <button onClick={() => set({ effects: [] })} style={ghostBtn}>Clear all</button>}>
+              Combine as many as you like. Inside a group marked <em>pick one</em>, choosing an effect replaces the other one.
+              Hover over the preview to try them.
+            </PanelIntro>
+            {EFFECT_GROUPS.map(g => (
+              <fieldset key={g.id} style={fxGroup}>
+                <legend style={{ padding: '0 6px', fontSize: '12px', fontWeight: 750, color: '#e2e8f0' }}>
+                  {g.label} <span style={{ fontWeight: 500, color: '#64748b' }}>· {g.mode === 'single' ? 'pick one' : 'combine freely'}</span>
+                </legend>
+                <div style={{ fontSize: '11px', color: g.needsSticky && !settings.isSticky ? '#fbbf24' : '#94a3b8', marginBottom: '8px' }}>
+                  {g.needsSticky && !settings.isSticky ? 'Turn on "Fixed on top" (Layout & Logo) for these to work.' : g.hint}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {g.effects.map(e => {
+                    const on = effectsOn.includes(e.id);
+                    return (
+                      <button key={e.id} aria-pressed={on} title={e.hint} onClick={() => set({ effects: toggleEffect(settings.effects, e.id) })}
+                        style={{ ...chip, ...(on ? chipOn : {}) }}>
+                        {on && <Check size={12} />} {e.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ))}
+          </>
+        )}
+
+        {tab === 'layout' && (
+          <>
+            <SectionTitle icon={LayoutPanelTop} color="#a78bfa">Position</SectionTitle>
+            <Grid>
+              <Field label="BUTTONS ALIGNMENT"><select style={input} value={settings.align} onChange={e => set({ align: e.target.value })}>
+                <option value="flex-start">Left</option><option value="center">Center</option><option value="flex-end">Right</option></select></Field>
+              <Field label="STICKY"><label style={checkRow}><input type="checkbox" checked={!!settings.isSticky} onChange={e => set({ isSticky: e.target.checked })} style={{ width: 18, height: 18 }} /> Fixed on top</label></Field>
+            </Grid>
+
+            <SectionTitle icon={ImageIcon} color="#10b981" border>Logo</SectionTitle>
+            <Grid>
+              <Field label="LOGO IMAGE">
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input style={{ ...input, flex: 1, minWidth: 0 }} value={settings.logoUrl} onChange={e => set({ logoUrl: e.target.value })} placeholder="/uploads/logo.png" />
+                  <button onClick={() => logoInputRef.current && logoInputRef.current.click()} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 12px', background: '#334155', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', whiteSpace: 'nowrap' }}><Upload size={14} /> Upload</button>
+                  <input ref={logoInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { uploadLogo(e.target.files[0]); e.target.value = ''; }} />
+                </div>
+              </Field>
+              <Field label="LOGO ALIGNMENT"><select style={input} value={settings.logoAlign} onChange={e => set({ logoAlign: e.target.value })}>
+                <option value="left">Left</option><option value="right">Right</option></select></Field>
+              <Field label="LOGO HEIGHT"><input style={input} value={settings.logoHeight} onChange={e => set({ logoHeight: e.target.value })} placeholder="40px" /></Field>
+              <Field label="LOGO / BUTTONS GAP"><input style={input} value={settings.logoGap} onChange={e => set({ logoGap: e.target.value })} placeholder="24px" /></Field>
+              <Field label="LOGO LINK"><select style={input} value={settings.logoLink} onChange={e => set({ logoLink: e.target.value })}>
+                <option value="index.html">Homepage</option><option value="">No link</option>
+                {pages.map(p => <option key={p.id} value={p.clean_slug ? p.clean_slug + '/index.html' : 'index.html'}>{p.title}</option>)}</select></Field>
+            </Grid>
+          </>
+        )}
+
+        {tab === 'mobile' && (
+          <>
+            <PanelIntro title="Mobile (hamburger)">
+              Below the breakpoint the items collapse into a hamburger button that opens them as a list under the bar.
+              Switch the preview to <em>Mobile</em> to check it.
+            </PanelIntro>
+
+            <SectionTitle icon={Smartphone} color="#10b981">Burger icon</SectionTitle>
+            <div role="group" aria-label="Burger icon" style={burgerGrid}>
+              {BURGER_ICONS.map(b => (
+                <button key={b.id} onClick={() => set({ burgerStyle: b.id })} aria-pressed={settings.burgerStyle === b.id} title={b.label}
+                  style={{ ...burgerTile, ...(settings.burgerStyle === b.id ? burgerTileOn : {}) }}>
+                  <span style={{ width: 26, height: 26, display: 'block' }} dangerouslySetInnerHTML={{ __html: b.svg }} />
+                  <span style={{ fontSize: '10px' }}>{b.label}</span>
+                </button>
+              ))}
+              <button onClick={() => set({ burgerStyle: 'label' })} aria-pressed={settings.burgerStyle === 'label'} title="Icon + Menu"
+                style={{ ...burgerTile, ...(settings.burgerStyle === 'label' ? burgerTileOn : {}) }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', height: 26 }}>
+                  <span style={{ width: 20, height: 20, display: 'block' }} dangerouslySetInnerHTML={{ __html: BURGER_ICONS[0].svg }} />
+                  <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '1px' }}>MENU</span>
+                </span>
+                <span style={{ fontSize: '10px' }}>Icon + Menu</span>
+              </button>
+              <button onClick={() => set({ burgerStyle: 'custom' })} aria-pressed={settings.burgerStyle === 'custom'} title="Custom character"
+                style={{ ...burgerTile, ...(settings.burgerStyle === 'custom' ? burgerTileOn : {}) }}>
+                <span style={{ fontSize: '20px', height: 26, lineHeight: '26px' }}>{settings.burgerIcon || '☰'}</span>
+                <span style={{ fontSize: '10px' }}>Custom</span>
+              </button>
+            </div>
+            {settings.burgerStyle === 'custom' && (
+              <div style={{ maxWidth: '220px', marginTop: '12px' }}>
+                <Field label="CUSTOM CHARACTER"><input style={input} value={settings.burgerIcon} onChange={e => set({ burgerIcon: e.target.value })} placeholder="☰" maxLength={8} /></Field>
+              </div>
+            )}
+            <p style={{ fontSize: '11px', color: '#94a3b8', margin: '10px 0 0' }}>When the menu is open the icon turns into ✕. It uses the menu text color.</p>
+
+            <SectionTitle icon={LayoutPanelTop} color="#a78bfa" border>Mobile bar</SectionTitle>
+            <Grid>
+              <Field label="BURGER POSITION">
+                <div role="group" aria-label="Burger position" style={{ display: 'flex', gap: '6px' }}>
+                  {[['left', 'Left'], ['right', 'Right']].map(([v, l]) => (
+                    <button key={v} onClick={() => set({ mobileBurgerSide: v })} aria-pressed={settings.mobileBurgerSide === v}
+                      style={{ ...chip, flex: 1, justifyContent: 'center', ...(settings.mobileBurgerSide === v ? chipOn : {}) }}>{l}</button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="LOGO ON MOBILE">
+                <label style={checkRow}><input type="checkbox" checked={settings.mobileShowLogo !== false} onChange={e => set({ mobileShowLogo: e.target.checked })} style={{ width: 18, height: 18 }} /> Show the logo</label>
+              </Field>
+              <Field label="MOBILE BREAKPOINT (px)"><input type="number" style={input} value={settings.mobileThreshold} onChange={e => set({ mobileThreshold: e.target.value })} /></Field>
+            </Grid>
+            <p style={{ fontSize: '11px', color: '#94a3b8', margin: '10px 0 0' }}>
+              {settings.logoUrl
+                ? (settings.mobileShowLogo === false ? 'The logo is hidden on mobile.' : `The logo sits on the ${settings.mobileBurgerSide === 'left' ? 'right' : 'left'}, opposite the burger.`)
+                : 'No logo set: add one in Layout & Logo.'}
+              {' '}On mobile the bar always shows logo and burger at the two edges, whatever the desktop alignment.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
 }
+
+const TABS = [
+  { id: 'structure', label: 'Structure', icon: ListTree },
+  { id: 'themes', label: 'Themes', icon: SwatchBook },
+  { id: 'style', label: 'Style', icon: Palette },
+  { id: 'effects', label: 'Effects', icon: Sparkles },
+  { id: 'layout', label: 'Layout & Logo', icon: LayoutPanelTop },
+  { id: 'mobile', label: 'Mobile', icon: Smartphone },
+];
 
 function MenuLevel({ items, depth, pages, onUpdate, onRemove, onAddChild, onMove, onIndent, onOutdent }) {
   return (
@@ -324,8 +469,10 @@ function MenuRow({ item, index, total, depth, pages, onUpdate, onRemove, onAddCh
   );
 }
 
-// AUTHENTIC preview: uses the real compiler (preview_menu endpoint) in an isolated iframe.
-function LivePreview({ items, settings }) {
+// AUTHENTIC preview: uses the real compiler (preview_menu endpoint) in an isolated iframe, over a
+// dummy page that scrolls, so "Fixed on top" and the scroll effects behave as on the site.
+// Stays at the top while scrolling the settings; "Mobile" narrows the frame below the breakpoint.
+function LivePreview({ items, settings, device, onDevice }) {
   const [html, setHtml] = useState('');
   const [loading, setLoading] = useState(false);
   useEffect(() => {
@@ -342,20 +489,62 @@ function LivePreview({ items, settings }) {
   }, [items, settings]);
 
   const doc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>:root{--brand-color:#3b82f6}html,body{margin:0;padding:0;background:#f1f5f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}</style>
-    </head><body>${html}<div style="height:220px"></div></body></html>`;
+    <style>:root{--brand-color:#3b82f6}html,body{margin:0;padding:0;background:#f1f5f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}${DUMMY_CSS}</style>
+    </head><body>${html}${DUMMY_PAGE}</body></html>`;
+  const mobile = device === 'mobile';
 
   return (
-    <div style={{ marginBottom: '20px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #334155' }}>
-      <div style={{ fontSize: '10px', color: '#64748b', padding: '6px 12px', background: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', justifyContent: 'space-between' }}>
-        <span>Live preview (authentic — links are inert)</span>{loading && <span>updating…</span>}
+    <div style={{ position: 'sticky', top: 0, zIndex: 5, marginBottom: '16px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #334155', background: '#0f172a', boxShadow: '0 10px 24px rgba(2,6,23,.45)' }}>
+      <div style={{ fontSize: '10px', color: '#64748b', padding: '6px 12px', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+        <span>Live preview (authentic — links are inert) · scroll it to try “Fixed on top”{loading && ' · updating…'}</span>
+        <span role="group" aria-label="Preview size" style={{ display: 'flex', gap: '4px' }}>
+          <button onClick={() => onDevice('desktop')} aria-pressed={!mobile} title="Desktop" style={{ ...deviceBtn, ...(!mobile ? deviceBtnOn : {}) }}><Monitor size={13} /> Desktop</button>
+          <button onClick={() => onDevice('mobile')} aria-pressed={mobile} title="Mobile" style={{ ...deviceBtn, ...(mobile ? deviceBtnOn : {}) }}><Smartphone size={13} /> Mobile</button>
+        </span>
       </div>
-      <iframe title="menu-preview" srcDoc={doc} sandbox="allow-scripts"
-        style={{ width: '100%', height: '340px', border: 'none', background: '#f1f5f9', display: 'block' }} />
+      <div style={{ background: '#1e293b', display: 'flex', justifyContent: 'center' }}>
+        <iframe title="menu-preview" srcDoc={doc} sandbox="allow-scripts"
+          style={{ width: mobile ? '390px' : '100%', maxWidth: '100%', height: '300px', border: 'none', background: '#f1f5f9', display: 'block' }} />
+      </div>
     </div>
   );
 }
 
+// Placeholder page under the preview menu: gray blocks only, so the menu stays the focus.
+const DUMMY_CSS = '.dp{max-width:960px;margin:0 auto;padding:28px 20px 60px;color:#94a3b8}'
+  + '.dp-hero{height:150px;border-radius:14px;background:linear-gradient(135deg,#e2e8f0,#cbd5e1);display:flex;align-items:center;justify-content:center;font-size:13px;color:#64748b;text-align:center;padding:0 16px}'
+  + '.dp-l{height:12px;border-radius:6px;background:#e2e8f0;margin:14px 0}.dp-l.s{width:60%}'
+  + '.dp-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:26px 0}.dp-c{height:110px;border-radius:12px;background:#e2e8f0}';
+const DUMMY_PAGE = '<main class="dp" aria-hidden="true"><div class="dp-hero">Sample page · scroll to see how the menu behaves</div>'
+  + [0, 1, 2].map(() => '<div class="dp-l"></div><div class="dp-l"></div><div class="dp-l s"></div><div class="dp-g"><div class="dp-c"></div><div class="dp-c"></div><div class="dp-c"></div></div>').join('')
+  + '</main>';
+
+// Miniature of a theme: its bar color, three items in its style and its hover color on the first one.
+function ThemeSwatch({ theme }) {
+  const s = theme.settings;
+  const transparent = !s.menuBgColor || s.menuBgColor === 'transparent';
+  const button = s.styleType !== 'link';
+  const item = (label, hover) => (
+    <span style={{
+      fontSize: '9px', fontWeight: s.fontWeight, textTransform: s.textTransform, letterSpacing: s.letterSpacing, whiteSpace: 'nowrap',
+      padding: button ? '3px 7px' : '3px 2px', borderRadius: s.styleType === 'pill' ? '20px' : s.borderRadius,
+      border: s.itemBorder !== 'none' ? s.itemBorder : undefined,
+      color: hover ? (button && s.hoverBgColor === 'transparent' ? s.buttonTextColor : s.hoverTextColor) : (button ? s.buttonTextColor : s.textColor),
+      background: hover && s.hoverBgColor !== 'transparent' ? s.hoverBgColor : (button ? s.bgColor : 'transparent'),
+      boxShadow: hover && !button && s.hoverBgColor === 'transparent' ? `inset 0 -2px 0 ${s.hoverTextColor}` : undefined,
+    }}>{label}</span>
+  );
+  return (
+    <span aria-hidden="true" style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', height: '38px', padding: '0 10px', borderRadius: '8px', overflow: 'hidden',
+      background: transparent ? 'repeating-conic-gradient(#e2e8f0 0% 25%, #f8fafc 0% 50%) 0 0 / 12px 12px' : s.menuBgColor,
+      boxShadow: s.effects.includes('accent-line') ? `inset 0 -3px 0 ${s.hoverTextColor}` : undefined,
+    }}>
+      <span style={{ marginRight: 'auto', width: '16px', height: '16px', borderRadius: '4px', background: s.hoverTextColor, opacity: 0.9 }} />
+      {item('Home', true)}{item('About')}{item('Contact')}
+    </span>
+  );
+}
 
 // ---- small UI components ----
 const SectionTitle = ({ icon: Icon, color, border, children }) => (
@@ -363,7 +552,15 @@ const SectionTitle = ({ icon: Icon, color, border, children }) => (
     <Icon size={16} color={color} /> {children}
   </h3>
 );
-const Grid = ({ cols, children }) => <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '15px' }}>{children}</div>;
+const PanelIntro = ({ title, action, children }) => (
+  <div style={{ marginBottom: '16px' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+      <h3 style={{ margin: '0 0 6px 0', fontSize: '15px' }}>{title}</h3>{action}
+    </div>
+    <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>{children}</p>
+  </div>
+);
+const Grid = ({ children }) => <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '15px' }}>{children}</div>;
 const Field = ({ label, children }) => (
   <div><label style={{ display: 'block', fontSize: '11px', fontWeight: 750, color: '#94a3b8', marginBottom: '5px' }}>{label}</label>{children}</div>
 );
@@ -374,10 +571,27 @@ const ColorInput = ({ value, onChange, allowTransparent }) => (
   </div>
 );
 
-const card = { background: '#1e293b', borderRadius: '12px', border: '1px solid #334155', padding: '25px', marginBottom: '20px' };
+const card = { background: '#1e293b', borderRadius: '0 0 12px 12px', border: '1px solid #334155', borderTop: 'none', padding: '22px', marginBottom: '20px' };
 const input = { padding: '7px 9px', border: '1px solid #334155', borderRadius: '6px', fontSize: '13px', width: '100%', background: '#0f172a', color: '#fff', boxSizing: 'border-box' };
 const miniBtn = { background: '#334155', border: 'none', color: '#fff', borderRadius: '4px', padding: '4px', cursor: 'pointer', display: 'flex' };
 const backBtn = { background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', padding: 0, marginBottom: '10px' };
 const primaryBtn = { display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' };
+const ghostBtn = { display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'transparent', color: '#bae6fd', border: '1px solid #0369a1', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12px' };
 const addBtn = { width: '100%', padding: '15px', background: 'transparent', color: '#38bdf8', border: '2px dashed #334155', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' };
 const checkRow = { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#f8fafc', fontWeight: 'bold', height: '38px', cursor: 'pointer' };
+const tabBar = { display: 'flex', flexWrap: 'wrap', gap: '2px', background: '#0f172a', border: '1px solid #334155', borderRadius: '12px 12px 0 0', padding: '6px 6px 0' };
+const tabBtn = { display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', background: 'transparent', color: '#94a3b8', border: 'none', borderBottom: '2px solid transparent', borderRadius: '8px 8px 0 0', cursor: 'pointer', fontSize: '13px', fontWeight: 600 };
+const tabBtnOn = { background: '#1e293b', color: '#f8fafc', borderBottom: '2px solid #38bdf8' };
+const badge = { background: '#0369a1', color: '#e0f2fe', borderRadius: '10px', padding: '1px 7px', fontSize: '10px', fontWeight: 700 };
+const undoBar = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', background: '#0c4a6e', border: '1px solid #0369a1', borderRadius: '10px', padding: '8px 12px', marginBottom: '14px', fontSize: '13px', color: '#e0f2fe' };
+const themeGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '12px' };
+const themeCard = { display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', padding: '10px', background: '#0f172a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit' };
+const themeCardOn = { border: '1px solid #38bdf8', boxShadow: '0 0 0 2px rgba(56,189,248,.25)' };
+const fxGroup = { border: '1px solid #334155', borderRadius: '10px', padding: '10px 14px 14px', margin: '0 0 12px 0', minWidth: 0 };
+const chip = { display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px', background: '#0f172a', color: '#cbd5e1', border: '1px solid #334155', borderRadius: '20px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 };
+const chipOn = { background: '#0c4a6e', color: '#f0f9ff', border: '1px solid #38bdf8' };
+const deviceBtn = { display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: '6px', cursor: 'pointer', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.5px' };
+const burgerGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))', gap: '8px' };
+const burgerTile = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '10px 6px', background: '#f8fafc', color: '#334155', border: '2px solid transparent', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 };
+const burgerTileOn = { border: '2px solid #38bdf8', boxShadow: '0 0 0 3px rgba(56,189,248,.25)' };
+const deviceBtnOn = { background: '#334155', color: '#f8fafc' };

@@ -11,6 +11,25 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Menu Builder reorganized into tabs** (Structure, Themes, Style, Effects, Layout & Logo, Mobile) with
+  the live preview pinned on top and a Desktop/Mobile switch to check the hamburger menu.
+- **12 menu themes**: Classic, Professional, Fresh, Warm, Midnight, Minimal, Ocean, Sunset, Earth, Pastel,
+  Bold and Corporate. A theme sets colors, item shape, typography and effects in one click, keeps the links,
+  logo, alignment and mobile settings, can be undone, and is marked "In use" until you customize it.
+- **Stackable menu effects** (`settings.effects`, replacing the single `effect`): 22 effects in 7 groups:
+  hover indicator (underline, center underline, overline, highlight, dot), hover motion (lift, grow, pop),
+  hover glow (text glow, shadow), bar (glass, glare, accent line), on scroll for sticky bars (shrink,
+  hide on scroll down, shadow), submenu opening (fade, slide, zoom) and page load (slide down, fade in,
+  stagger). Effects in different groups combine; "pick one" groups keep a single effect. Menus saved with
+  the old `effect` keep working. Animations are turned off for visitors who prefer reduced motion.
+- Menu typography (font size, weight, letter case, letter spacing), a button text color for the pill/box
+  styles (it was always white), and an optional highlight of the current page (`aria-current` is always set).
+- **Mobile menu options** (Mobile tab): 8 burger icons (classic, staggered, two lines, thin, bold, dots,
+  grid, boxed) plus "icon + Menu" and a custom character; the burger turns into ✕ while the menu is open
+  (`aria-expanded` is kept in sync). The burger can sit on the left, with the logo moving to the right,
+  and the logo can be hidden on mobile only.
+- `tests/menu.mjs` (`npm run test:menu`, part of `npm test`): keeps the effect catalog in sync between the
+  editor and the compiler and renders every theme and effect through the PHP compiler.
 - **Setup wizard** (`canvascore-admin/install.php`): checks the server requirements (PHP,
   extensions, writable folders, data dir inside/outside the web root, editor build, `mail()`, HTTPS),
   creates the DB with the existing migrations, an administrator account that replaces the default
@@ -32,6 +51,14 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- Mobile menu with **center or right** button alignment: the burger no longer ends up in the middle and the
+  centered logo no longer floats over the open menu; on mobile the bar always puts logo and burger at the edges.
+- Menu accent line drawn over the open submenus.
+- **Mobile menu always open**: the menu list's inline `display:flex` beat the mobile CSS, so on phones the
+  items were always shown and the burger could not close them (on the site and in the preview).
+- Menu Builder preview with "Fixed on top": the menu no longer slides down after each change. The preview now
+  renders the bar exactly as on the site, over a sample page you can scroll to try "Fixed on top" and the
+  scroll effects.
 - **Templates**: a page created from a template kept the slug `new-page` instead of following its
   title like a new blank page; it now starts as e.g. `coming-soon`.
 - **Editor canvas**: padded full-width blocks (forms, icon boxes, testimonials…) overflowed their box in
