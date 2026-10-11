@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 import { flushDrafts, setDraftUser } from '../session/drafts';
+import { CONTAINER_TYPES } from '../editor/blockCatalog';
+import { notify } from '../ui/notify';
+
+// Unique ids even for many blocks created in the same millisecond (templates, masters, imports)
+let idSeq = 0;
+export const newBlockId = () => 'block-' + Date.now().toString(36) + '-' + (++idSeq).toString(36) + Math.random().toString(36).slice(2, 7);
 
 const pushHistory = (state, newBlocks) => {
   const past = [...state.pastBlocks, state.blocks];
@@ -20,6 +26,18 @@ const removeNode = (blocks, id) => {
     if (block.children) return { ...block, children: removeNode(block.children, id) };
     return block;
   });
+};
+
+const isContainerNode = (b) => Array.isArray(b.children) || CONTAINER_TYPES.includes(b.type);
+const findNodeById = (list, id) => {
+  for (const b of list || []) { if (b.id === id) return b; const r = findNodeById(b.children, id); if (r) return r; }
+  return null;
+};
+// Adds inside the parent when it exists and is a container, otherwise at the end of the page
+// (a stale or non-container selection must never give a Text block "children").
+const addTo = (blocks, parentId, newBlock) => {
+  const parent = parentId ? findNodeById(blocks, parentId) : null;
+  return parent && isContainerNode(parent) ? insertNode(blocks, parentId, newBlock) : [...blocks, newBlock];
 };
 
 const insertNode = (blocks, parentId, newBlock) => {
@@ -67,6 +85,12 @@ const moveInTree = (roots, activeId, overId) => {
   if (nodeContainsId(a.node, overId)) return null; // no cycles
   const oPre = findInTree(tree, overId);
   if (!oPre) return null;
+  // Dropped on an EMPTY container (also a sibling): goes inside it
+  if (Array.isArray(oPre.node.children) && oPre.node.children.length === 0) {
+    a.list.splice(a.index, 1);
+    findInTree(tree, overId).node.children.push(a.node);
+    return tree;
+  }
   // Same parent: directional reorder (fixes dragging downwards)
   if (a.list === oPre.list) {
     const reordered = arrayMoveImpl(a.list, a.index, oPre.index);
@@ -100,6 +124,8 @@ export const placeInTree = (roots, activeId, targetId, position) => {
   return tree;
 };
 
+const lastEdit = { sig: '', t: 0, blocks: null };
+
 export const useStore = create((set, get) => ({
   isAuthenticated: false,
   userRole: 'editor',
@@ -120,6 +146,7 @@ export const useStore = create((set, get) => ({
   // ---- local backup of unsaved work ----
   editorDirty: false,
   editorRestored: false,        // the editor was restored from a local draft
+  editorDraftFound: null,       // { savedAt }: opening a page found unsaved work from an earlier visit (offered for restore)
   draftBackupFailed: false,     // the local backup failed (storage full/unavailable)
 
   fetchVersion: async () => {
@@ -178,7 +205,7 @@ export const useStore = create((set, get) => ({
   },
   logout: async () => {
     flushDrafts();                                   // back up unsaved work BEFORE resetting the state
-    try { await fetch('api.php?action=logout'); } catch { /* without network, still sign out of the interface */ }
+    try { await fetch('api.php?action=logout', { method: 'POST', body: '{}' }); } catch { /* without network, still sign out of the interface */ }
     window.__CC_CSRF = null;
     setDraftUser(null);
     set({
@@ -187,7 +214,7 @@ export const useStore = create((set, get) => ({
       currentView: 'manager', activePage: null, blocks: [], pastBlocks: [], futureBlocks: [], selectedBlockId: null,
       isEditingMaster: false, editingMaster: null, pages: [],
       sessionExpired: false, expiredUser: null, expiredAt: null, expiredReason: null, sessionExpiresAt: null, sessionWarning: false,
-      editorDirty: false, editorRestored: false, draftBackupFailed: false,
+      editorDirty: false, editorRestored: false, editorDraftFound: null, draftBackupFailed: false,
     });
   },
 
@@ -203,7 +230,7 @@ export const useStore = create((set, get) => ({
   publishSiteAsync: async () => {
     try {
       // An expired session is handled by the fetch guard: login on top of the app and the request retried.
-      const res = await fetch('rebuild_all.php');
+      const res = await fetch('rebuild_all.php', { method: 'POST', body: '{}' });
       const text = await res.text();
       return JSON.parse(text);
     } catch { return { success: false, message: 'Connection error.' }; }
@@ -242,13 +269,12 @@ export const useStore = create((set, get) => ({
     try {
       const blockData = JSON.parse(blockStr);
       const regenerateIds = (node) => {
-        node.id = 'block-' + Date.now() + Math.floor(Math.random() * 10000);
+        node.id = newBlockId();
         if (node.children) node.children = node.children.map(regenerateIds);
         return node;
       };
       const newBlock = regenerateIds(blockData);
-      if (parentId) return pushHistory(state, insertNode(state.blocks, parentId, newBlock));
-      return pushHistory(state, [...state.blocks, newBlock]);
+      return pushHistory(state, addTo(state.blocks, parentId, newBlock));
     } catch { return state; }
   }),
   deleteTemplate: async (id) => {
@@ -286,12 +312,15 @@ export const useStore = create((set, get) => ({
     const blockToSave = findBlock(state.blocks, blockId);
     if (!blockToSave) return;
 
-    const masterId = 'master-' + Date.now();
+    const masterId = 'master-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     try {
-      await fetch('api.php?action=save_master', {
+      const res = await fetch('api.php?action=save_master', {
         method: 'POST',
         body: JSON.stringify({ id: masterId, name, content_json: JSON.stringify(blockToSave) })
       });
+      const data = await res.json().catch(() => null);
+      // Only link the block once the master really exists (otherwise the block would be lost)
+      if (!res.ok || !data || !data.success) { notify('Master NOT saved: ' + ((data && data.message) || 'unexpected response') + '. The block was left as it is.', 'error'); return; }
       await get().fetchMasters();
 
       const replaceWithPointer = (nodes, id) => {
@@ -302,8 +331,8 @@ export const useStore = create((set, get) => ({
         });
       };
       set(s => pushHistory(s, replaceWithPointer(s.blocks, blockId)));
-      alert(`Master Component '${name}' saved and linked!`);
-    } catch { alert("Error saving Master."); }
+      notify(`Master "${name}" saved and linked.`);
+    } catch { notify('Error saving the master (connection problem). The block was left as it is.', 'error'); }
   },
 
   enterMasterEditMode: (masterId) => {
@@ -334,12 +363,12 @@ export const useStore = create((set, get) => ({
         });
         const data = await res.json();
         if (!data || !data.success) {
-          alert('Master NOT saved: ' + ((data && data.message) || 'unknown error') + '\nYour changes are still here: try again.');
+          notify('Master NOT saved: ' + ((data && data.message) || 'unknown error') + '. Your changes are still here: try again.', 'error');
           return;                                      // stays in edit mode: nothing lost
         }
         await get().fetchMasters();
       } catch {
-        alert('Master NOT saved (connection problem). Your changes are still here: try again.');
+        notify('Master NOT saved (connection problem). Your changes are still here: try again.', 'error');
         return;
       }
     }
@@ -350,7 +379,7 @@ export const useStore = create((set, get) => ({
       editingMaster: null, isEditingMaster: false,
       pastBlocks: [], futureBlocks: [], selectedBlockId: null
     });
-    if (save) alert("Master Component updated globally!");
+    if (save) notify('Master updated everywhere it is used.');
   },
 
   deleteMaster: async (id) => {
@@ -367,11 +396,8 @@ export const useStore = create((set, get) => ({
   },
 
   insertMaster: (masterId, name, parentId = null) => {
-    const newBlock = { id: 'block-' + Date.now(), type: 'MASTER', content: { masterId, name }, styles: {} };
-    set((state) => {
-      if (parentId) return pushHistory(state, insertNode(state.blocks, parentId, newBlock));
-      return pushHistory(state, [...state.blocks, newBlock]);
-    });
+    const newBlock = { id: newBlockId(), type: 'MASTER', content: { masterId, name }, styles: {} };
+    set((state) => pushHistory(state, addTo(state.blocks, parentId, newBlock)));
   },
 
   // ---- History ----
@@ -393,18 +419,24 @@ export const useStore = create((set, get) => ({
     // deep clone of content so blocks don't share references
     const content = def.content ? JSON.parse(JSON.stringify(def.content)) : {};
     if (type === 'HERO' && Array.isArray(content.buttons)) {
-      content.buttons = content.buttons.map(b => ({ id: Date.now() + Math.floor(Math.random() * 1000), ...b }));
+      content.buttons = content.buttons.map(b => ({ id: newBlockId(), ...b }));
     }
-    const newBlock = { id: 'block-' + Date.now() + Math.floor(Math.random() * 1000), type, content, styles };
-    if (def.children) newBlock.children = [];
+    const newBlock = { id: newBlockId(), type, content, styles };
+    if (def.children || CONTAINER_TYPES.includes(type)) newBlock.children = [];
 
-    set((state) => {
-      if (parentId) return pushHistory(state, insertNode(state.blocks, parentId, newBlock));
-      return pushHistory(state, [...state.blocks, newBlock]);
-    });
+    set((state) => pushHistory(state, addTo(state.blocks, parentId, newBlock)));
   },
 
-  updateBlock: (id, updates) => set((state) => pushHistory(state, updateNode(state.blocks, id, updates))),
+  // Typing in a field sends one update per key: quick successive edits of the same block and the same
+  // fields merge into ONE undo step (otherwise 30 characters would fill the whole undo history).
+  updateBlock: (id, updates) => set((state) => {
+    const sig = id + '|' + Object.keys(updates || {}).map((k) => k + ':' + (updates[k] && typeof updates[k] === 'object' ? Object.keys(updates[k]).sort().join(',') : '')).join(';');
+    const now = Date.now();
+    const merge = lastEdit.sig === sig && now - lastEdit.t < 1200 && state.pastBlocks.length > 0 && state.blocks === lastEdit.blocks;
+    const blocks = updateNode(state.blocks, id, updates);
+    lastEdit.sig = sig; lastEdit.t = now; lastEdit.blocks = blocks;
+    return merge ? { blocks, futureBlocks: [] } : pushHistory(state, blocks);
+  }),
   removeBlock: (id) => set((state) => {
     const historyState = pushHistory(state, removeNode(state.blocks, id));
     return { ...historyState, selectedBlockId: state.selectedBlockId === id ? null : state.selectedBlockId };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { notify } from '../ui/notify';
 import { History, RotateCcw, Trash2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { listDrafts, clearDraft, describeDraft } from '../session/drafts';
@@ -32,7 +33,7 @@ export default function DraftRestorePrompt() {
 
   const restore = (entry) => {
     const view = applyDraftToStore(entry, useStore.setState);
-    if (!view) { alert('This backup could not be restored.'); return; }
+    if (!view) { notify('This backup could not be restored.', 'error'); return; }
     setItems(null);
   };
   const discard = (entry) => {

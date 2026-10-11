@@ -13,7 +13,11 @@ $settings = file_exists($settings_file) ? json_decode(file_get_contents($setting
 // Per-form recipient registry (written by the build). The client can NOT choose the recipient.
 $forms_file = $data_dir . '/forms.json';
 $forms = file_exists($forms_file) ? json_decode(file_get_contents($forms_file), true) : [];
-$form_id = $_POST['_form'] ?? '';
+// Every value as text: a crafted field such as field_0[]=x must not crash the script
+function cc_str($v) { return is_array($v) ? implode(', ', array_map('cc_str', $v)) : trim((string)$v); }
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') { http_response_code(405); exit('Use the form on the site.'); }
+$form_id = cc_str($_POST['_form'] ?? '');
 $form_to = (is_array($forms) && isset($forms[$form_id]) && filter_var($forms[$form_id], FILTER_VALIDATE_EMAIL)) ? $forms[$form_id] : '';
 
 function cc_finish($message) {
@@ -26,10 +30,16 @@ function cc_finish($message) {
     exit;
 }
 
-$successMsg = $_POST['_success'] ?? 'Message sent successfully!';
+$successMsg = cc_str($_POST['_success'] ?? '') ?: 'Message sent successfully!';
 
 // Honeypot anti-spam: bots fill in the hidden field -> pretend success and stop
 if (!empty($_POST['_hp'])) { cc_finish($successMsg); }
+
+// Only forms that exist on the published site (every form is in the registry written by the build)
+if (is_array($forms) && $forms && !array_key_exists($form_id, $forms)) { http_response_code(400); cc_finish('This form is no longer available. Reload the page and try again.'); }
+
+// At most 8 submissions every 10 minutes from the same address (stops floods of spam and database filling)
+if (!cc_rate_allow('forms', $_SERVER['REMOTE_ADDR'] ?? '', 8, 600)) { http_response_code(429); cc_finish('Too many messages sent in a short time. Please try again in a few minutes.'); }
 
 // Store the submission in the database (regardless of the email outcome)
 try {
@@ -41,8 +51,8 @@ try {
         $fields = [];
         foreach ($_POST as $k => $v) {
             if (strpos($k, 'field_') === 0) {
-                $label = $_POST['_label_' . $k] ?? ucfirst(str_replace('field_', 'Field ', $k));
-                $fields[$label] = is_string($v) ? trim($v) : $v;
+                $label = cc_str($_POST['_label_' . $k] ?? ucfirst(str_replace('field_', 'Field ', $k)));
+                $fields[mb_substr($label, 0, 200)] = mb_substr(cc_str($v), 0, 10000);
             }
         }
         $page_ref = $_SERVER['HTTP_REFERER'] ?? '';
@@ -68,10 +78,10 @@ $body .= "------------------------------------------------------\n\n";
 foreach ($_POST as $key => $value) {
     if (strpos($key, 'field_') === 0) {
         $labelKey = '_label_' . $key;
-        $label = isset($_POST[$labelKey]) ? $_POST[$labelKey] : ucfirst(str_replace('field_', 'Field ', $key));
+        $label = isset($_POST[$labelKey]) ? cc_str($_POST[$labelKey]) : ucfirst(str_replace('field_', 'Field ', $key));
         $label = str_replace(["\r", "\n"], ' ', $label);
         $body .= strtoupper($label) . ":\n";
-        $body .= trim((string)$value) . "\n\n";
+        $body .= cc_str($value) . "\n\n";
     }
 }
 $body .= "------------------------------------------------------\n";

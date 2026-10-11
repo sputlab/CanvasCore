@@ -194,11 +194,21 @@ function cc_button_hover($bg, $color, $border, $effect) {
     return ['cls' => $cls, 'vars' => $vars];
 }
 
+// Whole number within [min, max] (default when missing or not a number). Mirrors ccInt() in renderBlock.mjs.
+function cc_int($v, $def, $min, $max) {
+    // Leading whole number, like JS parseInt ("7px" -> 7, "1e3" -> 1, "abc" -> default)
+    if (!is_scalar($v) || is_bool($v) || !preg_match('/^\s*([+-]?\d+)/', (string)$v, $m)) return $def;
+    return min($max, max($min, (int)$m[1]));
+}
+const CC_FORM_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date'];
+
 function build_inline_style($styles) {
     if (!$styles || !is_array($styles)) return '';
     $str = '';
     foreach($styles as $k => $v) {
-        if ($v === '' || $k === 'animation') continue;
+        if ($v === '' || $v === null || $k === 'animation') continue;
+        // Property names must look like CSS properties (a crafted key can't break out of the style attribute)
+        if (!is_string($k) || !preg_match('/^[a-zA-Z][a-zA-Z0-9-]*$/', $k) || is_array($v) || is_object($v)) continue;
         $kebab_key = strtolower(preg_replace('/(?<!^)[A-Z]/', '-$0', $k));
         $str .= $kebab_key . ': ' . htmlspecialchars($v) . '; ';
     }
@@ -290,13 +300,21 @@ function cc_render_menu_items($items) {
 function render_menu_html($menu_json_str, $opts = []) {
     $data = json_decode($menu_json_str, true);
     $items = cc_menu_items($data);
-    $settings = $data['settings'] ?? [];
+    $settings = is_array($data['settings'] ?? null) ? $data['settings'] : [];
+    // Every menu setting ends up inside CSS (a <style> block or a style attribute): keep only characters
+    // a CSS value needs, so a crafted value can't close the attribute, the rule or the <style> tag.
+    $cssSafe = function ($v) use (&$cssSafe) {
+        if (is_string($v)) return str_replace(['<', '>', '"', '{', '}', ';', '\\'], '', $v);
+        if (is_array($v)) return array_map($cssSafe, $v);
+        return is_scalar($v) || $v === null ? $v : null;
+    };
+    $settings = array_map($cssSafe, $settings);
     if (empty($items)) return '';
     $inheritTheme = !empty($opts['inheritTheme']);
     // $opts['preview'] (Menu Builder) renders exactly like the site: the preview page scrolls under a fixed bar.
 
     // --- Settings (with defaults) ---
-    $align          = $settings['align'] ?? 'flex-end';                 // flex-start|center|flex-end
+    $align          = in_array($settings['align'] ?? '', ['flex-start', 'center', 'flex-end'], true) ? $settings['align'] : 'flex-end';
     $styleType      = $settings['styleType'] ?? 'link';                 // link|pill|box
     $textColor      = htmlspecialchars($settings['textColor'] ?? '#334155');
     $hoverTextColor = htmlspecialchars($settings['hoverTextColor'] ?? ($settings['textColor'] ?? '#3b82f6'));
@@ -638,7 +656,8 @@ function render_block($block) {
     static $masters_cache = null;
     if ($masters_cache === null) {
         $masters_cache = [];
-        $db_file = __DIR__ . '/data/canvascore.sqlite';
+        // Same database as the API (data dir outside the web root when possible)
+        $db_file = (function_exists('cc_data_dir') ? cc_data_dir() : __DIR__ . '/data') . '/canvascore.sqlite';
         if (file_exists($db_file)) {
             try {
                 $temp_pdo = new PDO("sqlite:" . $db_file);
@@ -651,13 +670,15 @@ function render_block($block) {
     }
 
     if ($block['type'] === 'MASTER') {
+        static $master_stack = [];
         $masterId = $block['content']['masterId'] ?? null;
-        if ($masterId && isset($masters_cache[$masterId])) {
-            return "<!-- Start Master: " . htmlspecialchars($block['content']['name'] ?? '') . " -->\n"
-                 . render_block($masters_cache[$masterId])
-                 . "\n<!-- End Master -->\n";
-        }
-        return "<!-- Master not found -->\n";
+        if (!is_string($masterId) || !isset($masters_cache[$masterId])) return "<!-- Master not found -->\n";
+        if (in_array($masterId, $master_stack, true)) return "<!-- Master skipped: it contains itself -->\n";
+        $master_stack[] = $masterId;
+        $inner = render_block($masters_cache[$masterId]);
+        array_pop($master_stack);
+        $mName = str_replace('--', '- -', htmlspecialchars((string)($block['content']['name'] ?? '')));
+        return "<!-- Start Master: $mName -->\n" . $inner . "\n<!-- End Master -->\n";
     }
 
     $styleAttr = build_inline_style($block['styles'] ?? []);
@@ -696,8 +717,8 @@ function render_block($block) {
             return $customCss . $html;
 
         case 'CSS_GRID':
-            $columns = $block['content']['columns'] ?? 2;
-            $gap = $block['content']['gap'] ?? '20px';
+            $columns = cc_int($block['content']['columns'] ?? null, 2, 1, 12);
+            $gap = htmlspecialchars((string)($block['content']['gap'] ?? '20px'));
             $html = "<style>@media(max-width: 768px){ #$innerId { grid-template-columns: 1fr !important; } }</style>";
             $html .= "<div id=\"$innerId\" class=\"cc-css-grid$animClass$innerClass\" style=\"$styleAttr; display:grid; grid-template-columns:repeat($columns, 1fr); gap:$gap; overflow:hidden;\">\n";
             $html .= $childrenHtml;
@@ -745,7 +766,7 @@ function render_block($block) {
             return $customCss . $html;
 
         case 'GRID':
-            $columns = $block['content']['columns'] ?? 2;
+            $columns = cc_int($block['content']['columns'] ?? null, 2, 1, 24);
             $html = "<style>@media(max-width: 768px){ #$innerId { grid-template-columns: 1fr !important; } }</style>";
             $html .= "<div id=\"$innerId\" class=\"cc-grid $animClass$innerClass\" style=\"$styleAttr; display:grid; grid-template-columns:repeat($columns, 1fr); gap:20px; overflow:hidden;\">\n";
             if (isset($block['content']['items']) && is_array($block['content']['items'])) { foreach ($block['content']['items'] as $item) $html .= "  <div style=\"min-width:0;\">\n" . cc_sanitize_html($item) . "\n  </div>\n"; }
@@ -756,13 +777,14 @@ function render_block($block) {
             $bg = !empty($block['content']['bgImage']) ? "background-image: url('".htmlspecialchars($block['content']['bgImage'])."'); background-size: cover; background-position: center;" : "";
             $title = cc_sanitize_html($block['content']['title'] ?? '');
             $subtitle = cc_sanitize_html($block['content']['subtitle'] ?? '');
-            $minHeight = $block['styles']['minHeight'] ?? 'auto';
-            $buttonsHtml = "<div style=\"display:flex; gap:15px; flex-wrap:wrap; justify-content:".($block['styles']['textAlign'] ?? 'center').";\">";
-            $buttons = $block['content']['buttons'] ?? [];
-            if (empty($buttons)) { $buttons = [['text' => $block['content']['btnText'] ?? 'Start Now', 'url' => $block['content']['btnUrl'] ?? '#', 'bgColor' => 'var(--brand-color, #3b82f6)', 'textColor' => '#ffffff', 'borderRadius' => '8px']]; }
+            $minHeight = htmlspecialchars((string)($block['styles']['minHeight'] ?? 'auto'));
+            $buttonsHtml = "<div style=\"display:flex; gap:15px; flex-wrap:wrap; justify-content:".htmlspecialchars((string)($block['styles']['textAlign'] ?? 'center')).";\">";
+            // The legacy single button only for very old heroes without a list: an emptied list stays empty
+            $buttons = is_array($block['content']['buttons'] ?? null) ? $block['content']['buttons'] : [];
+            if (!is_array($block['content']['buttons'] ?? null)) { $buttons = [['text' => $block['content']['btnText'] ?? 'Start Now', 'url' => $block['content']['btnUrl'] ?? '#', 'bgColor' => 'var(--brand-color, #3b82f6)', 'textColor' => '#ffffff', 'borderRadius' => '8px']]; }
             foreach($buttons as $btn) {
-                $bText = htmlspecialchars($btn['text']);
-                $bUrl = htmlspecialchars($btn['url']);
+                $bText = htmlspecialchars((string)($btn['text'] ?? ''));
+                $bUrl = htmlspecialchars((string)($btn['url'] ?? '#'));
                 if (!preg_match('~^(?:f|ht)tps?://~i', $bUrl) && $bUrl !== '#') {
                     if ($bUrl === 'index.html' || $bUrl === 'index/index.html' || $bUrl === 'home/index.html' || $bUrl === '/') {
                         $bUrl = '{{BASE_URL}}';
@@ -771,8 +793,8 @@ function render_block($block) {
                         $bUrl = '{{BASE_URL}}' . ltrim($clean_url, '/');
                     }
                 }
-                $bBg = htmlspecialchars($btn['bgColor']); $bColor = htmlspecialchars($btn['textColor']);
-                $bRad = htmlspecialchars($btn['borderRadius']);
+                $bBg = htmlspecialchars((string)($btn['bgColor'] ?? '')); $bColor = htmlspecialchars((string)($btn['textColor'] ?? ''));
+                $bRad = htmlspecialchars((string)($btn['borderRadius'] ?? ''));
                 $hv = cc_button_hover($btn['hoverBg'] ?? null, $btn['hoverColor'] ?? null, $btn['hoverBorder'] ?? null, $btn['effect'] ?? null);
                 $bBorder = !empty($btn['borderColor']) ? '2px solid ' . htmlspecialchars($btn['borderColor']) : 'none';
                 $buttonsHtml .= "<a href=\"$bUrl\" class=\"cc-btn{$hv['cls']}\" style=\"display:inline-block; padding:14px 28px; background:$bBg; color:$bColor; border-radius:$bRad; text-decoration:none; font-weight:bold; border:$bBorder; box-sizing:border-box; {$hv['vars']}\">$bText</a>";
@@ -826,7 +848,7 @@ function render_block($block) {
 
             $fields = $block['content']['fields'] ?? [['label' => 'Name', 'type' => 'text', 'required' => true], ['label' => 'Email', 'type' => 'email', 'required' => true], ['label' => 'Message', 'type' => 'textarea', 'required' => true]];
             foreach($fields as $i => $f) {
-                $fLabel = htmlspecialchars($f['label']); $fType = $f['type']; $fReq = !empty($f['required']) ? 'required' : '';
+                $fLabel = htmlspecialchars((string)($f['label'] ?? '')); $fType = in_array($f['type'] ?? '', CC_FORM_TYPES, true) ? $f['type'] : 'text'; $fReq = !empty($f['required']) ? 'required' : '';
                 $name = "field_" . $i;
                 $html .= "<input type=\"hidden\" name=\"_label_$name\" value=\"$fLabel\">\n";
                 $html .= "<div style=\"margin-bottom:15px;\"><label style=\"display:block; margin-bottom:5px; font-weight:600;\">$fLabel</label>";
@@ -1558,7 +1580,7 @@ function render_block($block) {
             $html .= "</div>\n";
             return $customCss . $html;
 
-        default: return "<!-- Unknown element: " . $block['type'] . " -->\n";
+        default: return "<!-- Unknown element: " . preg_replace('/[^A-Za-z0-9_]/', '', (string)$block['type']) . " -->\n";
     }
 }
 ?>

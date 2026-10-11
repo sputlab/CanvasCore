@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { notify } from '../ui/notify';
 import { Image as ImageIcon, X, Upload } from 'lucide-react';
 
 // Media library picker (modal): choose an uploaded image or upload a new one.
@@ -15,9 +16,9 @@ const MediaPickerModal = ({ onClose, onSelect }) => {
     try {
       const res = await fetch('api.php?action=upload_media', { method: 'POST', body: formData });
       const data = await res.json();
-      if (!data.success) alert(data.message || "Upload error");
+      if (!data.success) notify(data.message || 'Upload error', 'error');
       fetchMedia();
-    } catch { alert("Network error"); }
+    } catch { notify('Upload failed (connection problem).', 'error'); }
     setUploading(false);
   };
 

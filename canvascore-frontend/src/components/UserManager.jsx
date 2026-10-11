@@ -10,6 +10,7 @@ export default function UserManager() {
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('editor');
+  const [pw, setPw] = useState(null); // { id, username, a, b }: inline "change password" form for one account
 
   const fetchUsers = () => {
     fetch('api.php?action=get_users')
@@ -34,13 +35,15 @@ export default function UserManager() {
     } catch { notify('Error adding user.', 'error'); }
   };
 
-  const handleForcePassword = async (id, username) => {
-    const newPwd = window.prompt(`Enter new password for user "${username}":`);
-    if (!newPwd) return;
+  const pwError = !pw ? '' : pw.a.length < 8 ? 'At least 8 characters.' : pw.a !== pw.b ? 'The two passwords do not match.' : '';
+  const handleForcePassword = async (e) => {
+    e.preventDefault();
+    if (!pw || pwError) return;
     try {
-      const res = await fetch('api.php?action=force_password', { method: 'POST', body: JSON.stringify({ id, password: newPwd }) });
+      const res = await fetch('api.php?action=force_password', { method: 'POST', body: JSON.stringify({ id: pw.id, password: pw.a }) });
       const data = await res.json();
-      notify(data.message || 'Done.', data.success === false ? 'error' : 'success');
+      notify(data.success === false ? (data.message || 'Not changed.') : `Password of "${pw.username}" changed. They will be asked to choose a new one at the next sign-in.`, data.success === false ? 'error' : 'success');
+      if (data.success !== false) setPw(null);
     } catch { notify('Network error.', 'error'); }
   };
 
@@ -77,16 +80,33 @@ export default function UserManager() {
             <thead><tr><th>User</th><th>Role</th><th className="ui-cell-actions">Actions</th></tr></thead>
             <tbody>
               {users.map(u => (
-                <tr key={u.id}>
+                <React.Fragment key={u.id}>
+                <tr>
                   <td className="ui-cell-title">{u.username}{u.username === me && <span className="ui-hint" style={{ fontWeight: 400 }}> (you)</span>}</td>
                   <td><Badge tone={u.role === 'admin' ? 'accent' : 'neutral'}>{u.role}</Badge></td>
                   <td className="ui-cell-actions">
                     <span className="ui-row" style={{ justifyContent: 'flex-end', gap: 6, flexWrap: 'nowrap' }}>
-                      <Button size="sm" icon={KeyRound} onClick={() => handleForcePassword(u.id, u.username)}>Change password</Button>
+                      <Button size="sm" icon={KeyRound} aria-expanded={pw?.id === u.id} onClick={() => setPw(pw?.id === u.id ? null : { id: u.id, username: u.username, a: '', b: '' })}>Change password</Button>
                       <Button size="sm" variant="danger" icon={Trash2} onClick={() => handleDeleteUser(u.id, u.username)} disabled={u.username === me} title={u.username === me ? 'You cannot delete your own account' : undefined}>Delete</Button>
                     </span>
                   </td>
                 </tr>
+                {pw?.id === u.id && (
+                  <tr><td colSpan={3}>
+                    <form onSubmit={handleForcePassword} className="ui-row" style={{ gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                      <label className="ui-label" style={{ display: 'grid', gap: 4 }}>New password
+                        <input className="ui-input" type="password" autoComplete="new-password" autoFocus value={pw.a} onChange={(e) => setPw({ ...pw, a: e.target.value })} />
+                      </label>
+                      <label className="ui-label" style={{ display: 'grid', gap: 4 }}>Repeat it
+                        <input className="ui-input" type="password" autoComplete="new-password" value={pw.b} onChange={(e) => setPw({ ...pw, b: e.target.value })} />
+                      </label>
+                      <Button type="submit" variant="primary" size="sm" disabled={!!pwError}>Set password</Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setPw(null)}>Cancel</Button>
+                      {pw.a && pwError && <span className="ui-error">{pwError}</span>}
+                    </form>
+                  </td></tr>
+                )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>

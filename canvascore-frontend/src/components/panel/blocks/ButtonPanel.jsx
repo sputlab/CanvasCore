@@ -17,7 +17,7 @@ export default function ButtonPanel({ ctx }) {
         <input type="checkbox" checked={selectedBlock.content.useGlobal ?? true} onChange={e => handleContentChange('useGlobal', e.target.checked)} /> Use Global Style (Brand)
       </label>
       <label style={labelStyle}>Button Size</label>
-      <select style={inputStyle} onChange={e => {
+      <select style={inputStyle} value="" onChange={e => {
         if (e.target.value === 'sm') patchStyles({ padding: '8px 16px', fontSize: '14px' });
         if (e.target.value === 'md') patchStyles({ padding: '12px 24px', fontSize: '16px' });
         if (e.target.value === 'lg') patchStyles({ padding: '18px 36px', fontSize: '20px' });
@@ -25,13 +25,13 @@ export default function ButtonPanel({ ctx }) {
         <option value="">Custom</option><option value="sm">Small</option><option value="md">Medium</option><option value="lg">Large</option>
       </select>
       <label style={labelStyle}>Text</label>
-      <input type="text" style={inputStyle} value={selectedBlock.content.text || 'Button'} onChange={e => handleContentChange('text', e.target.value)} />
+      <input type="text" style={inputStyle} placeholder="Click here" value={selectedBlock.content.text ?? ''} onChange={e => handleContentChange('text', e.target.value)} />
       <label style={labelStyle}>Link</label>
-      <select style={{...inputStyle, marginBottom: '8px'}} value={selectedBlock.content.url} onChange={e => handleContentChange('url', e.target.value)}>
+      <select style={{...inputStyle, marginBottom: '8px'}} value={selectedBlock.content.url ?? '#'} onChange={e => handleContentChange('url', e.target.value)}>
         <option value="#">Select internal page...</option>
         {pages.map(p => <option key={p.id} value={p.clean_slug ? p.clean_slug + '/index.html' : 'index.html'}>📄 {p.title}</option>)}
       </select>
-      <input type="text" style={inputStyle} placeholder="Custom URL..." value={selectedBlock.content.url} onChange={e => handleContentChange('url', e.target.value)} />
+      <input type="text" style={inputStyle} placeholder="Custom URL..." value={selectedBlock.content.url ?? ''} onChange={e => handleContentChange('url', e.target.value)} />
     </PanelAccordion>
 
     <PanelAccordion title="Colors" icon={Palette} defaultOpen={false}>

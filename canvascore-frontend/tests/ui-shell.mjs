@@ -233,6 +233,56 @@ try {
   mount(React.createElement(LayerNavigator)); await sleep(40);
   const countAll = (list) => list.reduce((n, b) => n + 1 + countAll(b.children || []), 0);
   check('layers list every block with a drag handle, rows keep their size (no transforms)', $$('[role="treeitem"]').length === countAll(st().blocks) && $$('[aria-label^="Move "]').length === countAll(st().blocks) && !$$('[role="treeitem"]').some((r) => /scale/.test(r.parentElement.getAttribute('style') || '')));
+
+  console.log('\nSTORE & SAVING');
+  {
+    const { newBlockId } = await vite.ssrLoadModule('/src/store/useStore.js');
+    const ids = new Set(); for (let i = 0; i < 2000; i++) ids.add(newBlockId());
+    check('block ids are unique even when made in the same millisecond', ids.size === 2000);
+    useStore.setState({ blocks: [{ id: 't1', type: 'TEXT', styles: {}, content: { text: '<p>a</p>' } }, { id: 'sx', type: 'SECTION', styles: {}, content: {}, children: [] }], pastBlocks: [], futureBlocks: [] });
+    st().addBlock('SECTION', 't1');
+    check('"add inside" a Text block adds at the end of the page instead (no children on a Text)', !st().blocks[0].children && st().blocks.length === 3);
+    st().addBlock('TEXT', 'gone-id');
+    check('"add inside" a block that no longer exists adds at the end of the page', st().blocks.length === 4);
+    st().moveBlock('t1', 'sx');
+    check('dragging a block onto an EMPTY sibling container puts it inside', (st().blocks.find((b) => b.id === 'sx').children || []).some((c) => c.id === 't1'));
+    useStore.setState({ blocks: [{ id: 'u1', type: 'TEXT', styles: {}, content: { text: '' } }], pastBlocks: [], futureBlocks: [] });
+    for (const ch of 'hello') st().updateBlock('u1', { content: { text: (st().blocks[0].content.text || '') + ch } });
+    check('typing in a field = one undo step, not one per key', st().pastBlocks.length === 1 && st().blocks[0].content.text === 'hello');
+    st().undo();
+    check('…and undo brings back the text before typing', st().blocks[0].content.text === '');
+
+    // a save that runs while the user keeps editing: only what was sent counts as saved
+    const { createEditorDraftTracker, editorSnapshot, editorScope } = await vite.ssrLoadModule('/src/session/draftTrackers.js');
+    useStore.setState({ activePage: { id: 'pz', title: 'P' }, blocks: [{ id: 'z1', type: 'TEXT', styles: {}, content: { text: '<p>v1</p>' } }], editorRestored: false, isEditingMaster: false, editingMaster: null });
+    const tr = createEditorDraftTracker({ getState: useStore.getState, setState: useStore.setState, setTimeoutFn: (f) => f(), clearTimeoutFn: () => {} });
+    tr.start();
+    useStore.setState({ blocks: [{ id: 'z1', type: 'TEXT', styles: {}, content: { text: '<p>v2</p>' } }] }); tr.evaluate();
+    const sent = editorSnapshot(st()).page; const scope = editorScope(st());
+    useStore.setState({ blocks: [{ id: 'z1', type: 'TEXT', styles: {}, content: { text: '<p>v3 typed during the save</p>' } }] }); tr.evaluate();
+    tr.markSaved(sent, scope);
+    check('edits made while a save is running stay "unsaved" (and backed up)', st().editorDirty === true);
+    tr.markSaved(editorSnapshot(st()).page, editorScope(st()));
+    check('…until they are saved too', st().editorDirty === false);
+    tr.dispose();
+
+    // reopening a page that has unsaved work from an earlier visit: offered, never deleted silently
+    const drafts = await vite.ssrLoadModule('/src/session/drafts.js');
+    drafts.setDraftUser('ann');
+    useStore.setState({ activePage: { id: 'pk', title: 'K' }, blocks: [{ id: 'k1', type: 'TEXT', styles: {}, content: { text: '<p>server</p>' } }], editorRestored: false });
+    const kScope = editorScope(st());
+    drafts.saveDraft(kScope, { page: { page: { id: 'pk', title: 'K' }, blocks: [{ id: 'k1', type: 'TEXT', styles: {}, content: { text: '<p>unsaved edit</p>' } }] }, master: null });
+    let tk = createEditorDraftTracker({ getState: useStore.getState, setState: useStore.setState, setTimeoutFn: (f) => f(), clearTimeoutFn: () => {} });
+    tk.start();
+    check('reopening a page with a backup offers to restore it', !!st().editorDraftFound);
+    tk.dispose();
+    check('…leaving without deciding keeps the backup', !!drafts.readDraft(kScope) && !st().editorDraftFound);
+    tk = createEditorDraftTracker({ getState: useStore.getState, setState: useStore.setState, setTimeoutFn: (f) => f(), clearTimeoutFn: () => {} });
+    tk.start(); tk.restoreFound();
+    check('…and Restore brings the unsaved edit back (as unsaved)', st().blocks[0].content.text === '<p>unsaved edit</p>' && st().editorRestored === true && st().editorDirty === true);
+    tk.dispose();
+    check('leaving resets the "restored" flag (it must not follow to another page)', st().editorRestored === false);
+  }
 } catch (e) {
   failedRun = true; fails++; total++;
   console.error('  ✗ EXCEPTION: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));

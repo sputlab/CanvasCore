@@ -217,6 +217,20 @@ try {
   const cdlg = await waitFor(() => hbar.querySelector('[role="dialog"][aria-label="Text color"]'));
   check('color palette offers the site color (follows the brand color)', !!cdlg && !!cdlg.querySelector('[aria-label="Site color"]'));
   blurTo(ht); await sleep(30);
+  // moving straight from the title to the subtitle: the title is saved and the subtitle keeps the caret
+  {
+    const t1 = doc.querySelector('.cc-canvas [data-cc-field="title"]');
+    focus(t1); await sleep(20);
+    t1.innerHTML = '<h1>Hero moved</h1>';
+    const sub = doc.querySelector('.cc-canvas [data-cc-field="subtitle"]');
+    blurTo(t1, sub); focus(sub); await sleep(60);
+    check('HERO: title → subtitle saves the title', st().blocks[0].content.title === '<h1>Hero moved</h1>', st().blocks[0].content.title);
+    check('HERO: …and the subtitle is not rebuilt under the caret (same element, still connected)', doc.querySelector('.cc-canvas [data-cc-field="subtitle"]') === sub && sub.isConnected);
+    sub.innerHTML = '<p>Sub moved</p>';
+    blurTo(sub); await sleep(60);
+    check('HERO: then the subtitle is saved too', st().blocks[0].content.subtitle === '<p>Sub moved</p>', st().blocks[0].content.subtitle);
+    useStore.setState({ blocks: [hero], selectedBlockId: 'h2' }); await sleep(30); // back to the original text for the checks below
+  }
 
   console.log('\nPROPERTY PANEL — same editor');
   mount(React.createElement(PropertyPanel));

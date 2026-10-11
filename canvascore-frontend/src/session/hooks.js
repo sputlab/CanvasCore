@@ -6,12 +6,14 @@ import { createEditorDraftTracker, createDraftChannel } from './draftTrackers';
 import { registerFlusher } from './drafts';
 
 // Block editor: tracks unsaved work and copies it to the local backup.
-// Returns { markSaved, discard }: markSaved must be called after EVERY successful save.
+// Returns { markSaved, discard, restoreFound, dismissFound }: markSaved must be called after EVERY successful save.
 export function useEditorDraft() {
   const trackerRef = useRef(null);
   const [api] = useState(() => ({
-    markSaved: () => { if (trackerRef.current) trackerRef.current.markSaved(); },
+    markSaved: (sent, sentScope) => { if (trackerRef.current) trackerRef.current.markSaved(sent, sentScope); },
     discard: () => { if (trackerRef.current) trackerRef.current.discard(); },
+    restoreFound: () => (trackerRef.current ? trackerRef.current.restoreFound() : false),
+    dismissFound: () => { if (trackerRef.current) trackerRef.current.dismissFound(); },
   }));
   useEffect(() => {
     const tracker = createEditorDraftTracker({ getState: useStore.getState, setState: useStore.setState });

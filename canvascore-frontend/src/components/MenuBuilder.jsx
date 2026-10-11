@@ -41,6 +41,8 @@ export default function MenuBuilder() {
   const [items, setItems] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
+  // Saving before the data arrives (or after it failed) would overwrite the site's data with defaults
+  const [loadState, setLoadState] = useState('loading');
   // Local backup of unsaved work (see src/session/)
   const draftValue = useMemo(() => ({ items, settings }), [items, settings]);
   const draft = useDraftSync('menu', draftValue);
@@ -100,11 +102,13 @@ export default function MenuBuilder() {
         const v = pending ? pending.value : server;
         setSettings(normalizeSettings(v.settings)); setItems(v.items);
         if (pending) setRestoredAt(pending.savedAt);
+        setLoadState('ready');
       })
-      .catch(console.error);
+      .catch(() => { setLoadState('error'); notify('Could not load the menu from the server. Reload the page before saving.', 'error'); });
   }, [draft]);
 
   const saveMenu = async () => {
+    if (loadState !== 'ready') return;
     setIsSaving(true);
     try {
       const r = await fetch('api.php?action=save_menu', { method: 'POST', body: JSON.stringify({ items, settings }) });
@@ -172,7 +176,7 @@ export default function MenuBuilder() {
   return (
     <div style={{ maxWidth: '960px', color: '#f8fafc', paddingBottom: '60px' }}>
       <PageHeader icon={ListTree} title="Menu Builder" description="The site's navigation bar: links, look and mobile behavior. Saving also republishes the site."
-        actions={<Button variant="primary" icon={Save} onClick={saveMenu} disabled={isSaving}>{isSaving ? 'Saving…' : 'Save & Publish'}</Button>} />
+        actions={<Button variant="primary" icon={Save} onClick={saveMenu} disabled={isSaving || loadState !== 'ready'} title={loadState === 'loading' ? 'Loading…' : loadState === 'error' ? 'Not loaded: reload the page' : undefined}>{isSaving ? 'Saving…' : loadState === 'loading' ? 'Loading…' : 'Save & Publish'}</Button>} />
 
       {restoredAt && (
         <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', background: '#0c4a6e', border: '1px solid #0369a1', borderRadius: '10px', padding: '9px 13px', marginBottom: '14px', fontSize: '13px', color: '#e0f2fe' }}>
