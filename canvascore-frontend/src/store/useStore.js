@@ -84,6 +84,22 @@ const moveInTree = (roots, activeId, overId) => {
   return tree;
 };
 
+// Explicit move (Layers tab): puts the block 'before' or 'after' the target, or 'inside' it
+// (at the end of a container's children). Exported for the tests. Returns null when not possible.
+export const placeInTree = (roots, activeId, targetId, position) => {
+  if (!activeId || !targetId || activeId === targetId) return null;
+  const tree = JSON.parse(JSON.stringify(roots));
+  const a = findInTree(tree, activeId);
+  if (!a || nodeContainsId(a.node, targetId)) return null; // not into itself or its own children
+  const t0 = findInTree(tree, targetId);
+  if (!t0 || (position === 'inside' && !Array.isArray(t0.node.children))) return null;
+  a.list.splice(a.index, 1);
+  const t = findInTree(tree, targetId);
+  if (position === 'inside') t.node.children.push(a.node);
+  else t.list.splice(position === 'after' ? t.index + 1 : t.index, 0, a.node);
+  return tree;
+};
+
 export const useStore = create((set, get) => ({
   isAuthenticated: false,
   userRole: 'editor',
@@ -397,6 +413,12 @@ export const useStore = create((set, get) => ({
   // Real reorder: works among siblings at any level of the tree.
   moveBlock: (activeId, overId) => set((state) => {
     const moved = moveInTree(state.blocks, activeId, overId);
+    if (!moved) return state;
+    return pushHistory(state, moved);
+  }),
+
+  moveBlockTo: (activeId, targetId, position) => set((state) => {
+    const moved = placeInTree(state.blocks, activeId, targetId, position);
     if (!moved) return state;
     return pushHistory(state, moved);
   })

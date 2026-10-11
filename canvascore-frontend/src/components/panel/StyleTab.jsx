@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, Palette, Type } from 'lucide-react';
-import { PanelAccordion, SpacingControl } from './fields';
+import { PanelAccordion, SpacingControl, ColorInput } from './fields';
 import { handleNumericKey, labelStyle, inputStyle } from './helpers';
 
 // Style tab (every block): size, spacing, typography, background, borders.
@@ -72,15 +72,18 @@ export default function StyleTab({ ctx }) {
           </select>
         </div>
       </div>
+      <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block' }}>Text Color</label>
+      <div style={{ marginBottom: '10px' }}>
+        <ColorInput label="text color" value={selectedBlock.styles.color} onChange={v => handleStyleChange('color', v)} placeholder="Inherited" allowTransparent={false} />
+      </div>
       <label style={{ fontSize: '10px', color: '#94a3b8' }}>Letter Spacing (↑/↓)</label>
       <input type="text" value={selectedBlock.styles.letterSpacing || ''} onChange={e => handleStyleChange('letterSpacing', e.target.value)} onKeyDown={e => handleNumericKey(e, selectedBlock.styles.letterSpacing, val => handleStyleChange('letterSpacing', val))} style={{...inputStyle, marginBottom:0}} placeholder="e.g. 1px" />
     </PanelAccordion>
 
     <PanelAccordion title="Background & Alignment" icon={Palette} defaultOpen={false}>
       <label style={labelStyle}>Background Color</label>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-        <input type="color" value={selectedBlock.styles.backgroundColor || '#ffffff'} onChange={e => handleStyleChange('backgroundColor', e.target.value)} style={{ width: '36px', height: '36px', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: 0 }} />
-        <button onClick={() => handleStyleChange('backgroundColor', 'transparent')} style={{ padding: '8px', fontSize: '12px', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', cursor: 'pointer', color: '#f8fafc' }}>Transparent</button>
+      <div style={{ marginBottom: '15px' }}>
+        <ColorInput label="background color" value={selectedBlock.styles.backgroundColor} onChange={v => handleStyleChange('backgroundColor', v)} />
       </div>
       <label style={labelStyle}>Text Alignment</label>
       <div style={{ display: 'flex', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', overflow: 'hidden' }}>
@@ -106,7 +109,9 @@ export default function StyleTab({ ctx }) {
         </div>
       </div>
       <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block' }}>Color</label>
-      <input type="color" value={selectedBlock.styles.borderColor || '#000000'} onChange={e => handleStyleChange('borderColor', e.target.value)} style={{ width: '100%', height: '30px', border: 'none', borderRadius: '4px', marginBottom: '15px', cursor: 'pointer' }} />
+      <div style={{ marginBottom: '15px' }}>
+        <ColorInput label="border color" value={selectedBlock.styles.borderColor} onChange={v => handleStyleChange('borderColor', v)} placeholder="#000000" />
+      </div>
       <label style={labelStyle}>Border Radius (↑/↓ to adjust)</label>
       <input type="text" placeholder="e.g. 10px, 50%" value={selectedBlock.styles.borderRadius || '0px'} onChange={e => handleStyleChange('borderRadius', e.target.value)} onKeyDown={e => handleNumericKey(e, selectedBlock.styles.borderRadius, val => handleStyleChange('borderRadius', val))} style={inputStyle} />
     </PanelAccordion>

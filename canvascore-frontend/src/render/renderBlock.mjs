@@ -8,6 +8,8 @@
 // test the inner content is normalized, so it does not affect the comparison
 // of structure and styles.
 
+import { effectClasses, buttonHover } from './effects.mjs';
+
 export function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -44,7 +46,7 @@ export function blockRoot(block) {
   const content = block.content || {};
   const id = block.id ? String(block.id).replace(/[^a-zA-Z0-9_-]/g, '') : 'b_x';
   const innerId = content.customId ? String(content.customId).replace(/[^a-zA-Z0-9_-]/g, '') : id;
-  const animClass = (styles.animation && styles.animation !== 'none') ? ` cc-reveal ${styles.animation}` : '';
+  const animClass = effectClasses(styles, content);
   const innerClass = content.customClass ? ' ' + content.customClass : '';
   switch (block.type) {
     case 'SECTION':   return { tag: 'section', id: innerId, className: `cc-section${animClass}${innerClass}`, style: { ...styles } };
@@ -113,7 +115,7 @@ export function renderBlock(block, opts = {}) {
   const content = block.content || {};
   const styleAttr = buildInlineStyle(styles);
   const styleString = styleAttr ? ` style="${styleAttr}"` : '';
-  const animClass = (styles.animation && styles.animation !== 'none') ? ` cc-reveal ${styles.animation}` : '';
+  const animClass = effectClasses(styles, content);
 
   const blockId = block.id ? String(block.id).replace(/[^a-zA-Z0-9_-]/g, '') : 'b_x';
   const innerId = content.customId ? String(content.customId).replace(/[^a-zA-Z0-9_-]/g, '') : blockId;
@@ -185,8 +187,9 @@ export function renderBlock(block, opts = {}) {
       const own = { ...styles };
       delete own.margin; delete own.textAlign; delete own.animation;
       const globalStyle = useGlobal ? 'background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; ' : '';
-      const btnStyle = 'display:inline-block; text-decoration:none; font-weight:bold; box-sizing:border-box; ' + globalStyle + buildInlineStyle(own);
-      return customCss + `<div id="${innerId}" class="cc-btn-wrap${animClass}${innerClass}" style="text-align:${align}; margin:${margin};">\n<a href="${url}" class="cc-btn" style="${btnStyle}">${text}</a>\n</div>\n`;
+      const hv = buttonHover({ bg: content.btnHoverBg, color: content.btnHoverColor, border: content.btnHoverBorder, effect: content.btnEffect });
+      const btnStyle = 'display:inline-block; text-decoration:none; font-weight:bold; box-sizing:border-box; ' + globalStyle + buildInlineStyle(own) + escapeHtml(hv.vars);
+      return customCss + `<div id="${innerId}" class="cc-btn-wrap${animClass}${innerClass}" style="text-align:${align}; margin:${margin};">\n<a href="${url}" class="cc-btn${hv.cls}" style="${btnStyle}">${text}</a>\n</div>\n`;
     }
 
     case 'GRID': {
@@ -208,7 +211,9 @@ export function renderBlock(block, opts = {}) {
       let buttonsHtml = `<div style="display:flex; gap:15px; flex-wrap:wrap; justify-content:${styles.textAlign ?? 'center'};">`;
       for (const btn of buttons) {
         const bUrl = escapeHtml(resolveInternalUrl(btn.url));
-        buttonsHtml += `<a href="${bUrl}" style="display:inline-block; padding:14px 28px; background:${escapeHtml(btn.bgColor)}; color:${escapeHtml(btn.textColor)}; border-radius:${escapeHtml(btn.borderRadius)}; text-decoration:none; font-weight:bold; border:none; box-sizing:border-box;">${escapeHtml(btn.text)}</a>`;
+        const hv = buttonHover({ bg: btn.hoverBg, color: btn.hoverColor, border: btn.hoverBorder, effect: btn.effect });
+        const bBorder = btn.borderColor ? `2px solid ${escapeHtml(btn.borderColor)}` : 'none';
+        buttonsHtml += `<a href="${bUrl}" class="cc-btn${hv.cls}" style="display:inline-block; padding:14px 28px; background:${escapeHtml(btn.bgColor)}; color:${escapeHtml(btn.textColor)}; border-radius:${escapeHtml(btn.borderRadius)}; text-decoration:none; font-weight:bold; border:${bBorder}; box-sizing:border-box; ${escapeHtml(hv.vars)}">${escapeHtml(btn.text)}</a>`;
       }
       buttonsHtml += `</div>`;
       return customCss + `<section id="${innerId}" class="cc-hero${animClass}${innerClass}" style="${styleAttr} ${bg} min-height:${minHeight}; display:flex; flex-direction:column; justify-content:center;">\n<div>\n${opts.fields ? `<div${field('title', 'Title')}>${title}</div>` : title}\n<div style="margin:20px 0;"${field('subtitle', 'Subtitle')}>${subtitle}</div>\n${buttonsHtml}\n</div>\n</section>\n`;

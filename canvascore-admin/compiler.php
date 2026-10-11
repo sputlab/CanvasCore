@@ -155,6 +155,45 @@ function cc_collections_data() {
 }
 
 
+// Block effects (Advanced tab) and button hovers: mirror of effectClasses()/buttonHover()
+// in canvascore-frontend/src/render/effects.mjs. The CSS is effects.css (inlined by rebuild_all.php).
+const CC_FX_REVEAL = ['fade-in', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'zoom-in', 'zoom-out', 'flip-up', 'flip-left', 'rotate-in', 'blur-in', 'bounce-in'];
+const CC_FX_DUR = ['fast', 'slow', 'slower'];
+const CC_FX_DELAY = ['100', '200', '300', '500', '800', '1000', '1500'];
+const CC_FX_HOVER = ['lift', 'grow', 'shrink', 'shadow', 'glow', 'tilt', 'brighten', 'grayscale'];
+const CC_FX_LOOP = ['float', 'pulse', 'bounce', 'swing', 'heartbeat', 'shake', 'spin'];
+const CC_FX_BUTTON = ['lift', 'grow', 'press', 'shadow', 'glow', 'shine', 'ring', 'pulse'];
+
+function cc_effect_classes($styles, $content) {
+    $styles = is_array($styles) ? $styles : [];
+    $content = is_array($content) ? $content : [];
+    $c = '';
+    $anim = $styles['animation'] ?? '';
+    if (is_string($anim) && in_array($anim, CC_FX_REVEAL, true)) {
+        $c .= " cc-reveal $anim";
+        $dur = $content['animDuration'] ?? '';
+        if (is_string($dur) && in_array($dur, CC_FX_DUR, true)) $c .= " cc-dur-$dur";
+        $delay = (string)($content['animDelay'] ?? '');
+        if (in_array($delay, CC_FX_DELAY, true)) $c .= " cc-delay-$delay";
+    }
+    $hover = $content['hoverEffect'] ?? '';
+    if (is_string($hover) && in_array($hover, CC_FX_HOVER, true)) $c .= " cc-hover-$hover";
+    $loop = $content['loopEffect'] ?? '';
+    if (is_string($loop) && in_array($loop, CC_FX_LOOP, true)) $c .= " cc-loop-$loop";
+    return $c;
+}
+
+// ['cls' => ' cc-hbg cc-bfx-lift…', 'vars' => '--cc-hover-bg:…; '] (vars already HTML-escaped)
+function cc_button_hover($bg, $color, $border, $effect) {
+    $cls = ''; $vars = '';
+    $ok = function ($v) { return is_string($v) && trim($v) !== ''; };
+    if ($ok($bg)) { $cls .= ' cc-hbg'; $vars .= '--cc-hover-bg:' . htmlspecialchars($bg) . '; '; }
+    if ($ok($color)) { $cls .= ' cc-hcol'; $vars .= '--cc-hover-color:' . htmlspecialchars($color) . '; '; }
+    if ($ok($border)) { $cls .= ' cc-hbd'; $vars .= '--cc-hover-border:' . htmlspecialchars($border) . '; '; }
+    if (is_string($effect) && in_array($effect, CC_FX_BUTTON, true)) $cls .= " cc-bfx-$effect";
+    return ['cls' => $cls, 'vars' => $vars];
+}
+
 function build_inline_style($styles) {
     if (!$styles || !is_array($styles)) return '';
     $str = '';
@@ -623,7 +662,7 @@ function render_block($block) {
 
     $styleAttr = build_inline_style($block['styles'] ?? []);
     $styleString = $styleAttr ? " style=\"$styleAttr\"" : "";
-    $animClass = ($block['styles']['animation'] ?? 'none') !== 'none' ? " cc-reveal " . $block['styles']['animation'] : "";
+    $animClass = cc_effect_classes($block['styles'] ?? [], $block['content'] ?? []);
 
     $blockId = isset($block['id']) ? preg_replace('/[^a-zA-Z0-9_-]/', '', $block['id']) : uniqid('b_');
     $innerId = !empty($block['content']['customId']) ? preg_replace('/[^a-zA-Z0-9_-]/', '', $block['content']['customId']) : $blockId;
@@ -699,8 +738,10 @@ function render_block($block) {
             $btnOwn = $block['styles'] ?? [];
             unset($btnOwn['margin'], $btnOwn['textAlign'], $btnOwn['animation']);
             $globalStyle = $useGlobal ? "background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; " : "";
-            $btnStyle = "display:inline-block; text-decoration:none; font-weight:bold; box-sizing:border-box; " . $globalStyle . build_inline_style($btnOwn);
-            $html = "<div id=\"$innerId\" class=\"cc-btn-wrap$animClass$innerClass\" style=\"text-align:$align; margin:$margin;\">\n<a href=\"$url\" class=\"cc-btn\" style=\"$btnStyle\">$text</a>\n</div>\n";
+            $c = $block['content'] ?? [];
+            $hv = cc_button_hover($c['btnHoverBg'] ?? null, $c['btnHoverColor'] ?? null, $c['btnHoverBorder'] ?? null, $c['btnEffect'] ?? null);
+            $btnStyle = "display:inline-block; text-decoration:none; font-weight:bold; box-sizing:border-box; " . $globalStyle . build_inline_style($btnOwn) . $hv['vars'];
+            $html = "<div id=\"$innerId\" class=\"cc-btn-wrap$animClass$innerClass\" style=\"text-align:$align; margin:$margin;\">\n<a href=\"$url\" class=\"cc-btn{$hv['cls']}\" style=\"$btnStyle\">$text</a>\n</div>\n";
             return $customCss . $html;
 
         case 'GRID':
@@ -732,7 +773,9 @@ function render_block($block) {
                 }
                 $bBg = htmlspecialchars($btn['bgColor']); $bColor = htmlspecialchars($btn['textColor']);
                 $bRad = htmlspecialchars($btn['borderRadius']);
-                $buttonsHtml .= "<a href=\"$bUrl\" style=\"display:inline-block; padding:14px 28px; background:$bBg; color:$bColor; border-radius:$bRad; text-decoration:none; font-weight:bold; border:none; box-sizing:border-box;\">$bText</a>";
+                $hv = cc_button_hover($btn['hoverBg'] ?? null, $btn['hoverColor'] ?? null, $btn['hoverBorder'] ?? null, $btn['effect'] ?? null);
+                $bBorder = !empty($btn['borderColor']) ? '2px solid ' . htmlspecialchars($btn['borderColor']) : 'none';
+                $buttonsHtml .= "<a href=\"$bUrl\" class=\"cc-btn{$hv['cls']}\" style=\"display:inline-block; padding:14px 28px; background:$bBg; color:$bColor; border-radius:$bRad; text-decoration:none; font-weight:bold; border:$bBorder; box-sizing:border-box; {$hv['vars']}\">$bText</a>";
             }
             $buttonsHtml .= "</div>";
             $html = "<section id=\"$innerId\" class=\"cc-hero$animClass$innerClass\" style=\"$styleAttr; $bg; min-height:$minHeight; display:flex; flex-direction:column; justify-content:center;\">\n<div>\n$title\n<div style=\"margin:20px 0;\">$subtitle</div>\n$buttonsHtml\n</div>\n</section>\n";

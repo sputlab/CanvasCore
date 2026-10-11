@@ -69,6 +69,9 @@ try {
     $master_file = __DIR__ . '/master.html';
     if (!file_exists($master_file)) die(json_encode(['success' => false, 'message' => 'Error: master.html missing!']));
     $template = file_get_contents($master_file);
+    // Block effects and button hovers (shared with the editor canvas)
+    $effects_file = __DIR__ . '/effects.css';
+    $template = str_replace('{{EFFECTS_CSS}}', file_exists($effects_file) ? file_get_contents($effects_file) : '', $template);
 
     // Only published/modified pages (the live version is always the parent row).
     $stmt = $pdo->query("SELECT * FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified')");

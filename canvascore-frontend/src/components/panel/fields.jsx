@@ -65,17 +65,33 @@ export const SelF = ({ label, value, onChange, options }) => (
 export const ChkF = ({ label, checked, onChange }) => (
   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#cbd5e1', cursor: 'pointer', marginTop: '8px' }}><input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)} /> {label}</label>
 );
-export const ColorF = ({ label, value, onChange, placeholder }) => {
-  const hex = /^#[0-9a-fA-F]{6}$/.test(value || '');
+// Color field: swatch + typed value (any CSS color) + Transparent + clear. Used for every color in the panels.
+const checker = 'repeating-conic-gradient(#94a3b8 0% 25%, #e2e8f0 0% 50%) 50% / 10px 10px';
+export const ColorInput = ({ value, onChange, placeholder, allowTransparent = true, allowClear = true, label }) => {
+  const v = value ?? '';
+  const hex = /^#[0-9a-fA-F]{6}$/.test(v) ? v : (/^#[0-9a-fA-F]{3}$/.test(v) ? '#' + v.slice(1).split('').map(c => c + c).join('') : null);
+  const isTransparent = v === 'transparent';
+  const chip = { height: '30px', padding: '0 8px', fontSize: '11px', fontWeight: 600, borderRadius: '6px', cursor: 'pointer', border: '1px solid #334155', flexShrink: 0 };
   return (
-    <Fld label={label}>
-      <div style={{ display: 'flex', gap: '6px' }}>
-        <input type="color" value={hex ? value : '#cbd5e1'} onChange={e => onChange(e.target.value)} style={{ width: '34px', height: '30px', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }} />
-        <input type="text" style={{ ...fldInput, flex: 1 }} value={value ?? ''} onChange={e => onChange(e.target.value)} placeholder={placeholder || '#cbd5e1'} />
-      </div>
-    </Fld>
+    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+      <span style={{ position: 'relative', width: '30px', height: '30px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0, border: '1px solid #334155', background: isTransparent || !v ? checker : v }}>
+        <input type="color" aria-label={label ? `Pick ${label}` : 'Pick a color'} value={hex || '#ffffff'} onChange={e => onChange(e.target.value)}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 'none', padding: 0 }} />
+      </span>
+      <input type="text" aria-label={label || 'Color'} style={{ ...fldInput, flex: 1, minWidth: 0 }} value={v} onChange={e => onChange(e.target.value)} placeholder={placeholder || 'Default'} />
+      {allowTransparent && (
+        <button type="button" onClick={() => onChange('transparent')} title="No fill (transparent)" aria-pressed={isTransparent}
+          style={{ ...chip, background: isTransparent ? '#38bdf8' : '#1e293b', color: isTransparent ? '#0f172a' : '#cbd5e1' }}>Transparent</button>
+      )}
+      {allowClear && v !== '' && (
+        <button type="button" onClick={() => onChange('')} title="Back to default" aria-label="Clear color" style={{ ...chip, background: 'transparent', color: '#94a3b8', padding: '0 6px' }}>×</button>
+      )}
+    </div>
   );
 };
+export const ColorF = ({ label, value, onChange, placeholder, allowTransparent = true }) => (
+  <Fld label={label}><ColorInput label={label} value={value} onChange={onChange} placeholder={placeholder || '#cbd5e1'} allowTransparent={allowTransparent} /></Fld>
+);
 export const ImgF = ({ label, value, onChange, onPick }) => (
   <Fld label={label}>
     <div style={{ display: 'flex', gap: '6px' }}>

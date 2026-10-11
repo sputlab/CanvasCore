@@ -11,6 +11,16 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Effects in the Advanced tab** of every block: 12 entrance animations (fade, slide in from left/right,
+  zoom in/out, flip, rotate, blur, bounce…) with speed and delay, **hover effects** (lift, grow, shrink,
+  shadow, glow, tilt, brighten, black & white → color) and **looping motion** (float, pulse, bounce, swing,
+  heartbeat, shake, spin), plus **Preview animation** in the editor. All of it stays still for visitors who ask
+  their system for less motion. The CSS lives in `canvascore-admin/effects.css`, shared by the site and the canvas.
+- **Button hovers**: hover background, text and border colors and a hover effect (lift, grow, press, shadow,
+  glow, shine sweep, outline ring, pulse) for the Button block and for each Hero button.
+- **Transparent / outline buttons**: every color field in the panels has a **Transparent** option and a clear
+  button; Hero buttons get Solid / Outline / Text only looks and an optional border; the Button block gets a
+  Colors section; the Style tab gets a **Text color**.
 - **Reorganized admin UI**:
   - **Sidebar navigation** for every section (Pages, Collections, Templates, Media, Menu, Global Options and,
     for admins, Submissions, Accounts, Backup), with Publish Site, the signed-in user, logout and the version;
@@ -93,6 +103,13 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- **Editor text was pale**: the canvas inherited the dark editor's light text color; it now starts from the
+  same base as the published page (dark text, the site font and brand color from Global Options).
+- **Layers drag & drop**: rows no longer stretch or shrink while dragging; a line shows where the block will
+  land (before/after), a highlight when it goes inside a Section/Container, and blocks can be dropped
+  after the last item or into a container that already has blocks.
+- **Cards**: the slider showed 2 for a block with 3 cards; it now counts the cards ("Number of cards").
+- **Button size** (Small/Medium/Large) only applied the font size, not the padding.
 - Selecting a text on the canvas no longer changes its layout (the old editor replaced it with a boxed editor
   with its own padding and toolbar).
 - Ctrl/Cmd+Z while typing in a field no longer undoes the whole page.

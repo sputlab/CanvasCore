@@ -4,7 +4,8 @@
 //  - Pages: search, status filters with counts, duplicate;
 //  - editor: top bar (back, devices, save, publish), Ctrl+S, Esc, collapsible panels (remembered);
 //  - Add panel: categories, search, admin-only blocks;
-//  - property panel: block name from the catalog, tabs, spacing in Style, first section open.
+//  - property panel: block name from the catalog, tabs, spacing in Style, first section open;
+//  - effects (Advanced tab), hero/button colors and hovers, cards count, Layers drop positions.
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -169,12 +170,69 @@ try {
   click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Style')); await sleep(30);
   check('Spacing (margin & padding) is in the Style tab', !!btnHas('Spacing (Margin & Padding)'));
   click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Advanced')); await sleep(30);
-  check('Advanced keeps animations and custom code', !!btnHas('Effects & Animations') && !!btnHas('Custom Code') && !btnHas('Spacing (Margin & Padding)'));
+  check('Advanced has entrance / hover / looping effects and custom code', ['Entrance Animation', 'Hover Effect', 'Looping Motion', 'Custom Code'].every((t) => !!btnHas(t)) && !btnHas('Spacing (Margin & Padding)'));
   click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Content')); await sleep(30);
   useStore.setState({ selectedBlockId: 's1' }); await sleep(30);
   check('a Section (no Content tab) falls back to Style', !$$('[role="tab"]').some((b) => b.textContent.trim() === 'Content') && $$('[role="tab"]').find((b) => b.getAttribute('aria-selected') === 'true').textContent.trim() === 'Style');
   useStore.setState({ selectedBlockId: null }); await sleep(30);
   check('no selection → page settings, Page Info open', !!btnHas('Page Info') && btnHas('Page Info').getAttribute('aria-expanded') === 'true');
+
+  console.log('\nEFFECTS & BUTTONS');
+  const pick = (el, v) => { Object.getOwnPropertyDescriptor(w.HTMLSelectElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new w.Event('change', { bubbles: true })); };
+  const selByLabel = (txt) => { const l = $$('label').find((x) => x.textContent.trim() === txt); return l && l.parentElement.querySelector('select'); };
+  const openSec = async (t) => { const b = btnHas(t); if (b && b.getAttribute('aria-expanded') !== 'true') { click(b); await sleep(30); } };
+  const blk = (id) => (function find(list) { for (const b of list) { if (b.id === id) return b; const r = b.children && find(b.children); if (r) return r; } return null; })(st().blocks);
+  useStore.setState({ selectedBlockId: 'h1' }); await sleep(30);
+  click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Advanced')); await sleep(30);
+  pick(selByLabel('When the block scrolls into view'), 'bounce-in'); await sleep(30);
+  check('entrance animation is saved', blk('h1').styles.animation === 'bounce-in');
+  pick(selByLabel('Delay'), '300'); await sleep(30);
+  pick(selByLabel('Speed'), 'slow'); await sleep(30);
+  await openSec('Hover Effect'); pick(selByLabel('When the mouse is over the block'), 'lift'); await sleep(30);
+  await openSec('Looping Motion'); pick(selByLabel('Keeps moving gently'), 'float'); await sleep(30);
+  const hc = blk('h1').content;
+  check('speed, delay, hover and loop are saved on the block', hc.animDelay === '300' && hc.animDuration === 'slow' && hc.hoverEffect === 'lift' && hc.loopEffect === 'float', JSON.stringify(hc));
+  check('a Preview animation button is offered', !!btnHas('Preview animation'));
+  click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Content')); await sleep(30);
+  await openSec('Hero Buttons');
+  const card = () => $$('span').find((x) => x.textContent === 'Button 1').closest('div').parentElement;
+  click(btn('Outline', card())); await sleep(30);
+  let b0 = blk('h1').content.buttons[0];
+  check('hero button Outline = transparent fill with a border', b0.bgColor === 'transparent' && !!b0.borderColor && b0.textColor === b0.borderColor, JSON.stringify(b0));
+  click(btn('Solid', card())); await sleep(30);
+  check('hero button Solid gets a fill again', blk('h1').content.buttons[0].bgColor !== 'transparent' && !blk('h1').content.buttons[0].borderColor);
+  click(btn('Transparent', card())); await sleep(30);
+  check('hero button background has a Transparent option', blk('h1').content.buttons[0].bgColor === 'transparent');
+  pick($$('select', card()).find((x) => [...x.options].some((o) => o.value === 'shine')), 'shine'); await sleep(30);
+  check('hero button hover effect is saved', blk('h1').content.buttons[0].effect === 'shine');
+
+  const bt = { id: 'bt1', type: 'BUTTON', styles: {}, content: { text: 'Go', url: '#', useGlobal: true } };
+  const cards = { id: 'c1', type: 'CARDS', styles: {}, content: { items: ['<h3>a</h3>', '<h3>b</h3>', '<h3>c</h3>'] } };
+  useStore.setState({ blocks: [...st().blocks, bt, cards], selectedBlockId: 'bt1' }); await sleep(30);
+  pick($$('select').find((x) => [...x.options].some((o) => o.value === 'lg')), 'lg'); await sleep(30);
+  check('button size sets padding and font size together', blk('bt1').styles.padding === '18px 36px' && blk('bt1').styles.fontSize === '20px', JSON.stringify(blk('bt1').styles));
+  await openSec('Hover');
+  pick(selByLabel('Hover effect'), 'glow'); await sleep(30);
+  check('button hover effect is saved', blk('bt1').content.btnEffect === 'glow');
+  const { renderBlock } = await vite.ssrLoadModule('/src/render/renderBlock.mjs');
+  const bh = renderBlock({ ...blk('bt1'), content: { ...blk('bt1').content, btnHoverBg: '#111111' } });
+  check('rendered button carries the hover classes and color', bh.includes('class="cc-btn cc-hbg cc-bfx-glow"') && bh.includes('--cc-hover-bg:#111111'));
+  useStore.setState({ selectedBlockId: 'c1' }); await sleep(30);
+  check('a Cards block with 3 cards shows 3 on the slider', $$('label').some((l) => l.textContent.trim() === 'Number of cards: 3') && $('input[type="range"]').value === '3');
+
+  console.log('\nLAYERS');
+  const { placeInTree } = await vite.ssrLoadModule('/src/store/useStore.js');
+  const { dropPosition } = await vite.ssrLoadModule('/src/editor/layerDrop.js');
+  const tree = [{ id: 'a', children: [{ id: 'a1' }] }, { id: 'b' }, { id: 'c', children: [] }];
+  const ids = (t) => JSON.stringify(t, (k, v) => (k === 'id' || k === 'children' || Array.isArray(v) || typeof v === 'object' ? v : undefined));
+  check('drop before / after a row', ids(placeInTree(tree, 'b', 'a', 'before')) === ids([{ id: 'b' }, { id: 'a', children: [{ id: 'a1' }] }, { id: 'c', children: [] }]) && ids(placeInTree(tree, 'a1', 'c', 'after')) === ids([{ id: 'a', children: [] }, { id: 'b' }, { id: 'c', children: [] }, { id: 'a1' }]));
+  check('drop inside an (empty) container', ids(placeInTree(tree, 'b', 'c', 'inside')) === ids([{ id: 'a', children: [{ id: 'a1' }] }, { id: 'c', children: [{ id: 'b' }] }]));
+  check('a container cannot go inside itself or its children; inside a non-container is refused', placeInTree(tree, 'a', 'a1', 'after') === null && placeInTree(tree, 'b', 'a1', 'inside') === null);
+  check('pointer height → before / inside / after', dropPosition(0.1, true) === 'before' && dropPosition(0.5, true) === 'inside' && dropPosition(0.9, true) === 'after' && dropPosition(0.4, false) === 'before' && dropPosition(0.6, false) === 'after');
+  const LayerNavigator = (await vite.ssrLoadModule('/src/components/LayerNavigator.jsx')).default;
+  mount(React.createElement(LayerNavigator)); await sleep(40);
+  const countAll = (list) => list.reduce((n, b) => n + 1 + countAll(b.children || []), 0);
+  check('layers list every block with a drag handle, rows keep their size (no transforms)', $$('[role="treeitem"]').length === countAll(st().blocks) && $$('[aria-label^="Move "]').length === countAll(st().blocks) && !$$('[role="treeitem"]').some((r) => /scale/.test(r.parentElement.getAttribute('style') || '')));
 } catch (e) {
   failedRun = true; fails++; total++;
   console.error('  ✗ EXCEPTION: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));

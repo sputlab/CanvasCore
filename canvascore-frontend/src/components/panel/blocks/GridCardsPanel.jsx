@@ -6,23 +6,29 @@ import { labelStyle, inputStyle } from '../helpers';
 // Content panel: GRID, CARDS
 export default function GridCardsPanel({ ctx }) {
   const { selectedBlock, updateBlock, setMediaPickerTarget } = ctx;
+  const isCards = selectedBlock.type === 'CARDS';
+  const items = selectedBlock.content.items || [];
+  // Cards: the count is the number of items. Grid: the stored columns (older grids may lack it).
+  const count = isCards ? items.length : (parseInt(selectedBlock.content.columns) || items.length || 2);
   return (
     <>
-      <PanelAccordion title="Grid Settings" icon={Columns3} defaultOpen={true}>
-        <label style={labelStyle}>Number of Columns: {selectedBlock.content.columns || 2}</label>
-        <input type="range" min="1" max="24" style={{ width: '100%', cursor: 'pointer' }} value={parseInt(selectedBlock.content.columns) || 2}
+      <PanelAccordion title={isCards ? 'Cards' : 'Grid Settings'} icon={Columns3} defaultOpen={true}>
+        <label style={labelStyle}>{isCards ? 'Number of cards' : 'Number of columns'}: {count}</label>
+        <input type="range" min="1" max={isCards ? 12 : 24} style={{ width: '100%', cursor: 'pointer' }} value={count}
+          aria-label={isCards ? 'Number of cards' : 'Number of columns'}
           onChange={e => {
-            const cols = parseInt(e.target.value);
-            const currentItems = selectedBlock.content.items || [];
-            const newItems = Array(cols).fill('').map((_, i) => currentItems[i] !== undefined ? currentItems[i] : `<p>Column ${i+1}</p>`);
-            updateBlock(selectedBlock.id, { content: { ...selectedBlock.content, columns: cols, items: newItems } });
+            const n = parseInt(e.target.value);
+            const newItems = Array(n).fill('').map((_, i) => items[i] !== undefined ? items[i] : (isCards ? `<h3>Card ${i+1}</h3><p>Describe it here.</p>` : `<p>Column ${i+1}</p>`));
+            // Cards wrap on their own (auto-fit): only the list changes. A grid also stores its columns.
+            updateBlock(selectedBlock.id, { content: { ...selectedBlock.content, ...(isCards ? {} : { columns: n }), items: newItems } });
           }} />
+        {isCards && <p style={{ fontSize: '11px', color: '#64748b', margin: '6px 0 0' }}>Cards sit side by side and wrap to a new row when there is not enough room.</p>}
       </PanelAccordion>
 
-      <PanelAccordion title="Columns Content" icon={Layout} defaultOpen={false}>
-        {selectedBlock.content.items.map((item, idx) => (
+      <PanelAccordion title={isCards ? 'Cards content' : 'Columns Content'} icon={Layout} defaultOpen={false}>
+        {items.map((item, idx) => (
           <div key={idx} style={{ background: '#0f172a', padding: '15px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #334155' }}>
-            <label style={{...labelStyle, marginTop: 0}}>Item {idx + 1}</label>
+            <label style={{...labelStyle, marginTop: 0}}>{isCards ? 'Card' : 'Item'} {idx + 1}</label>
             <textarea rows="4" style={inputStyle} value={item} onChange={e => {
               const newItems = [...selectedBlock.content.items]; newItems[idx] = e.target.value; updateBlock(selectedBlock.id, { content: { ...selectedBlock.content, items: newItems } });
             }} />

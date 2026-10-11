@@ -31,23 +31,8 @@
             .cc-img-text { flex-direction: column !important; }
         }
 
-        /* ====== ANIMATIONS ====== */
-        .cc-reveal {
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.8s cubic-bezier(0.5, 0, 0, 1);
-            will-change: opacity, transform;
-        }
-
-        .cc-reveal.fade-up { transform: translateY(50px); }
-        .cc-reveal.fade-in { transform: translateY(0); }
-        .cc-reveal.zoom-in { transform: scale(0.92); }
-
-        .cc-reveal.is-visible {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0) scale(1);
-        }
+        /* Scroll animations, hover effects, looping motion, button hovers: canvascore-admin/effects.css */
+{{EFFECTS_CSS}}
     </style>
 </head>
 <body>

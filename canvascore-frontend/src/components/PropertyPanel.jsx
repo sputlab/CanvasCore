@@ -58,6 +58,8 @@ export default function PropertyPanel() {
   };
   const handleContentChange = (property, value) => updateBlock(selectedBlock.id, { content: { ...liveContent(), [property]: value } });
   const handleStyleChange = (property, value) => updateBlock(selectedBlock.id, { styles: { ...selectedBlock.styles, [property]: value } });
+  // Several style properties in one update (separate handleStyleChange calls would overwrite each other)
+  const patchStyles = (patch) => updateBlock(selectedBlock.id, { styles: { ...selectedBlock.styles, ...patch } });
 
   // Helpers for list blocks: immutable updates (no mutation of the store state)
   const lstOf = (key) => { const v = liveContent()[key]; return Array.isArray(v) ? v : []; };
@@ -140,7 +142,7 @@ export default function PropertyPanel() {
   const tab = tabs.some(([id]) => id === activeTab) ? activeTab : tabs[0][0];
   const c = selectedBlock.content || {};
   const ctx = {
-    selectedBlock, c, set: handleContentChange, handleContentChange, handleStyleChange, updateBlock, setMediaPickerTarget,
+    selectedBlock, c, set: handleContentChange, handleContentChange, handleStyleChange, patchStyles, updateBlock, setMediaPickerTarget,
     pick: (type, index) => () => setMediaPickerTarget(index === undefined ? { type } : { type, index }),
     ARS: [['16 / 9', '16:9'], ['4 / 3', '4:3'], ['3 / 2', '3:2'], ['1 / 1', '1:1'], ['21 / 9', '21:9']],
     pages, collections, lstOf, lstPatch, lstRemove, lstAdd, lstMove, userRole,

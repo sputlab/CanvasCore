@@ -1,12 +1,29 @@
 import React from 'react';
-import { Layout, Sliders, Image as ImageIcon, Trash2 } from 'lucide-react';
-import { PanelAccordion } from '../fields';
-import { handleNumericKey, labelStyle, inputStyle } from '../helpers';
+import { Layout, Sliders, Image as ImageIcon } from 'lucide-react';
+import { PanelAccordion, ItemCard, Fld, TxtF, SelF, ColorF } from '../fields';
+import { handleNumericKey, labelStyle, inputStyle, fldInput, lstAddBtn } from '../helpers';
+import { BUTTON_EFFECTS } from '../../../render/effects.mjs';
+
+// Quick looks for a hero button: filled, outlined (transparent with a border) or text only.
+const STYLE_PRESETS = [['solid', 'Solid'], ['outline', 'Outline'], ['ghost', 'Text only']];
+const presetOf = (b) => (b.bgColor === 'transparent' ? (b.borderColor ? 'outline' : 'ghost') : 'solid');
+const applyPreset = (b, id) => {
+  const ink = b.bgColor && b.bgColor !== 'transparent' ? b.bgColor : (b.borderColor || '#ffffff');
+  if (id === 'outline') return { bgColor: 'transparent', borderColor: b.borderColor || ink, textColor: b.borderColor || ink };
+  if (id === 'ghost') return { bgColor: 'transparent', borderColor: '', textColor: b.textColor === '#ffffff' || !b.textColor ? ink : b.textColor };
+  return { bgColor: b.borderColor || (b.bgColor !== 'transparent' && b.bgColor) || '#3b82f6', borderColor: '', textColor: '#ffffff' };
+};
 import { RichTextField } from '../../../editor/RichText';
 
 // Content panel: HERO
 export default function HeroPanel({ ctx }) {
   const { selectedBlock, handleContentChange, setMediaPickerTarget, pages } = ctx;
+  const buttons = selectedBlock.content.buttons || [];
+  const patch = (i, p) => handleContentChange('buttons', buttons.map((b, j) => (j === i ? { ...b, ...p } : b)));
+  const moveBtn = (i, d) => {
+    const j = i + d; if (j < 0 || j >= buttons.length) return;
+    const next = [...buttons]; [next[i], next[j]] = [next[j], next[i]]; handleContentChange('buttons', next);
+  };
   return (
     <>
       <PanelAccordion title="Background & Titles" icon={Layout} defaultOpen={true}>
@@ -22,49 +39,41 @@ export default function HeroPanel({ ctx }) {
       </PanelAccordion>
 
       <PanelAccordion title="Hero Buttons" icon={Sliders} defaultOpen={false}>
-        {(selectedBlock.content.buttons || []).map((btn, index) => (
-          <div key={index} style={{ background: '#0f172a', padding: '15px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #334155' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <label style={{...labelStyle, margin: 0}}>Button {index + 1}</label>
-              <button onClick={() => {
-                const newBtns = [...selectedBlock.content.buttons]; newBtns.splice(index, 1); handleContentChange('buttons', newBtns);
-              }} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={14}/></button>
-            </div>
-            <input type="text" style={{...inputStyle, marginBottom: '8px'}} value={btn.text} onChange={e => {
-              const newBtns = [...(selectedBlock.content.buttons || [])]; newBtns[index].text = e.target.value; handleContentChange('buttons', newBtns);
-            }} placeholder="Button Text" />
-            <select style={{...inputStyle, marginBottom: '8px'}} value={btn.url} onChange={e => {
-              const newBtns = [...(selectedBlock.content.buttons || [])]; newBtns[index].url = e.target.value; handleContentChange('buttons', newBtns);
-            }}>
-              <option value="#">Select internal page...</option>
-              {pages.map(p => <option key={p.id} value={p.clean_slug ? p.clean_slug + '/index.html' : 'index.html'}>📄 {p.title}</option>)}
-            </select>
-            <input type="text" style={inputStyle} placeholder="Custom URL..." value={btn.url} onChange={e => {
-              const newBtns = [...(selectedBlock.content.buttons || [])]; newBtns[index].url = e.target.value; handleContentChange('buttons', newBtns);
-            }} />
-            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              <div style={{ flex: 1 }}><label style={{fontSize:'10px', color:'#cbd5e1', display:'block'}}>BG</label><input type="color" value={btn.bgColor} onChange={e => {
-                const newBtns = [...(selectedBlock.content.buttons || [])]; newBtns[index].bgColor = e.target.value; handleContentChange('buttons', newBtns);
-              }} style={{width:'100%', border:'none', height:'30px', cursor:'pointer'}}/></div>
-              <div style={{ flex: 1 }}><label style={{fontSize:'10px', color:'#cbd5e1', display:'block'}}>Text</label><input type="color" value={btn.textColor} onChange={e => {
-                const newBtns = [...(selectedBlock.content.buttons || [])]; newBtns[index].textColor = e.target.value; handleContentChange('buttons', newBtns);
-              }} style={{width:'100%', border:'none', height:'30px', cursor:'pointer'}}/></div>
-              <div style={{ flex: 1 }}>
-                <label style={{fontSize:'10px', color:'#cbd5e1', display:'block'}}>Radius</label>
-                <input type="text" value={btn.borderRadius} onChange={e => {
-                  const newBtns = [...(selectedBlock.content.buttons || [])]; newBtns[index].borderRadius = e.target.value; handleContentChange('buttons', newBtns);
-                }} onKeyDown={e => handleNumericKey(e, btn.borderRadius, val => {
-                  const newBtns = [...(selectedBlock.content.buttons || [])]; newBtns[index].borderRadius = val; handleContentChange('buttons', newBtns);
-                })} style={{...inputStyle, padding:'4px', height:'30px'}} title="Press Up/Down arrow"/>
+        {buttons.map((btn, index) => (
+          <ItemCard key={index} title={`Button ${index + 1}`} index={index} total={buttons.length}
+            onMove={(d) => moveBtn(index, d)} onRemove={() => handleContentChange('buttons', buttons.filter((_, i) => i !== index))}>
+            <TxtF label="Text" value={btn.text} onChange={v => patch(index, { text: v })} placeholder="Button text" />
+            <Fld label="Link">
+              <select style={{...fldInput, marginBottom: '6px'}} value={btn.url} onChange={e => patch(index, { url: e.target.value })}>
+                <option value="#">Select internal page...</option>
+                {pages.map(p => <option key={p.id} value={p.clean_slug ? p.clean_slug + '/index.html' : 'index.html'}>📄 {p.title}</option>)}
+              </select>
+              <input type="text" style={fldInput} placeholder="Custom URL..." value={btn.url} onChange={e => patch(index, { url: e.target.value })} />
+            </Fld>
+            <Fld label="Style">
+              <div className="ui-seg" role="group" aria-label="Button style" style={{ display: 'flex', gap: 4 }}>
+                {STYLE_PRESETS.map(([id, name]) => (
+                  <button key={id} type="button" className="ui-seg__btn" aria-pressed={presetOf(btn) === id} onClick={() => patch(index, applyPreset(btn, id))}>{name}</button>
+                ))}
               </div>
+            </Fld>
+            <ColorF label="Background" value={btn.bgColor} onChange={v => patch(index, { bgColor: v })} />
+            <ColorF label="Text color" value={btn.textColor} onChange={v => patch(index, { textColor: v })} allowTransparent={false} />
+            <ColorF label="Border (empty = no border)" value={btn.borderColor} onChange={v => patch(index, { borderColor: v })} allowTransparent={false} placeholder="No border" />
+            <Fld label="Corner radius (↑/↓)">
+              <input type="text" value={btn.borderRadius} onChange={e => patch(index, { borderRadius: e.target.value })}
+                onKeyDown={e => handleNumericKey(e, btn.borderRadius, val => patch(index, { borderRadius: val }))} style={fldInput} />
+            </Fld>
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #334155' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#38bdf8', letterSpacing: '.5px' }}>ON HOVER</span>
+              <ColorF label="Background" value={btn.hoverBg} onChange={v => patch(index, { hoverBg: v })} placeholder="No change" />
+              <ColorF label="Text color" value={btn.hoverColor} onChange={v => patch(index, { hoverColor: v })} allowTransparent={false} placeholder="No change" />
+              {btn.borderColor ? <ColorF label="Border" value={btn.hoverBorder} onChange={v => patch(index, { hoverBorder: v })} allowTransparent={false} placeholder="No change" /> : null}
+              <SelF label="Effect" value={btn.effect || ''} onChange={v => patch(index, { effect: v })} options={BUTTON_EFFECTS} />
             </div>
-          </div>
+          </ItemCard>
         ))}
-        <button onClick={() => {
-          const newBtns = selectedBlock.content.buttons ? [...selectedBlock.content.buttons] : [];
-          newBtns.push({ text: 'New Button', url: '#', bgColor: '#10b981', textColor: '#ffffff', borderRadius: '8px' });
-          handleContentChange('buttons', newBtns);
-        }} style={{ width: '100%', padding: '10px', background: 'transparent', color: '#38bdf8', border: '2px dashed #334155', borderRadius: '8px', cursor: 'pointer' }}>+ Add Button</button>
+        <button onClick={() => handleContentChange('buttons', [...buttons, { text: 'New Button', url: '#', bgColor: '#10b981', textColor: '#ffffff', borderRadius: '8px' }])} style={lstAddBtn}>+ Add Button</button>
       </PanelAccordion>
     </>
   );
