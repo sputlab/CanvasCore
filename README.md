@@ -13,6 +13,7 @@ e un backend PHP + SQLite che compila le pagine in file `.html` pronti da servir
 │   ├── compiler.php       Renderer PHP dei blocchi → HTML
 │   ├── rebuild_all.php    Pubblica l'intero sito nella cartella superiore
 │   ├── submit_form.php    Endpoint pubblico per l'invio dei form
+│   ├── install.php        Wizard di installazione (da eliminare dopo l'uso)
 │   ├── config.php         Sessione, CSRF, data dir, sanitizer HTML
 │   ├── migrations.php     Migrazioni schema DB e contenuti
 │   ├── blocks.json        Default dei blocchi (condivisi con l'editor)
@@ -46,7 +47,13 @@ npm run build      # build in dist/ (incrementa il build in canvascore-admin/ver
 1. `npm run build` in `canvascore-frontend/`.
 2. Carica `canvascore-admin/` sul server, dentro la webroot del sito (es. `/admin/`).
 3. Copia il contenuto di `canvascore-frontend/dist/` dentro quella cartella.
-4. Al primo accesso l'utente è `admin` / `admin` e viene richiesto il cambio password.
+4. Apri `install.php` nel browser (es. `https://www.example.com/admin/install.php`): verifica i requisiti
+   del server, crea il database, l'account amministratore (al posto del default `admin` / `admin`),
+   le impostazioni base e, se vuoi, una homepage da uno starter. Ti lascia già connesso all'editor.
+5. Elimina `install.php` (il wizard offre un pulsante apposito). A installazione completata
+   il file si blocca comunque da solo.
+
+Senza wizard, al primo accesso l'utente è `admin` / `admin` e viene richiesto il cambio password.
 
 Il sito pubblicato viene scritto nella cartella **sopra** `canvascore-admin/`
 (`index.html`, una cartella per slug, `sitemap.xml`, `robots.txt`, `404.html`, `uploads/`).

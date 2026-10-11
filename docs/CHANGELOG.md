@@ -10,6 +10,15 @@ minor e l'altra: `MINOR` segnala nuove funzionalità, `PATCH` correzioni.
 
 ## [Unreleased]
 
+### Added
+- **Wizard di installazione** (`canvascore-admin/install.php`): verifica dei requisiti del server (PHP,
+  estensioni, cartelle scrivibili, data dir dentro/fuori webroot, build dell'editor, `mail()`, HTTPS),
+  creazione del DB con le migrazioni esistenti, account amministratore che sostituisce il default
+  `admin`/`admin`, nome e indirizzo del sito, email per i form e homepage opzionale da uno starter
+  (creata come bozza). Accesso automatico all'editor a fine installazione. Protetto da CSRF; si blocca da
+  solo quando il sito risulta già installato (anche per installazioni precedenti al wizard) e offre di
+  eliminarsi dal server.
+
 ## [0.13.0] - 2026-10-07 — 12 nuovi blocchi
 
 ### Added
