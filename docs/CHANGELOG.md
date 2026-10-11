@@ -18,6 +18,13 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   (created as a draft). Signs you in to the editor automatically at the end of the installation. CSRF-protected;
   it locks itself once the site is already installed (including installs that predate the wizard) and offers to
   delete itself from the server.
+- **8 new starter page templates**, available from "Start from a template" and in the installer:
+  Services, Pricing, Portfolio, Team, FAQ, Coming Soon, Local Business and Event. They use the newer
+  blocks (Steps, Pricing, Data table, Accordion, Gallery, Counters, Logo cloud, Team, Timeline,
+  Countdown, Business details, Map).
+- `tests/starters.mjs` (`npm run test:starters`, part of `npm test`): checks every starter for unknown
+  block types, misspelled content fields and duplicate ids, and renders each one in both the editor
+  renderer and the PHP compiler.
 
 ### Fixed
 - **Publishing**: `rebuild_all.php` read the global settings before loading them, so the menu's

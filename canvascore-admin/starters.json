@@ -62,5 +62,257 @@
         ] }
       ] }
     ]
+  },
+  {
+    "id": "services",
+    "name": "Services",
+    "description": "Service cards, a step-by-step process, a testimonial and a call to action.",
+    "blocks": [
+      { "id": "sv-1", "type": "SECTION", "styles": { "padding": "0", "backgroundColor": "#0f172a", "width": "100%" }, "children": [
+        { "id": "sv-h", "type": "HERO", "styles": { "padding": "110px 20px", "backgroundColor": "#0f172a", "color": "#ffffff", "textAlign": "center", "width": "100%" }, "content": { "title": "<h1>Services that move your business forward</h1>", "subtitle": "<p>Strategy, design and development under one roof.</p>", "bgImage": "", "buttons": [ { "text": "Get a quote", "url": "#", "bgColor": "#3b82f6", "textColor": "#ffffff", "borderRadius": "8px" }, { "text": "See our work", "url": "#", "bgColor": "transparent", "textColor": "#ffffff", "borderRadius": "8px" } ] } }
+      ] },
+      { "id": "sv-2", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "sv-2c", "type": "CONTAINER", "styles": { "maxWidth": "1100px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "sv-2t", "type": "TEXT", "styles": { "padding": "0 0 40px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>What we do</h2><p>Pick one service or combine them into a complete package.</p>" } },
+          { "id": "sv-2g", "type": "CSS_GRID", "styles": { "gap": "24px", "width": "100%" }, "content": { "columns": 3, "gap": "24px" }, "children": [
+            { "id": "sv-i1", "type": "ICON_BOX", "styles": { "padding": "30px", "backgroundColor": "#f8fafc", "borderRadius": "12px", "textAlign": "center", "width": "100%" }, "content": { "title": "Strategy", "description": "Research, positioning and a clear plan to reach your goals.", "icon": "🎯" } },
+            { "id": "sv-i2", "type": "ICON_BOX", "styles": { "padding": "30px", "backgroundColor": "#f8fafc", "borderRadius": "12px", "textAlign": "center", "width": "100%" }, "content": { "title": "Design", "description": "Brand identities and interfaces people enjoy using.", "icon": "🎨" } },
+            { "id": "sv-i3", "type": "ICON_BOX", "styles": { "padding": "30px", "backgroundColor": "#f8fafc", "borderRadius": "12px", "textAlign": "center", "width": "100%" }, "content": { "title": "Development", "description": "Fast, accessible websites and apps built to last.", "icon": "🛠️" } },
+            { "id": "sv-i4", "type": "ICON_BOX", "styles": { "padding": "30px", "backgroundColor": "#f8fafc", "borderRadius": "12px", "textAlign": "center", "width": "100%" }, "content": { "title": "Marketing", "description": "Campaigns, content and SEO that bring the right visitors.", "icon": "📣" } },
+            { "id": "sv-i5", "type": "ICON_BOX", "styles": { "padding": "30px", "backgroundColor": "#f8fafc", "borderRadius": "12px", "textAlign": "center", "width": "100%" }, "content": { "title": "Analytics", "description": "Dashboards and insights to measure what works.", "icon": "📊" } },
+            { "id": "sv-i6", "type": "ICON_BOX", "styles": { "padding": "30px", "backgroundColor": "#f8fafc", "borderRadius": "12px", "textAlign": "center", "width": "100%" }, "content": { "title": "Support", "description": "Ongoing care, updates and a team that answers quickly.", "icon": "🤝" } }
+          ] }
+        ] }
+      ] },
+      { "id": "sv-3", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "sv-3c", "type": "CONTAINER", "styles": { "maxWidth": "1000px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "sv-3t", "type": "TEXT", "styles": { "padding": "0 0 30px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>How we work</h2><p>A simple process with no surprises.</p>" } },
+          { "id": "sv-steps", "type": "STEPS", "styles": { "width": "100%", "padding": "0" }, "content": { "layout": "horizontal", "items": [ { "title": "Discovery call", "text": "We learn about your goals, audience and timeline." }, { "title": "Proposal", "text": "A clear scope, schedule and fixed price." }, { "title": "Build", "text": "Regular check-ins while we design and develop." }, { "title": "Launch & support", "text": "We go live together and keep improving." } ] } }
+        ] }
+      ] },
+      { "id": "sv-4", "type": "SECTION", "styles": { "padding": "70px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "sv-4c", "type": "CONTAINER", "styles": { "maxWidth": "760px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "sv-test", "type": "TESTIMONIAL", "styles": { "padding": "40px", "backgroundColor": "#f8fafc", "borderRadius": "16px", "width": "100%" }, "content": { "quote": "They understood what we needed from the first call and delivered ahead of schedule.", "author": "Jamie Carter", "role": "Founder, Northwind" } }
+        ] }
+      ] },
+      { "id": "sv-cta", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#0f172a", "color": "#ffffff", "width": "100%" }, "children": [
+        { "id": "sv-ctac", "type": "CONTAINER", "styles": { "maxWidth": "760px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "sv-ctat", "type": "TEXT", "styles": { "padding": "0 0 24px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Let's talk about your project</h2><p>Tell us what you have in mind and get a proposal within two days.</p>" } },
+          { "id": "sv-ctab", "type": "BUTTON", "styles": { "textAlign": "center", "padding": "14px 32px", "backgroundColor": "#3b82f6", "color": "#ffffff", "borderRadius": "8px" }, "content": { "text": "Get a quote", "url": "#", "useGlobal": true } }
+        ] }
+      ] }
+    ]
+  },
+  {
+    "id": "pricing",
+    "name": "Pricing",
+    "description": "Pricing plans, a feature comparison table and billing FAQs.",
+    "blocks": [
+      { "id": "pr-1", "type": "SECTION", "styles": { "padding": "90px 20px 40px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "pr-1c", "type": "CONTAINER", "styles": { "maxWidth": "760px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "pr-1t", "type": "TEXT", "styles": { "padding": "0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h1>Simple, transparent pricing</h1><p>Start free and upgrade when you need more. No hidden fees.</p>" } }
+        ] }
+      ] },
+      { "id": "pr-2", "type": "SECTION", "styles": { "padding": "20px 20px 80px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "pr-2c", "type": "CONTAINER", "styles": { "maxWidth": "1100px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "pr-plans", "type": "PRICING", "styles": { "padding": "0", "width": "100%" }, "content": { "columns": 0, "plans": [ { "name": "Starter", "price": "$0", "period": "/month", "description": "For personal projects.", "features": [ "1 project", "Community support", "Basic analytics" ], "buttonText": "Get started", "buttonUrl": "#", "highlighted": false, "badge": "" }, { "name": "Pro", "price": "$19", "period": "/month", "description": "For growing teams.", "features": [ "Unlimited projects", "Priority support", "Custom domain" ], "buttonText": "Start free trial", "buttonUrl": "#", "highlighted": true, "badge": "Most popular" }, { "name": "Business", "price": "$49", "period": "/month", "description": "For larger organizations.", "features": [ "Everything in Pro", "Advanced permissions", "Dedicated manager" ], "buttonText": "Contact sales", "buttonUrl": "#", "highlighted": false, "badge": "" } ] } }
+        ] }
+      ] },
+      { "id": "pr-3", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "pr-3c", "type": "CONTAINER", "styles": { "maxWidth": "900px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "pr-3t", "type": "TEXT", "styles": { "padding": "0 0 24px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Compare plans</h2>" } },
+          { "id": "pr-table", "type": "TABLE", "styles": { "width": "100%" }, "content": { "data": "Feature | Starter | Pro | Business\nProjects | 1 | Unlimited | Unlimited\nTeam members | 1 | 5 | Unlimited\nCustom domain | — | ✓ | ✓\nPriority support | — | ✓ | ✓\nAdvanced permissions | — | — | ✓\nDedicated manager | — | — | ✓", "caption": "", "headerRow": true, "striped": true, "bordered": false, "compact": false, "rowHeaders": true, "stickyHeader": false, "maxHeight": 0 } }
+        ] }
+      ] },
+      { "id": "pr-4", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "pr-4c", "type": "CONTAINER", "styles": { "maxWidth": "800px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "pr-4t", "type": "TEXT", "styles": { "padding": "0 0 24px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Billing questions</h2>" } },
+          { "id": "pr-faq", "type": "ACCORDION", "styles": { "width": "100%", "padding": "0 0 40px 0" }, "content": { "allowMultiple": false, "openFirst": false, "icon": "plus", "variant": "card", "items": [ { "title": "Can I change plans later?", "content": "<p>Yes. Upgrade or downgrade at any time; the difference is prorated on your next invoice.</p>" }, { "title": "Is there a free trial?", "content": "<p>The Pro plan includes a 14-day free trial. No credit card is required to start.</p>" }, { "title": "Which payment methods do you accept?", "content": "<p>All major credit cards and bank transfer for yearly plans.</p>" }, { "title": "Can I cancel anytime?", "content": "<p>Yes, there are no long-term contracts. You keep access until the end of the billing period.</p>" } ] } }
+        ] }
+      ] },
+      { "id": "pr-cta", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#0f172a", "color": "#ffffff", "width": "100%" }, "children": [
+        { "id": "pr-ctac", "type": "CONTAINER", "styles": { "maxWidth": "760px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "pr-ctat", "type": "TEXT", "styles": { "padding": "0 0 24px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Not sure which plan fits?</h2><p>Talk to us and we will help you choose.</p>" } },
+          { "id": "pr-ctab", "type": "BUTTON", "styles": { "textAlign": "center", "padding": "14px 32px", "backgroundColor": "#3b82f6", "color": "#ffffff", "borderRadius": "8px" }, "content": { "text": "Contact sales", "url": "#", "useGlobal": true } }
+        ] }
+      ] }
+    ]
+  },
+  {
+    "id": "portfolio",
+    "name": "Portfolio",
+    "description": "Project gallery with lightbox, results in numbers and client logos.",
+    "blocks": [
+      { "id": "pf-1", "type": "SECTION", "styles": { "padding": "0", "backgroundColor": "#0f172a", "width": "100%" }, "children": [
+        { "id": "pf-h", "type": "HERO", "styles": { "padding": "110px 20px", "backgroundColor": "#0f172a", "color": "#ffffff", "textAlign": "center", "width": "100%" }, "content": { "title": "<h1>Selected work</h1>", "subtitle": "<p>A few projects we are proud of.</p>", "bgImage": "", "buttons": [ { "text": "Start a project", "url": "#", "bgColor": "#3b82f6", "textColor": "#ffffff", "borderRadius": "8px" } ] } }
+      ] },
+      { "id": "pf-2", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "pf-2c", "type": "CONTAINER", "styles": { "maxWidth": "1200px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "pf-gal", "type": "GALLERY", "styles": { "width": "100%" }, "content": { "layout": "grid", "columns": 3, "gap": 16, "aspectRatio": "4 / 3", "borderRadius": "10px", "lightbox": true, "showCaptions": true, "images": [ { "src": "https://via.placeholder.com/800x600?text=Project+1", "alt": "Brand identity for a coffee roaster", "caption": "Brand identity — Roastery" }, { "src": "https://via.placeholder.com/800x600?text=Project+2", "alt": "Online shop redesign", "caption": "E-commerce — Atelier" }, { "src": "https://via.placeholder.com/800x600?text=Project+3", "alt": "Mobile banking app", "caption": "Mobile app — Finly" }, { "src": "https://via.placeholder.com/800x600?text=Project+4", "alt": "Annual report design", "caption": "Editorial — Greenfield" }, { "src": "https://via.placeholder.com/800x600?text=Project+5", "alt": "Product launch campaign", "caption": "Campaign — Volt" }, { "src": "https://via.placeholder.com/800x600?text=Project+6", "alt": "Architecture studio website", "caption": "Website — Studio Arc" } ] } }
+        ] }
+      ] },
+      { "id": "pf-3", "type": "SECTION", "styles": { "padding": "60px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "pf-3c", "type": "CONTAINER", "styles": { "maxWidth": "1000px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "pf-num", "type": "COUNTERS", "styles": { "width": "100%", "padding": "0" }, "content": { "columns": 0, "animate": true, "duration": 1800, "items": [ { "value": 150, "prefix": "", "suffix": "+", "decimals": 0, "label": "Projects delivered" }, { "value": 12, "prefix": "", "suffix": "", "decimals": 0, "label": "Design awards" }, { "value": 30, "prefix": "", "suffix": "+", "decimals": 0, "label": "Countries" }, { "value": 98, "prefix": "", "suffix": "%", "decimals": 0, "label": "Returning clients" } ] } }
+        ] }
+      ] },
+      { "id": "pf-4", "type": "SECTION", "styles": { "padding": "60px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "pf-4c", "type": "CONTAINER", "styles": { "maxWidth": "1100px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "pf-logos", "type": "LOGOS", "styles": { "width": "100%", "padding": "0" }, "content": { "layout": "grid", "title": "Clients we've worked with", "columns": 5, "height": 48, "gap": 40, "grayscale": true, "speed": 30, "logos": [ { "src": "https://via.placeholder.com/160x60?text=Client+1", "alt": "Client 1", "href": "" }, { "src": "https://via.placeholder.com/160x60?text=Client+2", "alt": "Client 2", "href": "" }, { "src": "https://via.placeholder.com/160x60?text=Client+3", "alt": "Client 3", "href": "" }, { "src": "https://via.placeholder.com/160x60?text=Client+4", "alt": "Client 4", "href": "" }, { "src": "https://via.placeholder.com/160x60?text=Client+5", "alt": "Client 5", "href": "" } ] } }
+        ] }
+      ] },
+      { "id": "pf-cta", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#0f172a", "color": "#ffffff", "width": "100%" }, "children": [
+        { "id": "pf-ctac", "type": "CONTAINER", "styles": { "maxWidth": "760px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "pf-ctat", "type": "TEXT", "styles": { "padding": "0 0 24px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Have a project in mind?</h2><p>We would love to hear about it.</p>" } },
+          { "id": "pf-ctab", "type": "BUTTON", "styles": { "textAlign": "center", "padding": "14px 32px", "backgroundColor": "#3b82f6", "color": "#ffffff", "borderRadius": "8px" }, "content": { "text": "Get in touch", "url": "#", "useGlobal": true } }
+        ] }
+      ] }
+    ]
+  },
+  {
+    "id": "team",
+    "name": "Team",
+    "description": "Meet the team, the company story as a timeline, and key numbers.",
+    "blocks": [
+      { "id": "tm-1", "type": "SECTION", "styles": { "padding": "90px 20px", "backgroundColor": "#1e293b", "color": "#ffffff", "width": "100%" }, "children": [
+        { "id": "tm-1c", "type": "CONTAINER", "styles": { "maxWidth": "760px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "tm-1t", "type": "TEXT", "styles": { "padding": "0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h1>Meet the team</h1><p>The people who make it all happen.</p>" } }
+        ] }
+      ] },
+      { "id": "tm-2", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "tm-2c", "type": "CONTAINER", "styles": { "maxWidth": "1100px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "tm-team", "type": "TEAM", "styles": { "width": "100%", "padding": "0" }, "content": { "columns": 0, "layout": "card", "photoShape": "circle", "members": [ { "name": "Alex Morgan", "role": "CEO & Co-founder", "bio": "Sets the direction and keeps everyone pointed at it.", "photo": "", "email": "", "linkedin": "", "twitter": "", "website": "" }, { "name": "Sam Lee", "role": "CTO", "bio": "Turns ideas into reliable, well-built products.", "photo": "", "email": "", "linkedin": "", "twitter": "", "website": "" }, { "name": "Jordan Patel", "role": "Head of Design", "bio": "Obsessed with details and with the people who use our work.", "photo": "", "email": "", "linkedin": "", "twitter": "", "website": "" }, { "name": "Taylor Kim", "role": "Customer Success", "bio": "Makes sure every client gets real value from day one.", "photo": "", "email": "", "linkedin": "", "twitter": "", "website": "" } ] } }
+        ] }
+      ] },
+      { "id": "tm-3", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "tm-3c", "type": "CONTAINER", "styles": { "maxWidth": "900px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "tm-3t", "type": "TEXT", "styles": { "padding": "0 0 30px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Our story</h2>" } },
+          { "id": "tm-tl", "type": "TIMELINE", "styles": { "width": "100%", "padding": "0" }, "content": { "layout": "alternate", "items": [ { "date": "2019", "title": "The beginning", "text": "Two friends, one laptop and a shared idea." }, { "date": "2021", "title": "First office", "text": "The team grows to ten and moves into a real office." }, { "date": "2023", "title": "100 clients", "text": "A milestone reached thanks to word of mouth." }, { "date": "2025", "title": "Going international", "text": "New markets, new languages, same values." } ] } }
+        ] }
+      ] },
+      { "id": "tm-4", "type": "SECTION", "styles": { "padding": "60px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "tm-4c", "type": "CONTAINER", "styles": { "maxWidth": "1000px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "tm-num", "type": "COUNTERS", "styles": { "width": "100%", "padding": "0" }, "content": { "columns": 0, "animate": true, "duration": 1800, "items": [ { "value": 25, "prefix": "", "suffix": "", "decimals": 0, "label": "Team members" }, { "value": 8, "prefix": "", "suffix": "", "decimals": 0, "label": "Nationalities" }, { "value": 100, "prefix": "", "suffix": "+", "decimals": 0, "label": "Clients" }, { "value": 4.9, "prefix": "", "suffix": "", "decimals": 1, "label": "Average rating" } ] } }
+        ] }
+      ] },
+      { "id": "tm-cta", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#0f172a", "color": "#ffffff", "width": "100%" }, "children": [
+        { "id": "tm-ctac", "type": "CONTAINER", "styles": { "maxWidth": "760px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "tm-ctat", "type": "TEXT", "styles": { "padding": "0 0 24px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>We're hiring</h2><p>Want to work with us? Take a look at our open roles.</p>" } },
+          { "id": "tm-ctab", "type": "BUTTON", "styles": { "textAlign": "center", "padding": "14px 32px", "backgroundColor": "#3b82f6", "color": "#ffffff", "borderRadius": "8px" }, "content": { "text": "See open roles", "url": "#", "useGlobal": true } }
+        ] }
+      ] }
+    ]
+  },
+  {
+    "id": "faq",
+    "name": "FAQ",
+    "description": "Frequently asked questions in groups, plus a \"still need help?\" box.",
+    "blocks": [
+      { "id": "fq-1", "type": "SECTION", "styles": { "padding": "90px 20px 60px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "fq-1c", "type": "CONTAINER", "styles": { "maxWidth": "760px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "fq-1t", "type": "TEXT", "styles": { "padding": "0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h1>Frequently asked questions</h1><p>Quick answers to the questions we hear most often.</p>" } }
+        ] }
+      ] },
+      { "id": "fq-2", "type": "SECTION", "styles": { "padding": "40px 20px 90px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "fq-2c", "type": "CONTAINER", "styles": { "maxWidth": "800px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "fq-g1", "type": "TEXT", "styles": { "padding": "0 0 16px 0", "width": "100%" }, "content": { "text": "<h2>Getting started</h2>" } },
+          { "id": "fq-a1", "type": "ACCORDION", "styles": { "width": "100%", "padding": "0 0 40px 0" }, "content": { "allowMultiple": false, "openFirst": false, "icon": "plus", "variant": "card", "items": [ { "title": "How do I create an account?", "content": "<p>Click \"Sign up\", enter your email and choose a password. It takes less than a minute.</p>" }, { "title": "Do I need to install anything?", "content": "<p>No. Everything works in your browser on desktop, tablet and phone.</p>" }, { "title": "Is there a free plan?", "content": "<p>Yes. The free plan covers the basics and you can upgrade at any time.</p>" } ] } },
+          { "id": "fq-g2", "type": "TEXT", "styles": { "padding": "0 0 16px 0", "width": "100%" }, "content": { "text": "<h2>Account and billing</h2>" } },
+          { "id": "fq-a2", "type": "ACCORDION", "styles": { "width": "100%", "padding": "0 0 40px 0" }, "content": { "allowMultiple": false, "openFirst": false, "icon": "plus", "variant": "card", "items": [ { "title": "How do I change my password?", "content": "<p>Open your account settings and choose \"Change password\".</p>" }, { "title": "Where can I find my invoices?", "content": "<p>All invoices are available to download from the billing section of your account.</p>" }, { "title": "How do I cancel my subscription?", "content": "<p>You can cancel from the billing section; access continues until the end of the period.</p>" } ] } },
+          { "id": "fq-g3", "type": "TEXT", "styles": { "padding": "0 0 16px 0", "width": "100%" }, "content": { "text": "<h2>Privacy and security</h2>" } },
+          { "id": "fq-a3", "type": "ACCORDION", "styles": { "width": "100%", "padding": "0 0 40px 0" }, "content": { "allowMultiple": false, "openFirst": false, "icon": "plus", "variant": "card", "items": [ { "title": "Is my data safe?", "content": "<p>Data is encrypted in transit and at rest, and backed up every day.</p>" }, { "title": "Can I export or delete my data?", "content": "<p>Yes. You can export everything or ask us to delete your account at any time.</p>" } ] } },
+          { "id": "fq-help", "type": "CALLOUT", "styles": { "width": "100%", "padding": "0 0 20px 0" }, "content": { "variant": "info", "title": "Still need help?", "text": "<p>Our team usually replies within one business day.</p>", "showIcon": true } },
+          { "id": "fq-btn", "type": "BUTTON", "styles": { "textAlign": "left", "padding": "14px 32px", "backgroundColor": "#3b82f6", "color": "#ffffff", "borderRadius": "8px" }, "content": { "text": "Contact us", "url": "#", "useGlobal": true } }
+        ] }
+      ] }
+    ]
+  },
+  {
+    "id": "coming-soon",
+    "name": "Coming Soon",
+    "description": "A launch countdown with an email sign-up form.",
+    "blocks": [
+      { "id": "cs-1", "type": "SECTION", "styles": { "padding": "100px 20px", "backgroundColor": "#f8fafc", "width": "100%", "minHeight": "100vh" }, "children": [
+        { "id": "cs-1c", "type": "CONTAINER", "styles": { "maxWidth": "640px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "cs-1t", "type": "TEXT", "styles": { "padding": "0 0 20px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h1>Something new is coming</h1><p>We are putting the finishing touches on it. Leave your email and be the first to know.</p>" } },
+          { "id": "cs-cd", "type": "COUNTDOWN", "styles": { "width": "100%", "padding": "10px 0 30px 0" }, "content": { "datetime": "2030-01-01T09:00", "utcOffset": "local", "endAction": "message", "endMessage": "We're live!", "showSeconds": true, "showDate": true, "labelDays": "Days", "labelHours": "Hours", "labelMinutes": "Minutes", "labelSeconds": "Seconds" } },
+          { "id": "cs-form", "type": "FORM", "styles": { "padding": "40px", "backgroundColor": "#ffffff", "borderRadius": "12px", "width": "100%" }, "content": { "title": "<h3>Get notified at launch</h3>", "email": "", "btnText": "Notify me", "successMsg": "Thanks! We'll let you know as soon as we launch.", "fields": [ { "label": "Email", "type": "email", "required": true } ] } }
+        ] }
+      ] }
+    ]
+  },
+  {
+    "id": "local-business",
+    "name": "Local Business",
+    "description": "Shop, studio or restaurant page: photos, opening hours, map and contact form.",
+    "blocks": [
+      { "id": "lb-1", "type": "SECTION", "styles": { "padding": "0", "backgroundColor": "#0f172a", "width": "100%" }, "children": [
+        { "id": "lb-h", "type": "HERO", "styles": { "padding": "140px 20px", "backgroundColor": "#0f172a", "color": "#ffffff", "textAlign": "center", "width": "100%", "minHeight": "60vh" }, "content": { "title": "<h1>Welcome to Your Business</h1>", "subtitle": "<p>Fresh, local and made with care since 2010.</p>", "bgImage": "https://via.placeholder.com/1600x700?text=Your+photo", "buttons": [ { "text": "Visit us", "url": "#", "bgColor": "#3b82f6", "textColor": "#ffffff", "borderRadius": "8px" }, { "text": "Call now", "url": "#", "bgColor": "transparent", "textColor": "#ffffff", "borderRadius": "8px" } ] } }
+      ] },
+      { "id": "lb-2", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "lb-2c", "type": "CONTAINER", "styles": { "maxWidth": "1000px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "lb-about", "type": "IMAGE_TEXT", "styles": { "padding": "0", "width": "100%" }, "content": { "src": "https://via.placeholder.com/600x400?text=About+us", "text": "<h2>About us</h2><p>Tell visitors what makes you special: your story, your products and the people behind them.</p>", "layout": "img-left" } }
+        ] }
+      ] },
+      { "id": "lb-3", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "lb-3c", "type": "CONTAINER", "styles": { "maxWidth": "1200px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "lb-3t", "type": "TEXT", "styles": { "padding": "0 0 24px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Take a look inside</h2>" } },
+          { "id": "lb-gal", "type": "GALLERY", "styles": { "width": "100%" }, "content": { "layout": "grid", "columns": 4, "gap": 16, "aspectRatio": "1 / 1", "borderRadius": "10px", "lightbox": true, "showCaptions": false, "images": [ { "src": "https://via.placeholder.com/800x800?text=Photo+1", "alt": "Photo 1", "caption": "" }, { "src": "https://via.placeholder.com/800x800?text=Photo+2", "alt": "Photo 2", "caption": "" }, { "src": "https://via.placeholder.com/800x800?text=Photo+3", "alt": "Photo 3", "caption": "" }, { "src": "https://via.placeholder.com/800x800?text=Photo+4", "alt": "Photo 4", "caption": "" } ] } }
+        ] }
+      ] },
+      { "id": "lb-4", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "lb-4c", "type": "CONTAINER", "styles": { "maxWidth": "1100px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "lb-4g", "type": "CSS_GRID", "styles": { "gap": "40px", "width": "100%" }, "content": { "columns": 2, "gap": "40px" }, "children": [
+            { "id": "lb-biz", "type": "BUSINESS", "styles": { "width": "100%", "padding": "0" }, "content": { "name": "Your Business", "businessType": "LocalBusiness", "address": "123 Main Street\nSpringfield", "phone": "+1 555 0100", "email": "hello@example.com", "website": "", "mapsLink": true, "directionsLabel": "Get directions", "hoursTitle": "Opening hours", "closedLabel": "Closed", "note": "", "jsonLd": true, "hours": [ { "day": "Monday", "open": "09:00", "close": "18:00", "closed": false }, { "day": "Tuesday", "open": "09:00", "close": "18:00", "closed": false }, { "day": "Wednesday", "open": "09:00", "close": "18:00", "closed": false }, { "day": "Thursday", "open": "09:00", "close": "18:00", "closed": false }, { "day": "Friday", "open": "09:00", "close": "18:00", "closed": false }, { "day": "Saturday", "open": "10:00", "close": "14:00", "closed": false }, { "day": "Sunday", "open": "", "close": "", "closed": true } ] } },
+            { "id": "lb-map", "type": "MAPS", "styles": { "width": "100%" }, "content": { "address": "123 Main Street, Springfield", "zoom": 15 } }
+          ] }
+        ] }
+      ] },
+      { "id": "lb-5", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "lb-5c", "type": "CONTAINER", "styles": { "maxWidth": "720px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "lb-form", "type": "FORM", "styles": { "padding": "40px", "backgroundColor": "#ffffff", "borderRadius": "12px", "width": "100%" }, "content": { "title": "<h3>Send us a message</h3>", "email": "", "btnText": "Send", "successMsg": "Thanks! We will get back to you soon.", "fields": [ { "label": "Name", "type": "text", "required": true }, { "label": "Email", "type": "email", "required": true }, { "label": "Message", "type": "textarea", "required": true } ] } }
+        ] }
+      ] }
+    ]
+  },
+  {
+    "id": "event",
+    "name": "Event",
+    "description": "Conference or meetup page: countdown, agenda, speakers, tickets and venue map.",
+    "blocks": [
+      { "id": "ev-1", "type": "SECTION", "styles": { "padding": "0", "backgroundColor": "#0f172a", "width": "100%" }, "children": [
+        { "id": "ev-h", "type": "HERO", "styles": { "padding": "120px 20px", "backgroundColor": "#0f172a", "color": "#ffffff", "textAlign": "center", "width": "100%", "minHeight": "60vh" }, "content": { "title": "<h1>Design Summit 2030</h1>", "subtitle": "<p>Two days of talks and workshops · March 14–15 · City Conference Center</p>", "bgImage": "", "buttons": [ { "text": "Get tickets", "url": "#", "bgColor": "#3b82f6", "textColor": "#ffffff", "borderRadius": "8px" }, { "text": "View agenda", "url": "#", "bgColor": "transparent", "textColor": "#ffffff", "borderRadius": "8px" } ] } }
+      ] },
+      { "id": "ev-2", "type": "SECTION", "styles": { "padding": "60px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "ev-2c", "type": "CONTAINER", "styles": { "maxWidth": "800px", "margin": "0 auto", "width": "100%", "textAlign": "center" }, "children": [
+          { "id": "ev-2t", "type": "TEXT", "styles": { "padding": "0 0 10px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>The event starts in</h2>" } },
+          { "id": "ev-cd", "type": "COUNTDOWN", "styles": { "width": "100%", "padding": "10px 0 30px 0" }, "content": { "datetime": "2030-03-14T09:00", "utcOffset": "local", "endAction": "message", "endMessage": "The event has started!", "showSeconds": true, "showDate": true, "labelDays": "Days", "labelHours": "Hours", "labelMinutes": "Minutes", "labelSeconds": "Seconds" } }
+        ] }
+      ] },
+      { "id": "ev-3", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "ev-3c", "type": "CONTAINER", "styles": { "maxWidth": "800px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "ev-3t", "type": "TEXT", "styles": { "padding": "0 0 30px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Agenda</h2>" } },
+          { "id": "ev-tl", "type": "TIMELINE", "styles": { "width": "100%", "padding": "0" }, "content": { "layout": "left", "items": [ { "date": "09:00", "title": "Registration and coffee", "text": "Pick up your badge and meet the other attendees." }, { "date": "10:00", "title": "Opening keynote", "text": "Where design is heading in the next five years." }, { "date": "12:30", "title": "Lunch break", "text": "Food, networking and sponsor booths." }, { "date": "14:00", "title": "Workshops", "text": "Hands-on sessions in small groups." }, { "date": "17:30", "title": "Closing panel and drinks", "text": "Questions, answers and a toast." } ] } }
+        ] }
+      ] },
+      { "id": "ev-4", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "ev-4c", "type": "CONTAINER", "styles": { "maxWidth": "1100px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "ev-4t", "type": "TEXT", "styles": { "padding": "0 0 30px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Speakers</h2>" } },
+          { "id": "ev-team", "type": "TEAM", "styles": { "width": "100%", "padding": "0" }, "content": { "columns": 0, "layout": "card", "photoShape": "circle", "members": [ { "name": "Riley Chen", "role": "Design Director", "bio": "Leads design systems used by millions every day.", "photo": "", "email": "", "linkedin": "", "twitter": "", "website": "" }, { "name": "Morgan Diaz", "role": "UX Researcher", "bio": "Has run more than 500 user interviews.", "photo": "", "email": "", "linkedin": "", "twitter": "", "website": "" }, { "name": "Casey Novak", "role": "Product Designer", "bio": "Author of a popular newsletter on interface design.", "photo": "", "email": "", "linkedin": "", "twitter": "", "website": "" } ] } }
+        ] }
+      ] },
+      { "id": "ev-5", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#f8fafc", "width": "100%" }, "children": [
+        { "id": "ev-5c", "type": "CONTAINER", "styles": { "maxWidth": "1100px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "ev-5t", "type": "TEXT", "styles": { "padding": "0 0 30px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Tickets</h2>" } },
+          { "id": "ev-tix", "type": "PRICING", "styles": { "padding": "0", "width": "100%" }, "content": { "columns": 0, "plans": [ { "name": "Early bird", "price": "$149", "period": "", "description": "Limited availability.", "features": [ "Both conference days", "Lunch and coffee", "Talk recordings" ], "buttonText": "Buy ticket", "buttonUrl": "#", "highlighted": false, "badge": "" }, { "name": "Standard", "price": "$249", "period": "", "description": "The full experience.", "features": [ "Both conference days", "One workshop", "Lunch and coffee", "Talk recordings" ], "buttonText": "Buy ticket", "buttonUrl": "#", "highlighted": true, "badge": "Best value" }, { "name": "Team (5)", "price": "$999", "period": "", "description": "Bring your colleagues.", "features": [ "5 standard tickets", "Reserved seating", "Invoice for your company" ], "buttonText": "Contact us", "buttonUrl": "#", "highlighted": false, "badge": "" } ] } }
+        ] }
+      ] },
+      { "id": "ev-6", "type": "SECTION", "styles": { "padding": "80px 20px", "backgroundColor": "#ffffff", "width": "100%" }, "children": [
+        { "id": "ev-6c", "type": "CONTAINER", "styles": { "maxWidth": "1000px", "margin": "0 auto", "width": "100%" }, "children": [
+          { "id": "ev-6t", "type": "TEXT", "styles": { "padding": "0 0 24px 0", "width": "100%", "textAlign": "center" }, "content": { "text": "<h2>Venue</h2><p>City Conference Center, 1 Congress Square, Springfield</p>" } },
+          { "id": "ev-map", "type": "MAPS", "styles": { "width": "100%" }, "content": { "address": "1 Congress Square, Springfield", "zoom": 15 } }
+        ] }
+      ] }
+    ]
   }
 ]
