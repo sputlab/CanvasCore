@@ -25,8 +25,18 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 - `tests/starters.mjs` (`npm run test:starters`, part of `npm test`): checks every starter for unknown
   block types, misspelled content fields and duplicate ids, and renders each one in both the editor
   renderer and the PHP compiler.
+- **Unique URLs site-wide**: a page can't be published on a URL already used by another live page,
+  a collection or a system folder (`uploads`, `canvascore-admin`), and a collection item can't reuse a
+  published item's slug in the same collection. The server refuses with a clear message; drafts can
+  still be saved. Page Info warns as you type, and new pages (blank or from a template) get a free
+  slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- **Templates**: a page created from a template kept the slug `new-page` instead of following its
+  title like a new blank page; it now starts as e.g. `coming-soon`.
+- **Editor canvas**: padded full-width blocks (forms, icon boxes, testimonials…) overflowed their box in
+  the editor while looking right on the site. The canvas now uses the same `box-sizing: border-box`
+  as the published pages.
 - **Editor**: opening the Advanced tab on a section or container that came from a starter template
   blanked the whole editor (admins only). Template blocks have no `content` object and the panel read
   it directly; the panel now always gets `content`/`styles` objects. Affected every starter, including

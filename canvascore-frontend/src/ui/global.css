@@ -2,6 +2,11 @@
    NB: no rules on generic elements (button/input/a/h1...) so as not to alter
    the canvas preview, which renders the blocks' real HTML. */
 
+/* The one exception: the canvas uses the same box model as the published pages
+   (master.html sets "* { box-sizing: border-box; }"), otherwise padded full-width
+   blocks such as forms overflow in the editor but not on the site. */
+.cc-canvas * { box-sizing: border-box; }
+
 :root {
   /* Palette admin */
   --cc-bg: #0b1220;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
+import { uniqueSlug } from '../utils/slug';
 import { FileText, Plus, Trash2, Edit, ListTree, LogOut, Globe, Image as ImageIcon, Palette, Users, Clock, User, CheckCircle, Edit3, AlertCircle, LayoutTemplate, Download, Upload, ExternalLink, Inbox, Library } from 'lucide-react';
 
 export default function PageManager() {
@@ -19,8 +20,9 @@ export default function PageManager() {
 
   const createPage = async () => {
     const id = 'page-' + Date.now();
+    const slug = uniqueSlug('New Page', { pages });
     const newPage = {
-      id, title: 'New Page', slug: 'new-page', clean_slug: 'new-page',
+      id, title: 'New Page', slug, clean_slug: slug,
       layout: 'boxed', boxed_width: '1200px', bg_color: '#ffffff',
       seo_title: '', seo_description: '', content_json: '[]',
       status: 'draft', is_draft_copy: 0, parent_id: null, is_home: 0
