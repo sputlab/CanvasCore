@@ -201,7 +201,12 @@ export default function PropertyPanel() {
     }
     return null;
   };
-  const selectedBlock = findBlockDeep(blocks, selectedBlockId);
+  // Blocks from templates, imports or older pages may have no "content"/"styles" (e.g. SECTION/CONTAINER):
+  // the panel reads them directly, so it always gets objects (a crash here blanks the whole editor).
+  const foundBlock = findBlockDeep(blocks, selectedBlockId);
+  const selectedBlock = foundBlock && (!foundBlock.content || !foundBlock.styles)
+    ? { ...foundBlock, content: foundBlock.content || {}, styles: foundBlock.styles || {} }
+    : foundBlock;
 
   const [activeTab, setActiveTab] = useState('content');
   const [mediaPickerTarget, setMediaPickerTarget] = useState(null);

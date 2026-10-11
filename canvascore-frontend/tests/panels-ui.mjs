@@ -219,6 +219,46 @@ try {
     await waitFor(() => doc.querySelector('.cc-divider'));
     check('DIVIDER canvas: does not capture the mouse (selects/drags normally)', doc.querySelector('.cc-divider').parentElement.style.pointerEvents === 'none');
   }
+
+  // Every block of every starter template, in every tab, as admin: the panel must never crash.
+  // Template blocks may have no "content" at all (e.g. SECTION/CONTAINER): a crash unmounts the whole app.
+  console.log('\nSTARTERS — every template block opens every tab (admin)');
+  {
+    const starters = JSON.parse(readFileSync(path.join(PROJECT, '../canvascore-admin/starters.json'), 'utf8'));
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    const panelAlive = () => $$('button').some((x) => x.textContent.trim() === 'Advanced');
+    for (const stt of starters) {
+      const all = [];
+      const walk = (bs) => { for (const b of bs || []) { all.push(b); walk(b.children); } };
+      walk(stt.blocks);
+      if (!all.length) continue;
+      const broken = [];
+      for (const b of all) {
+        useStore.setState({ blocks: structuredClone(stt.blocks), selectedBlockId: b.id, userRole: 'admin', pastBlocks: [], futureBlocks: [], activePage: { id: 'p', title: 'T', slug: 't', layout: 'boxed' }, viewport: 'desktop', masters: [], templates: [], pages: [] });
+        mount(React.createElement(PropertyPanel));
+        await waitFor(panelAlive);
+        // layout blocks (SECTION/CONTAINER/FLEX_ROW) have no Content tab
+        const tabs = ['SECTION', 'CONTAINER', 'FLEX_ROW'].includes(b.type) ? ['Style', 'Advanced'] : ['Content', 'Style', 'Advanced'];
+        for (const tab of tabs) {
+          const btn = $$('button').find((x) => x.textContent.trim() === tab);
+          if (!btn) { broken.push(`${b.id} ${b.type} (no ${tab} tab)`); break; }
+          click(btn); await tick();
+          if (!panelAlive()) { broken.push(`${b.id} ${b.type} (${tab})`); break; }
+        }
+      }
+      check(`${stt.id}: all ${all.length} blocks open every tab`, broken.length === 0, broken.join(', '));
+    }
+    // a SECTION with no "content" is still editable from Advanced (the write creates content)
+    const cs = starters.find((s) => s.id === 'coming-soon');
+    useStore.setState({ blocks: structuredClone(cs.blocks), selectedBlockId: cs.blocks[0].id, userRole: 'admin' });
+    mount(React.createElement(PropertyPanel));
+    click(await waitFor(() => buttonByText('Advanced'))); await tick();
+    click(await waitFor(() => buttonByText('Custom Code'))); await tick();
+    const idInput = await waitFor(() => field('CSS ID'));
+    if (idInput) { setValue(idInput, 'launch'); await tick(); }
+    const saved = st().blocks[0];
+    check('content-less SECTION: setting the CSS ID in Advanced saves it', saved.content?.customId === 'launch' && saved.children.length === 1, JSON.stringify(saved.content));
+  }
 } catch (e) {
   failedRun = true; fails++; total++;
   console.error('  ✗ EXCEPTION: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));

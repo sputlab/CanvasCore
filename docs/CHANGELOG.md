@@ -27,6 +27,10 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   renderer and the PHP compiler.
 
 ### Fixed
+- **Editor**: opening the Advanced tab on a section or container that came from a starter template
+  blanked the whole editor (admins only). Template blocks have no `content` object and the panel read
+  it directly; the panel now always gets `content`/`styles` objects. Affected every starter, including
+  Landing, About and Contact.
 - **Publishing**: `rebuild_all.php` read the global settings before loading them, so the menu's
   "inherit the theme" option (hover color = brand color) was ignored on the published site even though it
   worked in the preview, and the same applied to disabling the global header/footer
