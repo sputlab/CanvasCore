@@ -511,12 +511,13 @@ function cc_menu_effects_css($effects, $o) {
     // Bar
     if ($has('glare')) {
         // Overlay clipped to the bar only: the sheen does not cut off the dropdowns
-        $css[] = ".cc-navigation .cc-glare { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }";
+        $css[] = ".cc-navigation .cc-glare { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:2; }";
         $css[] = ".cc-navigation .cc-glare::before { content:''; position:absolute; top:0; left:-150%; width:60%; height:100%; background:linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent); transform:skewX(-20deg); animation: ccGlare 6s ease-in-out infinite; }";
         $css[] = "@keyframes ccGlare { 0%,60% { left:-150%; } 100% { left:150%; } }";
     }
     if ($has('accent-line')) {
-        $css[] = ".cc-navigation::after { content:''; position:absolute; left:0; right:0; bottom:0; height:3px; background:linear-gradient(90deg, {$o['accent']}, transparent); pointer-events:none; z-index:2; }";
+        // z-index 0 like the glare: below .cc-nav-inner (z-index 1), which holds the open dropdowns
+        $css[] = ".cc-navigation::after { content:''; position:absolute; left:0; right:0; bottom:0; height:3px; background:linear-gradient(90deg, {$o['accent']}, transparent); pointer-events:none; z-index:0; }";
     }
 
     // On scroll (sticky bar only; the script toggles .cc-scrolled / .cc-nav-hidden)

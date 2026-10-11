@@ -106,6 +106,10 @@ for (const id of EFFECT_IDS) {
   check('sticky + hide on scroll → scroll script with hide logic', sticky.includes("addEventListener('scroll'") && sticky.includes("classList.add('cc-nav-hidden')"));
   const dd = render({ effects: ['dd-slide'], mobileThreshold: '900' }).out;
   check('submenu animation applies only above the mobile breakpoint', dd.includes('@media (min-width: 901px)'));
+  const accent = render({ effects: ['accent-line'] }).out;
+  const z = (sel) => Number((accent.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^>]*?z-index:\\s*(-?\\d+)')) || [])[1]);
+  check('accent line stays behind the open submenus (below .cc-nav-inner)', z('.cc-navigation::after {') < z('class="cc-nav-inner"'),
+    `line ${z('.cc-navigation::after {')} vs inner ${z('class="cc-nav-inner"')}`);
   check('reduced-motion users get no animations', plain.includes('prefers-reduced-motion: reduce'));
 }
 {
