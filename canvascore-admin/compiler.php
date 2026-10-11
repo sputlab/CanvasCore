@@ -275,7 +275,16 @@ function render_menu_html($menu_json_str, $opts = []) {
     $barPadding     = htmlspecialchars($settings['barPadding'] ?? '0 24px');
     $isSticky       = !empty($settings['isSticky']);
     $shadow         = $settings['shadow'] ?? 'none';                    // none|soft|medium|strong
-    $effect         = $settings['effect'] ?? 'none';                    // none|glass|glare|underline|lift
+    $effects        = cc_menu_effects($settings);
+    $fx             = function ($id) use ($effects) { return in_array($id, $effects, true); };
+    $buttonText     = htmlspecialchars($settings['buttonTextColor'] ?? '#ffffff');
+    $fontSize       = htmlspecialchars($settings['fontSize'] ?? '15px');
+    $fontWeight     = (string)($settings['fontWeight'] ?? '600');
+    $fontWeight     = in_array($fontWeight, ['300', '400', '500', '600', '700', '800'], true) ? $fontWeight : '600';
+    $textTransform  = (string)($settings['textTransform'] ?? 'none');
+    $textTransform  = in_array($textTransform, ['none', 'uppercase', 'capitalize'], true) ? $textTransform : 'none';
+    $letterSpacing  = htmlspecialchars($settings['letterSpacing'] ?? '0px');
+    $highlightCurrent = !empty($settings['highlightCurrent']);
     $logoUrl        = trim((string)($settings['logoUrl'] ?? ''));
     $logoAlign      = ($settings['logoAlign'] ?? 'left') === 'right' ? 'right' : 'left';
     $logoHeight     = htmlspecialchars($settings['logoHeight'] ?? '40px');
@@ -320,12 +329,6 @@ function render_menu_html($menu_json_str, $opts = []) {
 
     $stickyCss = ($isSticky && !$preview) ? "position:fixed; top:0; left:0; right:0; z-index:9999;" : "position:relative;";
 
-    // --- Effects ---
-    $navEffect = '';
-    if ($effect === 'glass') {
-        $navEffect = "backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);";
-    }
-
     // --- HTML ---
     $logoHtml = '';
     if ($hasLogo) {
@@ -335,7 +338,8 @@ function render_menu_html($menu_json_str, $opts = []) {
             : "<span class=\"cc-logo\" style=\"$logoStyle\">$logoInner</span>";
     }
 
-    $glareHtml = ($effect === 'glare') ? "<span class=\"cc-glare\" aria-hidden=\"true\"></span>" : '';
+    $navEffect = $fx('glass') ? "backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);" : '';
+    $glareHtml = $fx('glare') ? "<span class=\"cc-glare\" aria-hidden=\"true\"></span>" : '';
     $html  = "<nav class=\"cc-navigation\" style=\"$stickyCss width:100%; padding:0; box-sizing:border-box; background:$menuBg; box-shadow:$boxShadow; $navEffect\">\n";
     $html .= "  $glareHtml\n";
     $html .= "  <div class=\"cc-nav-inner\" style=\"display:flex; align-items:center; min-height:$barHeight; padding:$barPadding; box-sizing:border-box; justify-content:$justify; position:relative; z-index:1; $innerExtra\">\n";
@@ -347,34 +351,32 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "  </div>\n";
 
     // --- CSS ---
+    $top = ".cc-navigation .cc-main-menu > .cc-item > .cc-menu-link";
+    // Hovered top-level item; with "highlight current page" the current one looks hovered too
+    $topOn = "$top:hover" . ($highlightCurrent ? ", $top.cc-current" : '');
     $pillBox = '';
     if ($styleType === 'pill' || $styleType === 'box') {
         $radius = $styleType === 'pill' ? '50px' : $borderRadius;
-        $pillBox = ".cc-navigation .cc-main-menu > .cc-item > .cc-menu-link { color:#fff !important; background:$bgColor; padding:10px 18px; border-radius:$radius; }";
+        $pillBox = "$top { color:$buttonText !important; background:$bgColor; padding:10px 18px; border-radius:$radius; }";
     }
     $dropdownBg = ($menuBgColorRaw === 'transparent' || $menuBgColorRaw === '') ? '#ffffff' : cc_hex_rgba($menuBgColorRaw, 100);
+    $currentCss = $highlightCurrent
+        ? ".cc-navigation .cc-menu-link.cc-current { color:$hoverColorVal !important;" . ($hoverBg !== 'transparent' ? " background:$hoverBg !important;" : "") . " }"
+        : '';
 
-    $effectCss = '';
-    if ($effect === 'underline') {
-        $effectCss = ".cc-navigation .cc-main-menu > .cc-item > .cc-menu-link { position:relative; }"
-          . ".cc-navigation .cc-main-menu > .cc-item > .cc-menu-link::after { content:''; position:absolute; left:0; bottom:-4px; width:0; height:2px; background:$hoverTextColor; transition:width .25s ease; }"
-          . ".cc-navigation .cc-main-menu > .cc-item > .cc-menu-link:hover::after { width:100%; }";
-    } elseif ($effect === 'lift') {
-        $effectCss = ".cc-navigation .cc-menu-link { transition: transform .2s ease, color .2s ease, background .2s ease; }"
-          . ".cc-navigation .cc-main-menu > .cc-item > .cc-menu-link:hover { transform: translateY(-2px); }";
-    } elseif ($effect === 'glare') {
-        // Overlay clipped to the bar only: the sheen does not cut off the dropdowns
-        $effectCss = ".cc-navigation .cc-glare { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }"
-          . ".cc-navigation .cc-glare::before { content:''; position:absolute; top:0; left:-150%; width:60%; height:100%; background:linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent); transform:skewX(-20deg); animation: ccGlare 6s ease-in-out infinite; }"
-          . "@keyframes ccGlare { 0%,60% { left:-150%; } 100% { left:150%; } }";
-    }
+    $effectCss = cc_menu_effects_css($effects, [
+        'top' => $top, 'topOn' => $topOn, 'hover' => $hoverColorVal, 'accent' => $hoverColorVal,
+        'barHeight' => $barHeight, 'logoHeight' => $logoHeight, 'mobile' => $mobileThreshold,
+        'topCount' => count($items), 'sticky' => $isSticky && !$preview,
+    ]);
 
     $html .= "  <style>\n";
     $html .= "    .cc-navigation * { box-sizing:border-box; }\n";
-    $html .= "    .cc-navigation .cc-menu-link { color:$textColor !important; text-decoration:none; font-weight:600; font-size:15px; display:inline-flex; align-items:center; gap:6px; padding:8px 10px; border:$itemBorder; border-radius:$borderRadius; background:transparent; cursor:pointer; font-family:inherit; transition:color .2s, background .2s; }\n";
+    $html .= "    .cc-navigation .cc-menu-link { color:$textColor !important; text-decoration:none; font-weight:$fontWeight; font-size:$fontSize; text-transform:$textTransform; letter-spacing:$letterSpacing; display:inline-flex; align-items:center; gap:6px; padding:8px 10px; border:$itemBorder; border-radius:$borderRadius; background:transparent; cursor:pointer; font-family:inherit; transition:color .2s, background .2s, transform .2s, box-shadow .2s, text-shadow .2s; }\n";
     $html .= "    .cc-navigation .cc-caret { font-size:11px; opacity:0.7; }\n";
     $html .= "    $pillBox\n";
     $html .= "    .cc-navigation .cc-menu-link:hover { color:$hoverColorVal !important;" . ($hoverBg !== 'transparent' ? " background:$hoverBg !important;" : "") . " }\n";
+    $html .= "    $currentCss\n";
     $html .= "    .cc-navigation .cc-item { position:relative; }\n";
     $html .= "    .cc-navigation .cc-dropdown { display:none; position:absolute; top:100%; left:0; min-width:210px; padding:8px 0; margin:0; list-style:none; border-radius:10px; z-index:1000; background:$dropdownBg; box-shadow:0 12px 30px rgba(0,0,0,0.12); }\n";
     $html .= "    .cc-navigation .cc-item:hover > .cc-dropdown, .cc-navigation .cc-item:focus-within > .cc-dropdown { display:block; }\n";
@@ -393,9 +395,11 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "      .cc-dropdown .cc-dropdown { left:0 !important; }\n";
     $html .= "      .cc-menu-link { width:100%; }\n";
     $html .= "    }\n";
+    $html .= "    @media (prefers-reduced-motion: reduce) { .cc-navigation, .cc-navigation *, .cc-navigation *::before, .cc-navigation *::after { animation:none !important; transition:none !important; } }\n";
     $html .= "  </style>\n";
 
-    // --- Script: burger + submenu expansion on mobile + sticky padding ---
+    // --- Script: burger + submenu expansion on mobile + current page + scroll effects + sticky padding ---
+    $scrollFx = ($isSticky && !$preview) && ($fx('shrink') || $fx('hide-on-scroll') || $fx('shadow-on-scroll'));
     $html .= "  <script>\n";
     $html .= "  (function(){\n";
     $html .= "    var nav = document.currentScript ? document.currentScript.closest('.cc-navigation') : document.querySelector('.cc-navigation');\n";
@@ -411,6 +415,29 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "        }\n";
     $html .= "      });\n";
     $html .= "    });\n";
+    // Marks the link to the page being viewed (aria-current) and its top-level parent
+    $html .= "    var norm = function(p){ p = p.replace(/index\\.html\$/, ''); return p.charAt(p.length - 1) === '/' ? p : p + '/'; };\n";
+    $html .= "    var here = norm(location.pathname);\n";
+    $html .= "    nav.querySelectorAll('a.cc-menu-link').forEach(function(a){\n";
+    $html .= "      if(a.host !== location.host || norm(a.pathname) !== here) return;\n";
+    $html .= "      a.setAttribute('aria-current', 'page'); a.classList.add('cc-current');\n";
+    $html .= "      var topItem = a.closest('.cc-main-menu > .cc-item'); var topLink = topItem && topItem.querySelector('.cc-menu-link');\n";
+    $html .= "      if(topLink) topLink.classList.add('cc-current');\n";
+    $html .= "    });\n";
+    if ($scrollFx) {
+        $html .= "    var lastY = window.scrollY;\n";
+        $html .= "    var onScroll = function(){\n";
+        $html .= "      var y = window.scrollY;\n";
+        $html .= "      nav.classList.toggle('cc-scrolled', y > 30);\n";
+        if ($fx('hide-on-scroll')) {
+            $html .= "      var open = menu && menu.classList.contains('active');\n";
+            $html .= "      if(y > lastY && y > nav.offsetHeight && !open) nav.classList.add('cc-nav-hidden');\n";
+            $html .= "      else if(y < lastY || open) nav.classList.remove('cc-nav-hidden');\n";
+        }
+        $html .= "      lastY = y;\n";
+        $html .= "    };\n";
+        $html .= "    window.addEventListener('scroll', onScroll, { passive: true }); onScroll();\n";
+    }
     if ($isSticky) {
         $html .= "    document.body.style.paddingTop = nav.offsetHeight + 'px';\n";
     }
@@ -418,6 +445,110 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "  </script>\n";
     $html .= "</nav>\n";
     return $html;
+}
+
+// Menu effects: id => group. In a 'single' group only one effect applies (they animate the same
+// property); the others stack. Mirrors EFFECT_GROUPS in canvascore-frontend/src/menu/menuThemes.js.
+const CC_MENU_EFFECTS = [
+    'underline' => 'decor', 'underline-center' => 'decor', 'overline' => 'decor', 'highlight' => 'decor', 'dot' => 'decor',
+    'lift' => 'motion', 'grow' => 'motion', 'pop' => 'motion',
+    'glow' => 'glow', 'halo' => 'glow',
+    'glass' => 'bar', 'glare' => 'bar', 'accent-line' => 'bar',
+    'shrink' => 'scroll', 'hide-on-scroll' => 'scroll', 'shadow-on-scroll' => 'scroll',
+    'dd-fade' => 'dropdown', 'dd-slide' => 'dropdown', 'dd-zoom' => 'dropdown',
+    'enter-slide' => 'entrance', 'enter-fade' => 'entrance', 'enter-stagger' => 'entrance',
+];
+const CC_MENU_SINGLE_GROUPS = ['decor', 'motion', 'dropdown', 'entrance'];
+
+// Valid effects of a menu: the `effects` list, or the legacy single `effect` string.
+function cc_menu_effects($settings) {
+    if (isset($settings['effects']) && is_array($settings['effects'])) $list = $settings['effects'];
+    else $list = (!empty($settings['effect']) && $settings['effect'] !== 'none') ? [$settings['effect']] : [];
+    $out = []; $taken = [];
+    foreach ($list as $id) {
+        if (!is_string($id) || !isset(CC_MENU_EFFECTS[$id]) || in_array($id, $out, true)) continue;
+        $g = CC_MENU_EFFECTS[$id];
+        if (in_array($g, CC_MENU_SINGLE_GROUPS, true)) { if (isset($taken[$g])) continue; $taken[$g] = true; }
+        $out[] = $id;
+    }
+    return $out;
+}
+
+function cc_menu_effects_css($effects, $o) {
+    $has = function ($id) use ($effects) { return in_array($id, $effects, true); };
+    $top = $o['top']; $on = $o['topOn'];
+    // selector list with a pseudo-element appended to each selector
+    $pe = function ($sel, $pseudo) { return implode(', ', array_map(function ($s) use ($pseudo) { return trim($s) . $pseudo; }, explode(',', $sel))); };
+    $css = [];
+
+    // Hover indicator (one): drawn with ::after (::before for the highlight fill)
+    $line = "content:''; position:absolute; left:0; width:100%; height:2px; background:currentColor; transition:transform .25s ease;";
+    if ($has('underline') || $has('underline-center') || $has('overline')) {
+        $pos = $has('overline') ? 'top:-4px;' : 'bottom:-4px;';
+        $origin = $has('underline') ? 'left' : 'center';
+        $css[] = "$top { position:relative; }";
+        $css[] = "$top::after { $line $pos transform:scaleX(0); transform-origin:$origin; }";
+        $css[] = $pe($on, '::after') . " { transform:scaleX(1); }";
+    } elseif ($has('highlight')) {
+        $css[] = "$top { position:relative; isolation:isolate; }";
+        $css[] = "$top::before { content:''; position:absolute; inset:0; border-radius:inherit; background:currentColor; opacity:.14; z-index:-1; transform:scaleY(0); transform-origin:bottom; transition:transform .25s ease; }";
+        $css[] = $pe($on, '::before') . " { transform:scaleY(1); }";
+    } elseif ($has('dot')) {
+        $css[] = "$top { position:relative; }";
+        $css[] = "$top::after { content:''; position:absolute; left:50%; bottom:-3px; width:5px; height:5px; border-radius:50%; background:currentColor; transform:translateX(-50%) scale(0); transition:transform .2s ease; }";
+        $css[] = $pe($on, '::after') . " { transform:translateX(-50%) scale(1); }";
+    }
+
+    // Hover motion (one)
+    if ($has('lift')) $css[] = "$top:hover { transform:translateY(-2px); }";
+    elseif ($has('grow')) $css[] = "$top:hover { transform:scale(1.06); }";
+    elseif ($has('pop')) $css[] = "$top { transition-timing-function:cubic-bezier(.34,1.56,.64,1); } $top:hover { transform:scale(1.1); }";
+
+    // Hover glow (stackable)
+    if ($has('glow')) $css[] = "$top:hover { text-shadow:0 0 12px {$o['hover']}; }";
+    if ($has('halo')) $css[] = "$top:hover { box-shadow:0 6px 18px rgba(0,0,0,.18); }";
+
+    // Bar
+    if ($has('glare')) {
+        // Overlay clipped to the bar only: the sheen does not cut off the dropdowns
+        $css[] = ".cc-navigation .cc-glare { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }";
+        $css[] = ".cc-navigation .cc-glare::before { content:''; position:absolute; top:0; left:-150%; width:60%; height:100%; background:linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent); transform:skewX(-20deg); animation: ccGlare 6s ease-in-out infinite; }";
+        $css[] = "@keyframes ccGlare { 0%,60% { left:-150%; } 100% { left:150%; } }";
+    }
+    if ($has('accent-line')) {
+        $css[] = ".cc-navigation::after { content:''; position:absolute; left:0; right:0; bottom:0; height:3px; background:linear-gradient(90deg, {$o['accent']}, transparent); pointer-events:none; z-index:2; }";
+    }
+
+    // On scroll (sticky bar only; the script toggles .cc-scrolled / .cc-nav-hidden)
+    if ($o['sticky']) {
+        if ($has('shrink')) {
+            $css[] = ".cc-navigation .cc-nav-inner { transition:min-height .25s ease; } .cc-navigation .cc-logo img { transition:height .25s ease; }";
+            $css[] = ".cc-navigation.cc-scrolled .cc-nav-inner { min-height:calc({$o['barHeight']} * .75) !important; }";
+            $css[] = ".cc-navigation.cc-scrolled .cc-logo img { height:calc({$o['logoHeight']} * .8) !important; }";
+        }
+        if ($has('hide-on-scroll')) $css[] = ".cc-navigation { transition:transform .3s ease; } .cc-navigation.cc-nav-hidden { transform:translateY(-100%); }";
+        if ($has('shadow-on-scroll')) $css[] = ".cc-navigation.cc-scrolled { box-shadow:0 8px 24px rgba(0,0,0,.15) !important; }";
+    }
+
+    // Submenu opening (one, desktop only: on mobile the submenus expand in place)
+    $dd = $has('dd-fade') ? 'none' : ($has('dd-slide') ? 'translateY(-8px)' : ($has('dd-zoom') ? 'scale(.96)' : null));
+    if ($dd !== null) {
+        $min = $o['mobile'] + 1;
+        $css[] = "@media (min-width: {$min}px) {"
+            . " .cc-navigation .cc-dropdown { display:block; visibility:hidden; opacity:0; pointer-events:none; transform:$dd; transform-origin:top left; transition:opacity .2s ease, transform .2s ease, visibility 0s linear .2s; }"
+            . " .cc-navigation .cc-item:hover > .cc-dropdown, .cc-navigation .cc-item:focus-within > .cc-dropdown { visibility:visible; opacity:1; pointer-events:auto; transform:none; transition-delay:0s; }"
+            . " }";
+    }
+
+    // Page load (one)
+    if ($has('enter-slide')) $css[] = ".cc-navigation { animation:ccNavSlide .6s ease; } @keyframes ccNavSlide { from { transform:translateY(-100%); opacity:0; } }";
+    elseif ($has('enter-fade')) $css[] = ".cc-navigation { animation:ccNavFade .8s ease; } @keyframes ccNavFade { from { opacity:0; } }";
+    elseif ($has('enter-stagger')) {
+        $css[] = ".cc-navigation .cc-main-menu > .cc-item { animation:ccItemIn .45s ease backwards; } @keyframes ccItemIn { from { opacity:0; transform:translateY(-8px); } }";
+        for ($i = 1; $i <= $o['topCount']; $i++) $css[] = ".cc-navigation .cc-main-menu > .cc-item:nth-child($i) { animation-delay:" . round(0.07 * $i, 2) . "s; }";
+    }
+
+    return implode("\n    ", $css);
 }
 
 function render_block($block) {

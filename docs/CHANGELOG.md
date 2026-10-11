@@ -11,6 +11,21 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Menu Builder reorganized into tabs** (Structure, Themes, Style, Effects, Layout & Logo, Mobile) with
+  the live preview pinned on top and a Desktop/Mobile switch to check the hamburger menu.
+- **12 menu themes**: Classic, Professional, Fresh, Warm, Midnight, Minimal, Ocean, Sunset, Earth, Pastel,
+  Bold and Corporate. A theme sets colors, item shape, typography and effects in one click, keeps the links,
+  logo, alignment and mobile settings, can be undone, and is marked "In use" until you customize it.
+- **Stackable menu effects** (`settings.effects`, replacing the single `effect`): 22 effects in 7 groups:
+  hover indicator (underline, center underline, overline, highlight, dot), hover motion (lift, grow, pop),
+  hover glow (text glow, shadow), bar (glass, glare, accent line), on scroll for sticky bars (shrink,
+  hide on scroll down, shadow), submenu opening (fade, slide, zoom) and page load (slide down, fade in,
+  stagger). Effects in different groups combine; "pick one" groups keep a single effect. Menus saved with
+  the old `effect` keep working. Animations are turned off for visitors who prefer reduced motion.
+- Menu typography (font size, weight, letter case, letter spacing), a button text color for the pill/box
+  styles (it was always white), and an optional highlight of the current page (`aria-current` is always set).
+- `tests/menu.mjs` (`npm run test:menu`, part of `npm test`): keeps the effect catalog in sync between the
+  editor and the compiler and renders every theme and effect through the PHP compiler.
 - **Setup wizard** (`canvascore-admin/install.php`): checks the server requirements (PHP,
   extensions, writable folders, data dir inside/outside the web root, editor build, `mail()`, HTTPS),
   creates the DB with the existing migrations, an administrator account that replaces the default
