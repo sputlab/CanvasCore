@@ -469,7 +469,8 @@ function MenuRow({ item, index, total, depth, pages, onUpdate, onRemove, onAddCh
   );
 }
 
-// AUTHENTIC preview: uses the real compiler (preview_menu endpoint) in an isolated iframe.
+// AUTHENTIC preview: uses the real compiler (preview_menu endpoint) in an isolated iframe, over a
+// dummy page that scrolls, so "Fixed on top" and the scroll effects behave as on the site.
 // Stays at the top while scrolling the settings; "Mobile" narrows the frame below the breakpoint.
 function LivePreview({ items, settings, device, onDevice }) {
   const [html, setHtml] = useState('');
@@ -488,14 +489,14 @@ function LivePreview({ items, settings, device, onDevice }) {
   }, [items, settings]);
 
   const doc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>:root{--brand-color:#3b82f6}html,body{margin:0;padding:0;background:#f1f5f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}</style>
-    </head><body>${html}<div style="height:220px"></div></body></html>`;
+    <style>:root{--brand-color:#3b82f6}html,body{margin:0;padding:0;background:#f1f5f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}${DUMMY_CSS}</style>
+    </head><body>${html}${DUMMY_PAGE}</body></html>`;
   const mobile = device === 'mobile';
 
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 5, marginBottom: '16px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #334155', background: '#0f172a', boxShadow: '0 10px 24px rgba(2,6,23,.45)' }}>
       <div style={{ fontSize: '10px', color: '#64748b', padding: '6px 12px', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-        <span>Live preview (authentic — links are inert){loading && ' · updating…'}</span>
+        <span>Live preview (authentic — links are inert) · scroll it to try “Fixed on top”{loading && ' · updating…'}</span>
         <span role="group" aria-label="Preview size" style={{ display: 'flex', gap: '4px' }}>
           <button onClick={() => onDevice('desktop')} aria-pressed={!mobile} title="Desktop" style={{ ...deviceBtn, ...(!mobile ? deviceBtnOn : {}) }}><Monitor size={13} /> Desktop</button>
           <button onClick={() => onDevice('mobile')} aria-pressed={mobile} title="Mobile" style={{ ...deviceBtn, ...(mobile ? deviceBtnOn : {}) }}><Smartphone size={13} /> Mobile</button>
@@ -503,11 +504,20 @@ function LivePreview({ items, settings, device, onDevice }) {
       </div>
       <div style={{ background: '#1e293b', display: 'flex', justifyContent: 'center' }}>
         <iframe title="menu-preview" srcDoc={doc} sandbox="allow-scripts"
-          style={{ width: mobile ? '390px' : '100%', maxWidth: '100%', height: '240px', border: 'none', background: '#f1f5f9', display: 'block' }} />
+          style={{ width: mobile ? '390px' : '100%', maxWidth: '100%', height: '300px', border: 'none', background: '#f1f5f9', display: 'block' }} />
       </div>
     </div>
   );
 }
+
+// Placeholder page under the preview menu: gray blocks only, so the menu stays the focus.
+const DUMMY_CSS = '.dp{max-width:960px;margin:0 auto;padding:28px 20px 60px;color:#94a3b8}'
+  + '.dp-hero{height:150px;border-radius:14px;background:linear-gradient(135deg,#e2e8f0,#cbd5e1);display:flex;align-items:center;justify-content:center;font-size:13px;color:#64748b;text-align:center;padding:0 16px}'
+  + '.dp-l{height:12px;border-radius:6px;background:#e2e8f0;margin:14px 0}.dp-l.s{width:60%}'
+  + '.dp-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:26px 0}.dp-c{height:110px;border-radius:12px;background:#e2e8f0}';
+const DUMMY_PAGE = '<main class="dp" aria-hidden="true"><div class="dp-hero">Sample page · scroll to see how the menu behaves</div>'
+  + [0, 1, 2].map(() => '<div class="dp-l"></div><div class="dp-l"></div><div class="dp-l s"></div><div class="dp-g"><div class="dp-c"></div><div class="dp-c"></div><div class="dp-c"></div></div>').join('')
+  + '</main>';
 
 // Miniature of a theme: its bar color, three items in its style and its hover color on the first one.
 function ThemeSwatch({ theme }) {

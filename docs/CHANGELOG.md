@@ -54,6 +54,11 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 - Mobile menu with **center or right** button alignment: the burger no longer ends up in the middle and the
   centered logo no longer floats over the open menu; on mobile the bar always puts logo and burger at the edges.
 - Menu accent line drawn over the open submenus.
+- **Mobile menu always open**: the menu list's inline `display:flex` beat the mobile CSS, so on phones the
+  items were always shown and the burger could not close them (on the site and in the preview).
+- Menu Builder preview with "Fixed on top": the menu no longer slides down after each change. The preview now
+  renders the bar exactly as on the site, over a sample page you can scroll to try "Fixed on top" and the
+  scroll effects.
 - **Templates**: a page created from a template kept the slug `new-page` instead of following its
   title like a new blank page; it now starts as e.g. `coming-soon`.
 - **Editor canvas**: padded full-width blocks (forms, icon boxes, testimonials…) overflowed their box in

@@ -7,6 +7,7 @@
 //  - mobile bar: burger icons, burger side, logo visibility, desktop alignment does not leak into it.
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { JSDOM } from 'jsdom';
 import {
   DEFAULT_SETTINGS, BURGER_ICONS, BURGER_STYLES, EFFECT_GROUPS, EFFECT_IDS, THEMES, THEME_KEYS, cleanEffects, toggleEffect, normalizeSettings, applyTheme, matchingTheme,
 } from '../src/menu/menuThemes.js';
@@ -102,7 +103,9 @@ for (const id of EFFECT_IDS) {
   const scroll = render({ effects: ['shrink', 'hide-on-scroll'] }).out;
   check('scroll effects are skipped when the bar is not sticky', !scroll.includes('cc-scrolled') && !scroll.includes("addEventListener('scroll'"));
   const preview = render({ isSticky: true, effects: ['shrink'] }, { preview: true }).out;
-  check('…and in the preview, where the bar is never fixed', !preview.includes("addEventListener('scroll'"));
+  check('the preview renders a sticky bar like the site (fixed, scroll effects, page padding)', preview === render({ isSticky: true, effects: ['shrink'] }).out
+    && preview.includes('position:fixed') && preview.includes("addEventListener('scroll'") && preview.includes('paddingTop'));
+  check('a non-sticky bar adds no page padding (the preview menu stays on top)', !render({}, { preview: true }).out.includes('paddingTop'));
   const sticky = render({ isSticky: true, effects: ['hide-on-scroll'] }).out;
   check('sticky + hide on scroll → scroll script with hide logic', sticky.includes("addEventListener('scroll'") && sticky.includes("classList.add('cc-nav-hidden')"));
   const dd = render({ effects: ['dd-slide'], mobileThreshold: '900' }).out;
@@ -143,6 +146,9 @@ console.log('\nMENU — mobile bar');
   check('unknown burger style falls back to lines', render({ burgerStyle: 'nope' }).err === '' && render({ burgerStyle: 'nope' }).out.includes(BURGER_ICONS[0].svg));
   const base = render({ logoUrl: '/l.png' }).out;
   check('the toggle exposes aria-expanded and the script updates it', base.includes('aria-expanded="false"') && base.includes("toggle.setAttribute('aria-expanded'"));
+  const mq = base.slice(base.indexOf('@media (max-width'));
+  check('mobile: the menu starts closed even with the inline display:flex', /\.cc-main-menu \{ display:none !important;/.test(mq));
+  check('mobile: the burger opens it (.active wins over the inline style)', mq.includes('.cc-main-menu.active { display:flex !important; }') && base.includes("menu.classList.toggle('active')"));
   check('open menu shows a close (✕) icon', base.includes('cc-burger-close') && base.includes('[aria-expanded="true"] .cc-burger-close { display:inline-flex; }'));
   const mob = (out) => out.slice(out.indexOf('@media (max-width'));
   const right = mob(base), left = mob(render({ logoUrl: '/l.png', mobileBurgerSide: 'left' }).out);
@@ -155,6 +161,24 @@ console.log('\nMENU — mobile bar');
     check(`desktop alignment "${align}" does not leak into the mobile bar (edges, static logo, menu below)`,
       m.includes('justify-content:space-between !important') && /\.cc-logo \{[^}]*position:static !important;[^}]*transform:none !important/.test(m) && /\.cc-main-menu \{[^}]*order:3 !important;[^}]*width:100%/.test(m));
   }
+}
+
+console.log('\nMENU — script behavior (jsdom, as in the preview iframe)');
+{
+  const run = (settings) => {
+    const html = render(settings, { preview: true }).out.replaceAll('{{BASE_URL}}', '#');
+    return new JSDOM(`<!doctype html><body>${html}<main style="height:2000px"></main></body>`, { runScripts: 'dangerously' }).window;
+  };
+  const w = run({ burgerStyle: 'dots' });
+  const t = w.document.querySelector('.cc-mobile-toggle'), m = w.document.querySelector('.cc-main-menu');
+  check('menu starts closed', !m.classList.contains('active') && t.getAttribute('aria-expanded') === 'false');
+  t.click();
+  check('burger click opens it (aria-expanded="true")', m.classList.contains('active') && t.getAttribute('aria-expanded') === 'true');
+  t.click();
+  check('second click closes it again', !m.classList.contains('active') && t.getAttribute('aria-expanded') === 'false');
+  check('non-sticky bar: no padding pushes the menu down', w.document.body.style.paddingTop === '');
+  const ws = run({ isSticky: true, burgerStyle: 'grid' });
+  check('sticky bar: fixed on top, the page gets the padding instead', ws.document.querySelector('.cc-navigation').style.position === 'fixed' && ws.document.body.style.paddingTop !== '');
 }
 
 console.log(`\n${fails === 0 ? 'MENU OK' : fails + ' checks failed'} (${total} checks)`);

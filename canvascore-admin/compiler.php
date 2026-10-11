@@ -254,7 +254,7 @@ function render_menu_html($menu_json_str, $opts = []) {
     $settings = $data['settings'] ?? [];
     if (empty($items)) return '';
     $inheritTheme = !empty($opts['inheritTheme']);
-    $preview = !empty($opts['preview']);
+    // $opts['preview'] (Menu Builder) renders exactly like the site: the preview page scrolls under a fixed bar.
 
     // --- Settings (with defaults) ---
     $align          = $settings['align'] ?? 'flex-end';                 // flex-start|center|flex-end
@@ -330,7 +330,7 @@ function render_menu_html($menu_json_str, $opts = []) {
         }
     }
 
-    $stickyCss = ($isSticky && !$preview) ? "position:fixed; top:0; left:0; right:0; z-index:9999;" : "position:relative;";
+    $stickyCss = $isSticky ? "position:fixed; top:0; left:0; right:0; z-index:9999;" : "position:relative;";
 
     // --- HTML ---
     $logoHtml = '';
@@ -374,7 +374,7 @@ function render_menu_html($menu_json_str, $opts = []) {
     $effectCss = cc_menu_effects_css($effects, [
         'top' => $top, 'topOn' => $topOn, 'hover' => $hoverColorVal, 'accent' => $hoverColorVal,
         'barHeight' => $barHeight, 'logoHeight' => $logoHeight, 'mobile' => $mobileThreshold,
-        'topCount' => count($items), 'sticky' => $isSticky && !$preview,
+        'topCount' => count($items), 'sticky' => $isSticky,
     ]);
 
     $html .= "  <style>\n";
@@ -406,8 +406,8 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "      .cc-navigation .cc-nav-inner { flex-wrap:wrap; justify-content:space-between !important; position:relative; }\n";
     $html .= "      .cc-navigation .cc-logo { position:static !important; transform:none !important; margin:0 !important; order:" . ($burgerLeft ? '2' : '1') . " !important;" . ($burgerLeft ? ' margin-left:auto !important;' : '') . ($mobileLogo ? '' : ' display:none !important;') . " }\n";
     $html .= "      .cc-navigation .cc-mobile-toggle { display:inline-flex !important; order:" . ($burgerLeft ? '1' : '2') . " !important; margin:0 !important; " . ($burgerLeft ? 'margin-right:auto !important;' : 'margin-left:auto !important;') . " }\n";
-    $html .= "      .cc-main-menu { display:none; order:3 !important; flex-direction:column; align-items:stretch !important; width:100%; margin:0 !important; gap:0 !important; padding:10px 0 !important; }\n";
-    $html .= "      .cc-main-menu.active { display:flex; }\n";
+    $html .= "      .cc-navigation .cc-main-menu { display:none !important; order:3 !important; flex-direction:column; align-items:stretch !important; width:100%; margin:0 !important; gap:0 !important; padding:10px 0 !important; }\n";
+    $html .= "      .cc-navigation .cc-main-menu.active { display:flex !important; }\n";
     $html .= "      .cc-dropdown { position:static !important; display:none; box-shadow:none !important; padding-left:18px !important; min-width:0; background:transparent; }\n";
     $html .= "      .cc-item.cc-open > .cc-dropdown { display:block !important; }\n";
     $html .= "      .cc-dropdown .cc-dropdown { left:0 !important; }\n";
@@ -417,7 +417,7 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "  </style>\n";
 
     // --- Script: burger + submenu expansion on mobile + current page + scroll effects + sticky padding ---
-    $scrollFx = ($isSticky && !$preview) && ($fx('shrink') || $fx('hide-on-scroll') || $fx('shadow-on-scroll'));
+    $scrollFx = $isSticky && ($fx('shrink') || $fx('hide-on-scroll') || $fx('shadow-on-scroll'));
     $html .= "  <script>\n";
     $html .= "  (function(){\n";
     $html .= "    var nav = document.currentScript ? document.currentScript.closest('.cc-navigation') : document.querySelector('.cc-navigation');\n";
