@@ -235,6 +235,20 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---------------------------------------------------------------------------
 // Pages — draft/published model
 // ---------------------------------------------------------------------------
+// Slugs are URLs: each top-level path has a single owner site-wide (a live page, a collection or a
+// system folder). Drafts don't own a URL until they are published. Returns a description of the
+// current owner, or null if the slug is free.
+function cc_slug_owner($pdo, $slug, $except_page = null, $except_collection = null) {
+    if (in_array($slug, ['canvascore-admin', 'uploads'], true)) return 'a system folder';
+    $st = $pdo->prepare("SELECT title FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified') AND clean_slug = ? AND id IS NOT ?");
+    $st->execute([$slug, $except_page]);
+    if (($t = $st->fetchColumn()) !== false) return 'the page "' . $t . '"';
+    $st = $pdo->prepare("SELECT name FROM collections WHERE slug = ? AND id IS NOT ?");
+    $st->execute([$slug, $except_collection]);
+    if (($n = $st->fetchColumn()) !== false) return 'the collection "' . $n . '"';
+    return null;
+}
+
 // Set the homepage exclusively (only one page can be home).
 function apply_home($pdo, $primaryId, $val) {
     if (!$primaryId) return;
@@ -317,6 +331,10 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     };
 
     if ($publish) {
+        $owner_id = ($existing && (int)($existing['is_draft_copy'] ?? 0) === 1) ? $existing['parent_id'] : $id;
+        if ($owner = cc_slug_owner($pdo, $clean, $owner_id)) {
+            echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL /$clean/ is already used by $owner. Change the slug in Page Info and publish again."]); exit;
+        }
         if ($existing && (int)($existing['is_draft_copy'] ?? 0) === 1) {
             // Promote the draft copy onto the published parent page
             $parentId = $existing['parent_id'];
@@ -467,6 +485,9 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = $d['id'] ?? ('col_' . uniqid());
     $name = trim($d['name'] ?? 'Collection');
     $slug = cc_safe_slug($d['slug'] ?? $name);
+    if ($owner = cc_slug_owner($pdo, $slug, null, $id)) {
+        echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL /$slug/ is already used by $owner. Choose a different slug."]); exit;
+    }
     $chk = $pdo->prepare("SELECT id FROM collections WHERE id = ?"); $chk->execute([$id]);
     if ($chk->fetch()) $pdo->prepare("UPDATE collections SET name=?, slug=? WHERE id=?")->execute([$name, $slug, $id]);
     else $pdo->prepare("INSERT INTO collections (id, name, slug) VALUES (?,?,?)")->execute([$id, $name, $slug]);
@@ -515,6 +536,13 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $cschema = cc_version()['content_schema'];
     $now = date('Y-m-d H:i:s');
 
+    if ($status === 'published') {
+        $dup = $pdo->prepare("SELECT title FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id IS NOT ?");
+        $dup->execute([$cid, $slug, $id]);
+        if (($t = $dup->fetchColumn()) !== false) {
+            echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL slug \"$slug\" is already used by \"$t\" in this collection. Change it and publish again."]); exit;
+        }
+    }
     $chk = $pdo->prepare("SELECT id, archived FROM collection_items WHERE id = ?"); $chk->execute([$id]);
     $existing_item = $chk->fetch(PDO::FETCH_ASSOC);
     if ($existing_item) {

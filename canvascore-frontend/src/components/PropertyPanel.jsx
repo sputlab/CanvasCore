@@ -2,14 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, MoveUp, Globe, FileEdit, ChevronLeft, Sliders, Palette, Shield, Save, Image as ImageIcon, X, Upload, Trash2, Eraser, MapPin, Images, HelpCircle, Columns3, Mail, SquareChartGantt, Type, Code, MonitorPlay, Star, MessageSquareQuote, Crown, Library, Rows3, PanelTop, CreditCard, GalleryHorizontal, ArrowUp, ArrowDown, SeparatorHorizontal, Info, ListOrdered, Hash, BarChart3, Table2, Timer, History, Building2, Users, GitCompare, Store, Clock } from 'lucide-react';
 import JoditEditor from 'jodit-react';
-
-// Converts a title to a slug: lowercase, dashes instead of spaces/characters.
-const slugify = (str) => (str || '')
-  .toString()
-  .toLowerCase()
-  .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strips accents
-  .replace(/[^a-z0-9]+/g, '-')
-  .replace(/^-+|-+$/g, '');
+import { slugify, slugOwner, uniqueSlug } from '../utils/slug';
 
 const handleNumericKey = (e, val, onChange) => {
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -201,7 +194,12 @@ export default function PropertyPanel() {
     }
     return null;
   };
-  const selectedBlock = findBlockDeep(blocks, selectedBlockId);
+  // Blocks from templates, imports or older pages may have no "content"/"styles" (e.g. SECTION/CONTAINER):
+  // the panel reads them directly, so it always gets objects (a crash here blanks the whole editor).
+  const foundBlock = findBlockDeep(blocks, selectedBlockId);
+  const selectedBlock = foundBlock && (!foundBlock.content || !foundBlock.styles)
+    ? { ...foundBlock, content: foundBlock.content || {}, styles: foundBlock.styles || {} }
+    : foundBlock;
 
   const [activeTab, setActiveTab] = useState('content');
   const [mediaPickerTarget, setMediaPickerTarget] = useState(null);
@@ -569,6 +567,9 @@ export default function PropertyPanel() {
   if (!selectedBlock) {
     // Hide the draft suffix from the user in the UI to avoid confusion
     const displaySlug = activePage?.slug || '';
+    // Pages and collections share the top-level URLs (collection items are checked by the server)
+    const slugCtx = { pages, collections, pageId: activePage?.id, parentId: activePage?.parent_id };
+    const slugTakenBy = activePage?.__item ? null : slugOwner(slugify(displaySlug), slugCtx);
 
     return (
       <div style={{ paddingBottom: '40px', color: '#f8fafc' }}>
@@ -615,7 +616,7 @@ export default function PropertyPanel() {
               const title = e.target.value;
               const published = ['published', 'modified'].includes(activePage?.status);
               const autoSlug = !activePage?._slugEdited && !published && !Number(activePage?.is_draft_copy);
-              if (autoSlug) updateActivePage({ title, slug: slugify(title) });
+              if (autoSlug) updateActivePage({ title, slug: activePage?.__item ? slugify(title) : uniqueSlug(title, slugCtx) });
               else updateActivePage({ title });
             }} style={inputStyle} />
 
@@ -623,7 +624,14 @@ export default function PropertyPanel() {
             <input type="text" value={displaySlug} onChange={(e) => {
               const cleanedSlug = e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-');
               updateActivePage({ slug: cleanedSlug, _slugEdited: true });
-            }} onBlur={(e) => updateActivePage({ slug: slugify(e.target.value), _slugEdited: true })} style={inputStyle} />
+            }} onBlur={(e) => updateActivePage({ slug: slugify(e.target.value), _slugEdited: true })} style={{ ...inputStyle, ...(slugTakenBy ? { borderColor: '#f87171' } : {}) }} aria-invalid={slugTakenBy ? true : undefined} />
+            {slugTakenBy && (
+              <p role="alert" style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#fca5a5' }}>
+                /{slugify(displaySlug)}/ is already used by {slugTakenBy.label}{slugTakenBy.live
+                  ? '. Choose another slug: this page cannot be published with it.'
+                  : ' (a draft). Choose another slug: only one of the two pages could be published.'}
+              </p>
+            )}
           </PanelAccordion>
 
           <PanelAccordion title="Page Structure" icon={Layout} defaultOpen={false}>

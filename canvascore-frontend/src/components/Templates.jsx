@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
+import { uniqueSlug } from '../utils/slug';
 import { ChevronLeft, LayoutTemplate, Plus, FileText } from 'lucide-react';
 
 // Regenerates the block tree's ids to avoid collisions
@@ -27,8 +28,11 @@ export default function Templates() {
     setBusy(true);
     const id = newPageId();
     const blocks = (starter.blocks || []).map(regenIds);
+    // The slug follows the title, as for a new blank page (and skips slugs already in use)
+    const title = starter.name === 'Blank' ? 'New Page' : starter.name;
+    const slug = uniqueSlug(title, { pages });
     const newPage = {
-      id, title: starter.name === 'Blank' ? 'New Page' : starter.name, slug: 'new-page', clean_slug: 'new-page',
+      id, title, slug, clean_slug: slug,
       layout: 'boxed', boxed_width: '1200px', bg_color: '#ffffff',
       seo_title: '', seo_description: '', content_json: JSON.stringify(blocks),
       status: 'draft', is_draft_copy: 0, parent_id: null, is_home: 0,

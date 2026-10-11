@@ -219,6 +219,111 @@ try {
     await waitFor(() => doc.querySelector('.cc-divider'));
     check('DIVIDER canvas: does not capture the mouse (selects/drags normally)', doc.querySelector('.cc-divider').parentElement.style.pointerEvents === 'none');
   }
+
+  // Every block of every starter template, in every tab, as admin: the panel must never crash.
+  // Template blocks may have no "content" at all (e.g. SECTION/CONTAINER): a crash unmounts the whole app.
+  console.log('\nSTARTERS — every template block opens every tab (admin)');
+  {
+    const starters = JSON.parse(readFileSync(path.join(PROJECT, '../canvascore-admin/starters.json'), 'utf8'));
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    const panelAlive = () => $$('button').some((x) => x.textContent.trim() === 'Advanced');
+    for (const stt of starters) {
+      const all = [];
+      const walk = (bs) => { for (const b of bs || []) { all.push(b); walk(b.children); } };
+      walk(stt.blocks);
+      if (!all.length) continue;
+      const broken = [];
+      for (const b of all) {
+        useStore.setState({ blocks: structuredClone(stt.blocks), selectedBlockId: b.id, userRole: 'admin', pastBlocks: [], futureBlocks: [], activePage: { id: 'p', title: 'T', slug: 't', layout: 'boxed' }, viewport: 'desktop', masters: [], templates: [], pages: [] });
+        mount(React.createElement(PropertyPanel));
+        await waitFor(panelAlive);
+        // layout blocks (SECTION/CONTAINER/FLEX_ROW) have no Content tab
+        const tabs = ['SECTION', 'CONTAINER', 'FLEX_ROW'].includes(b.type) ? ['Style', 'Advanced'] : ['Content', 'Style', 'Advanced'];
+        for (const tab of tabs) {
+          const btn = $$('button').find((x) => x.textContent.trim() === tab);
+          if (!btn) { broken.push(`${b.id} ${b.type} (no ${tab} tab)`); break; }
+          click(btn); await tick();
+          if (!panelAlive()) { broken.push(`${b.id} ${b.type} (${tab})`); break; }
+        }
+      }
+      check(`${stt.id}: all ${all.length} blocks open every tab`, broken.length === 0, broken.join(', '));
+    }
+    // a SECTION with no "content" is still editable from Advanced (the write creates content)
+    const cs = starters.find((s) => s.id === 'coming-soon');
+    useStore.setState({ blocks: structuredClone(cs.blocks), selectedBlockId: cs.blocks[0].id, userRole: 'admin' });
+    mount(React.createElement(PropertyPanel));
+    click(await waitFor(() => buttonByText('Advanced'))); await tick();
+    click(await waitFor(() => buttonByText('Custom Code'))); await tick();
+    const idInput = await waitFor(() => field('CSS ID'));
+    if (idInput) { setValue(idInput, 'launch'); await tick(); }
+    const saved = st().blocks[0];
+    check('content-less SECTION: setting the CSS ID in Advanced saves it', saved.content?.customId === 'launch' && saved.children.length === 1, JSON.stringify(saved.content));
+  }
+
+  // Slugs are site-wide URLs: helpers, automatic slug and the duplicate warning in Page Info
+  console.log('\nSLUGS — unique site-wide');
+  {
+    const { slugify, slugOwner, uniqueSlug } = await vite.ssrLoadModule('/src/utils/slug.js');
+    const pages = [
+      { id: 'a', title: 'About', slug: 'about', clean_slug: 'about', status: 'published', is_draft_copy: 0 },
+      { id: 'b', title: 'Services', slug: 'services', clean_slug: 'services', status: 'draft', is_draft_copy: 0 },
+      { id: 'draft-a', title: 'About', slug: 'about', clean_slug: 'about', is_draft_copy: 1, parent_id: 'a' },
+    ];
+    const collections = [{ id: 'c', name: 'Blog', slug: 'blog' }];
+    check('slugify: accents, spaces and symbols', slugify('  Chi Siamo & Più! ') === 'chi-siamo-piu');
+    check('uniqueSlug: free slug is kept', uniqueSlug('Contact', { pages, collections }) === 'contact');
+    check('uniqueSlug: taken by a page → -2', uniqueSlug('About', { pages, collections }) === 'about-2');
+    check('uniqueSlug: taken by a collection → -2', uniqueSlug('Blog', { pages, collections }) === 'blog-2');
+    check('uniqueSlug: system folder is never used', uniqueSlug('Uploads', { pages }) === 'uploads-2');
+    check('slugOwner: a page does not conflict with itself or its draft copy',
+      slugOwner('about', { pages, pageId: 'a' }) === null && slugOwner('about', { pages, pageId: 'draft-a', parentId: 'a' }) === null);
+    check('slugOwner: a live page is reported as blocking', (({ label, live } = {}) => /About/.test(label) && live)(slugOwner('about', { pages, pageId: 'b' }) || undefined));
+    check('slugOwner: a draft page is reported as non-blocking', (({ label, live } = {}) => /Services/.test(label) && !live)(slugOwner('services', { pages, pageId: 'n' }) || undefined));
+
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    const openPageInfo = async (activePage) => {
+      useStore.setState({ blocks: [], selectedBlockId: null, pages, activePage, userRole: 'admin' });
+      mount(React.createElement(PropertyPanel));
+      click(await waitFor(() => buttonByText('Page Info'))); await tick();
+    };
+    const warning = () => $$('[role="alert"]').map((e) => e.textContent).join(' ');
+    // the slug input is the one right after its label (field() would return the title input above it)
+    const slugInput = () => { const lab = $$('label').find((l) => l.textContent.trim() === 'URL (Slug)'); return lab && lab.nextElementSibling; };
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (u) => new Response(JSON.stringify(String(u).includes('get_collections') ? collections : []), { status: 200 });
+
+    await openPageInfo({ id: 'n', title: 'New Page', slug: 'new-page', status: 'draft', is_draft_copy: 0 });
+    setValue(await waitFor(() => field('Internal Title')), 'About'); await tick();
+    check('Page Info: typing a taken title picks the next free slug', st().activePage.slug === 'about-2', st().activePage.slug);
+    check('Page Info: no warning for the automatic slug', warning() === '', warning());
+    setValue(slugInput(), 'about'); await tick();
+    check('Page Info: a slug used by a live page shows a blocking warning', /already used by page “About”.*cannot be published/.test(warning()), warning());
+    setValue(slugInput(), 'services'); await tick();
+    check('Page Info: a slug used by a draft page shows a draft warning', /page “Services” \(a draft\)/.test(warning()), warning());
+    await waitFor(() => true); setValue(slugInput(), 'blog'); await tick();
+    check('Page Info: a slug used by a collection shows a warning', /already used by collection “Blog”/.test(warning()), warning());
+    setValue(slugInput(), 'about-us'); await tick();
+    check('Page Info: a free slug clears the warning', warning() === '', warning());
+
+    await openPageInfo({ id: 'draft-a', parent_id: 'a', title: 'About', slug: 'about', status: 'draft', is_draft_copy: 1 });
+    check('Page Info: the draft copy of a page does not warn about its own slug', warning() === '', warning());
+    globalThis.fetch = realFetch;
+  }
+
+  // The canvas uses the published pages' box model: padded full-width blocks (e.g. forms) must not overflow
+  console.log('\nCANVAS — same box model as the published page');
+  {
+    const Canvas = (await vite.ssrLoadModule('/src/components/Canvas.jsx')).default;
+    const css = readFileSync(path.join(PROJECT, 'src/ui/global.css'), 'utf8');
+    const styleEl = doc.createElement('style'); styleEl.textContent = css; doc.head.appendChild(styleEl);
+    const formBlock = { id: 'f1', type: 'FORM', styles: { padding: '40px', backgroundColor: '#fff', borderRadius: '12px', width: '100%' }, content: blockDefs.types.FORM.content };
+    useStore.setState({ blocks: [formBlock], selectedBlockId: null, viewport: 'desktop', activePage: { id: 'p', title: 'T', slug: 't', layout: 'boxed' } });
+    mount(React.createElement(Canvas));
+    const form = await waitFor(() => doc.querySelector('.cc-canvas .cc-form-block'));
+    check('canvas: blocks are inside .cc-canvas', !!form);
+    check('canvas: padded form box uses border-box (as on the published page)', !!form && w.getComputedStyle(form).boxSizing === 'border-box', form && w.getComputedStyle(form).boxSizing);
+    styleEl.remove();
+  }
 } catch (e) {
   failedRun = true; fails++; total++;
   console.error('  ✗ EXCEPTION: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));
