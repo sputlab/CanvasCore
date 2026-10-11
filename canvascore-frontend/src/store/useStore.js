@@ -198,6 +198,10 @@ export const useStore = create((set, get) => ({
 
   pages: [],
   setPages: (pages) => set({ pages: Array.isArray(pages) ? pages : [] }),
+  // Reloads the page list (dashboard statuses change after publishing)
+  refreshPages: async () => {
+    try { const r = await fetch('api.php?action=get_pages'); const d = await r.json(); if (Array.isArray(d)) set({ pages: d }); } catch { /* keep the current list */ }
+  },
   activePage: null,
   updateActivePage: (updates) => set((state) => ({ activePage: { ...state.activePage, ...updates } })),
   setActivePage: (page) => set({ activePage: page }),

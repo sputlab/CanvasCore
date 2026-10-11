@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { ChevronLeft, Library, Plus, Trash2, Edit3, FileText, Folder, Archive, ArchiveRestore } from 'lucide-react';
+import { Library, Plus, Trash2, Edit3, FileText, Folder, Archive, ArchiveRestore, Globe } from 'lucide-react';
+import { Button, IconButton, PageHeader, EmptyState, Badge, StatusBadge } from '../ui/kit';
+import { notify } from '../ui/notify';
 
 export default function Collections() {
   const { setView, userRole, setActivePage, setBlocks, setSelectedBlockId, publishSiteAsync } = useStore();
@@ -74,8 +76,8 @@ export default function Collections() {
     setPublishing(true);
     try {
       const res = await publishSiteAsync();
-      if (res && res.success) setNeedsPublish(false); else alert((res && res.message) || 'Publish error');
-    } catch { alert('Publish error'); }
+      if (res && res.success) { setNeedsPublish(false); notify(res.message || 'Site published.'); } else notify((res && res.message) || 'Publish error', 'error');
+    } catch { notify('Publish error', 'error'); }
     setPublishing(false);
   };
 
@@ -86,77 +88,72 @@ export default function Collections() {
   };
 
   return (
-    <div style={{ padding: '16px 22px', maxWidth: '1100px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif', color: '#f8fafc' }}>
-      <button onClick={() => setView('manager')} style={{ background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', padding: 0, marginBottom: '14px' }}>
-        <ChevronLeft size={16} /> Back to Dashboard
-      </button>
-      <h2 style={{ fontSize: '20px', fontWeight: '800', margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <Library size={22} color="#38bdf8" /> Collections <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 400 }}>(blog, portfolio, …)</span>
-      </h2>
+    <>
+      <PageHeader icon={Library} title="Collections" description="Groups of similar pages, such as a blog, news or a portfolio. Show them on any page with the Collection List block."
+        actions={userRole === 'admin' && <Button variant="primary" icon={Plus} onClick={newCollection}>New collection</Button>} />
 
       {needsPublish && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', background: '#1e293b', border: '1px solid #38bdf8', borderRadius: '8px', padding: '8px 12px', marginBottom: '12px', fontSize: '12.5px', color: '#cbd5e1' }}>
+        <div role="status" className="ui-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 14px', marginBottom: 14, borderColor: '#38bdf8', fontSize: 13 }}>
           <span>Archive change saved. Public lists update when you publish the site.</span>
-          <button onClick={publishNow} disabled={publishing} style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>{publishing ? 'Publishing…' : 'Publish now'}</button>
+          <Button variant="success" size="sm" icon={Globe} onClick={publishNow} disabled={publishing}>{publishing ? 'Publishing…' : 'Publish now'}</Button>
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '16px', alignItems: 'start' }}>
-        {/* Collection list */}
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.5px' }}>COLLECTIONS</span>
-            {userRole === 'admin' && <button onClick={newCollection} title="New collection" style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '6px', padding: '3px 7px', cursor: 'pointer' }}><Plus size={13} /></button>}
-          </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 250px) 1fr', gap: 16, alignItems: 'start' }} className="cc-collections-grid">
+        <style>{'@media (max-width: 760px) { .cc-collections-grid { grid-template-columns: 1fr !important; } }'}</style>
+        <nav className="ui-card" style={{ padding: 10, margin: 0 }} aria-label="Collections">
           {collections.length === 0 ? (
-            <p style={{ fontSize: '12px', color: '#64748b' }}>No collections yet.</p>
+            <p className="ui-hint" style={{ padding: 6 }}>No collections yet.</p>
           ) : collections.map(c => (
-            <div key={c.id} onClick={() => setActive(c)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 9px', borderRadius: '7px', cursor: 'pointer', marginBottom: '4px', background: active?.id === c.id ? '#0f172a' : 'transparent', border: active?.id === c.id ? '1px solid #38bdf8' : '1px solid transparent' }}>
-              <Folder size={14} color="#38bdf8" />
-              <span style={{ flex: 1, fontSize: '13px' }}>{c.name}</span>
-              <span style={{ fontSize: '10px', color: '#64748b' }}>{c.item_count}</span>
-              {userRole === 'admin' && <button onClick={(e) => { e.stopPropagation(); removeCollection(c); }} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}><Trash2 size={12} /></button>}
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+              <button type="button" className="ui-nav__item" aria-current={active?.id === c.id ? 'page' : undefined} onClick={() => setActive(c)} style={{ flex: 1, margin: 0 }}>
+                <Folder size={15} aria-hidden="true" />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                <Badge>{c.item_count}</Badge>
+              </button>
+              {userRole === 'admin' && <IconButton icon={Trash2} label={`Delete collection ${c.name}`} size="sm" onClick={() => removeCollection(c)} style={{ color: '#f87171' }} />}
             </div>
           ))}
-        </div>
+        </nav>
 
-        {/* Items of the selected collection */}
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '14px', minHeight: '260px' }}>
+        <section className="ui-card" style={{ margin: 0, minHeight: 260 }} aria-label={active ? `Items of ${active.name}` : 'Items'}>
           {!active ? (
-            <div style={{ textAlign: 'center', color: '#64748b', padding: '60px 20px' }}>
-              <Library size={36} style={{ marginBottom: '10px' }} />
-              <p>Select a collection{userRole === 'admin' ? ' or create one' : ''} to manage its items.</p>
-            </div>
+            <EmptyState icon={Library} title="Choose a collection">Select a collection{userRole === 'admin' ? ' or create one' : ''} to manage its items.</EmptyState>
           ) : (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h3 style={{ margin: 0, fontSize: '15px' }}>{active.name} <span style={{ color: '#64748b', fontSize: '12px', fontWeight: 400 }}>/{active.slug}/</span></h3>
-                <button onClick={() => editItem(null)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 12px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}><Plus size={14} /> New Item</button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <h2 className="ui-card__title" style={{ margin: 0 }}>{active.name} <span style={{ color: '#64748b', fontSize: 12, fontWeight: 400 }}>/{active.slug}/</span></h2>
+                <Button variant="primary" size="sm" icon={Plus} onClick={() => editItem(null)}>New Item</Button>
               </div>
               {items.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#64748b' }}>No items yet. Create the first one.</p>
+                <EmptyState icon={FileText} title="No items yet" action={<Button variant="primary" icon={Plus} onClick={() => editItem(null)}>Create the first item</Button>} />
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  {items.map(it => (
-                    <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '9px 12px' }}>
-                      <FileText size={15} color="#94a3b8" />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</div>
-                        <div style={{ fontSize: '11px', color: '#64748b' }}>/{it.slug}/ {it.date && `· ${it.date}`}</div>
-                      </div>
-                      <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: it.status === 'published' ? '#064e3b' : '#78350f', color: it.status === 'published' ? '#6ee7b7' : '#fcd34d' }}>{it.status}</span>
-                      {Number(it.archived) ? <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: '#1e293b', color: '#94a3b8', border: '1px solid #334155' }}>archived</span> : null}
-                      <button onClick={() => toggleArchive(it)} title={Number(it.archived) ? 'Unarchive' : 'Archive'} style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: '6px', padding: '6px', cursor: 'pointer', display: 'flex' }}>{Number(it.archived) ? <ArchiveRestore size={14} /> : <Archive size={14} />}</button>
-                      <button onClick={() => editItem(it)} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '6px', padding: '6px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}><Edit3 size={13} /> Edit</button>
-                      <button onClick={() => removeItem(it)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} /></button>
-                    </div>
-                  ))}
+                <div className="ui-table-wrap">
+                  <table className="ui-table">
+                    <thead><tr><th>Title</th><th>Date</th><th>Status</th><th className="ui-cell-actions">Actions</th></tr></thead>
+                    <tbody>
+                      {items.map(it => (
+                        <tr key={it.id} onDoubleClick={() => editItem(it)}>
+                          <td><div className="ui-cell-title">{it.title}</div><div className="ui-cell-muted">/{it.slug}/</div></td>
+                          <td className="ui-cell-muted">{it.date || '—'}</td>
+                          <td><span className="ui-row" style={{ gap: 6 }}><StatusBadge status={it.status} />{Number(it.archived) ? <Badge>Archived</Badge> : null}</span></td>
+                          <td className="ui-cell-actions">
+                            <span className="ui-row" style={{ justifyContent: 'flex-end', gap: 4, flexWrap: 'nowrap' }}>
+                              <IconButton icon={Number(it.archived) ? ArchiveRestore : Archive} label={Number(it.archived) ? 'Unarchive' : 'Archive'} size="sm" onClick={() => toggleArchive(it)} />
+                              <Button variant="primary" size="sm" icon={Edit3} onClick={() => editItem(it)}>Edit</Button>
+                              <IconButton icon={Trash2} label={`Delete ${it.title}`} size="sm" onClick={() => removeItem(it)} style={{ color: '#f87171' }} />
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </>
           )}
-        </div>
+        </section>
       </div>
-    </div>
+    </>
   );
 }

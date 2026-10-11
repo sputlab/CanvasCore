@@ -16,6 +16,9 @@ import ForcePasswordChange from './components/ForcePasswordChange';
 import SessionExpiredOverlay from './components/SessionExpiredOverlay';
 import SessionWarning from './components/SessionWarning';
 import DraftRestorePrompt from './components/DraftRestorePrompt';
+import AdminLayout from './components/AdminLayout';
+import Backup from './components/Backup';
+import { Toaster } from './ui/toast';
 
 export default function App() {
   const { currentView, isAuthenticated, checkAuth, userRole, mustChangePw, fetchVersion, sessionExpired, sessionWarning } = useStore();
@@ -50,6 +53,9 @@ export default function App() {
   else if (currentView === 'templates') view = <Templates />;
   else if (currentView === 'submissions' && userRole === 'admin') view = <Submissions />;
   else if (currentView === 'collections') view = <Collections />;
+  else if (currentView === 'backup' && userRole === 'admin') view = <Backup />;
+  // Every section except the full-screen page editor lives in the admin shell (sidebar navigation)
+  if (currentView !== 'editor') view = <AdminLayout wide={currentView === 'manager'}>{view}</AdminLayout>;
 
   return (
     <>
@@ -60,6 +66,7 @@ export default function App() {
       {sessionWarning && !sessionExpired && <SessionWarning />}
       {sessionExpired && <SessionExpiredOverlay />}
       <DraftRestorePrompt />
+      <Toaster />
     </>
   );
 }
