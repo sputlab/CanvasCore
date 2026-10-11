@@ -1,12 +1,11 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useStore } from '../store/useStore';
-import JoditEditor from 'jodit-react';
+import { InlineRegions } from '../editor/RichText';
 import { Crown } from 'lucide-react';
 import { renderBlock, blockRoot } from '../render/renderBlock.mjs';
 
-const EDITABLE = ['TEXT', 'HERO', 'IMAGE_TEXT', 'FORM', 'HTML'];
 const CONTAINERS = ['SECTION', 'CONTAINER', 'FLEX_ROW', 'CSS_GRID'];
 // Blocks whose canonical HTML is interactive in the canvas too (native details/radio, no JS):
 // a click opens/switches the tab AND selects the block (the event bubbles up to the frame).
@@ -31,10 +30,12 @@ function splitStyles(styles = {}) {
   return { outer, inner };
 }
 
-const editorConfig = {
-  readonly: false,
-  toolbarAdaptive: false,
-  buttons: ['bold', 'italic', 'underline', 'strikethrough', '|', 'font', 'fontsize', 'color', 'brush', '|', 'align', 'ul', 'ol', '|', 'link', 'image', '|', 'source'],
+// Rich text fields edited in place on the canvas, with their toolbar ('basic' for titles, 'full' for body text)
+const TEXT_FIELDS = {
+  TEXT: { text: 'full' },
+  HERO: { title: 'basic', subtitle: 'basic' },
+  IMAGE_TEXT: { text: 'full' },
+  FORM: { title: 'basic' },
 };
 
 function canonicalHtml(block) {
@@ -86,11 +87,17 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     return () => range.removeEventListener('input', set);
   }, [block]);
 
+  // Where the click that selected a text block landed: the caret is placed there once it becomes editable
+  const [clickPoint, setClickPoint] = useState(null);
   const handleClick = (e) => {
     if (isMasterPreview) return;
     e.stopPropagation();
+    if (!isSelected && TEXT_FIELDS[block.type]) setClickPoint({ x: e.clientX, y: e.clientY });
     setSelectedBlockId(block.id);
   };
+  const commitField = useCallback((key, value) => {
+    updateBlock(block.id, { content: { ...block.content, [key]: value } });
+  }, [block.id, block.content, updateBlock]);
 
   const handleContentChange = (key, value) => {
     updateBlock(block.id, { content: { ...block.content, [key]: value } });
@@ -192,54 +199,19 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
       return React.createElement(r.tag, { id: r.id, className: r.className, style }, children);
     }
 
-    // Selected EDITABLE blocks: inline editing
-    if (EDITABLE.includes(block.type) && isSelected && !isMasterPreview) {
-      const box = { boxSizing: 'border-box', width: '100%' };
-      if (block.type === 'TEXT') {
-        return (
-          <div id={innerId} className={innerClass} style={box} onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
-            <JoditEditor value={block.content.text || ''} config={editorConfig} onBlur={(val) => handleContentChange('text', val)} />
-          </div>
-        );
-      }
-      if (block.type === 'HTML') {
-        return (
-          <textarea rows="6" value={block.content.code || ''} onChange={(e) => handleContentChange('code', e.target.value)} onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', padding: '12px', fontFamily: 'monospace', fontSize: '13px', background: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '6px', boxSizing: 'border-box' }} />
-        );
-      }
-      if (block.type === 'HERO') {
-        return (
-          <div id={innerId} className={innerClass} style={{ ...box, padding: '20px', background: '#0f172a' }}>
-            <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} style={{ background: 'rgba(255,255,255,0.9)', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
-              <JoditEditor value={block.content.title || ''} config={editorConfig} onBlur={(val) => handleContentChange('title', val)} />
-            </div>
-            <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} style={{ background: 'rgba(255,255,255,0.9)', padding: '10px', borderRadius: '8px' }}>
-              <JoditEditor value={block.content.subtitle || ''} config={editorConfig} onBlur={(val) => handleContentChange('subtitle', val)} />
-            </div>
-          </div>
-        );
-      }
-      if (block.type === 'IMAGE_TEXT') {
-        return (
-          <div id={innerId} className={innerClass} style={{ ...box, display: 'flex', gap: '30px', alignItems: 'center', flexDirection: block.content.layout === 'img-right' ? 'row-reverse' : 'row', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 300px' }}><img src={block.content.src} alt="" style={{ width: '100%', borderRadius: '8px', display: 'block' }} /></div>
-            <div style={{ flex: '1 1 300px' }} onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
-              <JoditEditor value={block.content.text || ''} config={editorConfig} onBlur={(val) => handleContentChange('text', val)} />
-            </div>
-          </div>
-        );
-      }
-      if (block.type === 'FORM') {
-        return (
-          <div id={innerId} className={innerClass} style={box}>
-            <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} style={{ marginBottom: '20px', border: '1px dashed #cbd5e1', padding: '10px', background: '#fff', borderRadius: '8px' }}>
-              <JoditEditor value={block.content.title || '<h3>Contact Us</h3>'} config={editorConfig} onBlur={(val) => handleContentChange('title', val)} />
-            </div>
-            <div style={{ pointerEvents: 'none', opacity: 0.85 }} dangerouslySetInnerHTML={{ __html: canonicalHtml({ ...innerBlock, content: { ...block.content, title: '' } }) }} />
-          </div>
-        );
-      }
+    // Selected text blocks: the block's own HTML with its text fields editable in place, so the text keeps
+    // the size, spacing and margins it has on the published page (the toolbar floats above it)
+    if (TEXT_FIELDS[block.type] && isSelected && !isMasterPreview) {
+      return (
+        <InlineRegions html={renderBlock(innerBlock, { fields: true })} variants={TEXT_FIELDS[block.type]}
+          onCommit={commitField} initialPoint={clickPoint} style={{ width: '100%' }} />
+      );
+    }
+    if (block.type === 'HTML' && isSelected && !isMasterPreview) {
+      return (
+        <textarea rows="6" value={block.content.code || ''} onChange={(e) => handleContentChange('code', e.target.value)} onClick={(e) => e.stopPropagation()}
+          style={{ width: '100%', padding: '12px', fontFamily: 'monospace', fontSize: '13px', background: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '6px', boxSizing: 'border-box' }} />
+      );
     }
 
     // SLIDER: canonical HTML + animation driven via ref

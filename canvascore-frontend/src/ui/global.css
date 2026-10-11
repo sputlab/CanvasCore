@@ -61,3 +61,16 @@ body {
 /* Soft app entrance */
 #root { animation: ccFadeIn 0.25s ease both; }
 @keyframes ccFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Rich text edited in place on the canvas (src/editor/RichText.jsx). Only outlines and an
+   empty-field placeholder: nothing that changes the size or spacing of the text. */
+.cc-canvas .cc-rte-host { pointer-events: none; }
+.cc-canvas .cc-rte-host [data-cc-field] { pointer-events: auto; cursor: text; outline: 1px dashed rgba(56, 189, 248, 0.45); outline-offset: 2px; }
+.cc-canvas .cc-rte-host [data-cc-field]:focus { outline: 2px solid #38bdf8; }
+.cc-canvas .cc-rte-host [data-cc-field]:empty::before { content: attr(data-cc-placeholder); color: rgba(100, 116, 139, 0.75); pointer-events: none; }
+.cc-rte-field:focus { box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35); }
+.cc-rte-field img { max-width: 100%; height: auto; }
+.cc-rte-field table { width: 100%; border-collapse: collapse; }
+.cc-rte-field td, .cc-rte-field th { border: 1px solid #cbd5e1; padding: 4px 6px; }
+.cc-rte-field blockquote { margin: 0.5em 0; padding-left: 12px; border-left: 3px solid #cbd5e1; color: #475569; }
+.cc-rte-field p, .cc-rte-field h1, .cc-rte-field h2, .cc-rte-field h3, .cc-rte-field h4 { margin: 0.35em 0; }

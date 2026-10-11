@@ -49,6 +49,8 @@ export default function VisualEditor() {
     fetchMasters();
     const handleKeyDown = (e) => {
       if (useStore.getState().sessionExpired) return;   // with the login on top, the editor "behind" must not be modified
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return; // typing: the field has its own undo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault();
         if (e.shiftKey) redo(); else undo();

@@ -103,8 +103,11 @@ function ccInitials(name) {
 }
 function ccEnc(s) { return encodeURIComponent(String(s ?? '')).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase()); }
 
-export function renderBlock(block) {
+// opts.fields (editor canvas only): marks the rich text fields as editable in place
+// (data-cc-field + contenteditable) on the same elements the site renders, so editing keeps the layout.
+export function renderBlock(block, opts = {}) {
   if (!block || typeof block !== 'object') return '';
+  const field = (name, placeholder) => (opts.fields ? ` data-cc-field="${name}" contenteditable="true" data-cc-placeholder="${placeholder}"` : '');
 
   const styles = block.styles || {};
   const content = block.content || {};
@@ -160,7 +163,7 @@ export function renderBlock(block) {
     }
 
     case 'TEXT':
-      return customCss + `<div id="${innerId}" class="cc-text${animClass}${innerClass}"${styleString}>\n${content.text ?? ''}\n</div>\n`;
+      return customCss + `<div id="${innerId}" class="cc-text${animClass}${innerClass}"${styleString}${field('text', 'Type your text…')}>\n${content.text ?? ''}\n</div>\n`;
 
     case 'IMAGE': {
       const src = escapeHtml(content.src ?? '');
@@ -208,14 +211,14 @@ export function renderBlock(block) {
         buttonsHtml += `<a href="${bUrl}" style="display:inline-block; padding:14px 28px; background:${escapeHtml(btn.bgColor)}; color:${escapeHtml(btn.textColor)}; border-radius:${escapeHtml(btn.borderRadius)}; text-decoration:none; font-weight:bold; border:none; box-sizing:border-box;">${escapeHtml(btn.text)}</a>`;
       }
       buttonsHtml += `</div>`;
-      return customCss + `<section id="${innerId}" class="cc-hero${animClass}${innerClass}" style="${styleAttr} ${bg} min-height:${minHeight}; display:flex; flex-direction:column; justify-content:center;">\n<div>\n${title}\n<div style="margin:20px 0;">${subtitle}</div>\n${buttonsHtml}\n</div>\n</section>\n`;
+      return customCss + `<section id="${innerId}" class="cc-hero${animClass}${innerClass}" style="${styleAttr} ${bg} min-height:${minHeight}; display:flex; flex-direction:column; justify-content:center;">\n<div>\n${opts.fields ? `<div${field('title', 'Title')}>${title}</div>` : title}\n<div style="margin:20px 0;"${field('subtitle', 'Subtitle')}>${subtitle}</div>\n${buttonsHtml}\n</div>\n</section>\n`;
     }
 
     case 'IMAGE_TEXT': {
       const layout = (content.layout ?? 'img-left') === 'img-right' ? 'row-reverse' : 'row';
       const src = escapeHtml(content.src ?? '');
       const text = content.text ?? '';
-      return customCss + `<section id="${innerId}" class="cc-img-text${animClass}${innerClass}" style="${styleAttr} display:flex; gap:40px; align-items:center; flex-direction:${layout}; flex-wrap:wrap;">\n<div style="flex:1 1 300px; width:100%;"><img src="${src}" style="width:100%; border-radius:8px; display:block;"></div>\n<div style="flex:1 1 300px; width:100%;">${text}</div>\n</section>\n`;
+      return customCss + `<section id="${innerId}" class="cc-img-text${animClass}${innerClass}" style="${styleAttr} display:flex; gap:40px; align-items:center; flex-direction:${layout}; flex-wrap:wrap;">\n<div style="flex:1 1 300px; width:100%;"><img src="${src}" style="width:100%; border-radius:8px; display:block;"></div>\n<div style="flex:1 1 300px; width:100%;"${field('text', 'Type your text…')}>${text}</div>\n</section>\n`;
     }
 
     case 'CARDS': {
@@ -317,7 +320,7 @@ export function renderBlock(block) {
         else fieldsHtml += `<input type="${fType}" name="${name}" ${req} style="width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; background:#fff; box-sizing:border-box;">`;
         fieldsHtml += `</div>\n`;
       });
-      return customCss + `<div id="${innerId}" class="cc-form-block${animClass}${innerClass}"${styleString}>\n<div style="margin-bottom:20px;">${title}</div>\n<form id="${formId}" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST">\n<input type="hidden" name="_form" value="${formId}">\n<input type="hidden" name="_success" value="${successMsg}">\n<input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">\n${fieldsHtml}<button type="submit" style="padding:12px 24px; background:var(--brand-color, #3b82f6); color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">${btnText}</button>\n</form>\n</div>\n`;
+      return customCss + `<div id="${innerId}" class="cc-form-block${animClass}${innerClass}"${styleString}>\n<div style="margin-bottom:20px;"${field('title', 'Form title')}>${title}</div>\n<form id="${formId}" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST">\n<input type="hidden" name="_form" value="${formId}">\n<input type="hidden" name="_success" value="${successMsg}">\n<input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">\n${fieldsHtml}<button type="submit" style="padding:12px 24px; background:var(--brand-color, #3b82f6); color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">${btnText}</button>\n</form>\n</div>\n`;
     }
 
     case 'ACCORDION': {

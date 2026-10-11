@@ -11,6 +11,24 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **New rich text editor** (`src/editor/`), replacing Jodit everywhere with one consistent editor:
+  - **Edits the text in place on the canvas**: the block's own HTML becomes editable, so a selected text keeps
+    exactly the size, spacing and margins it has on the published page (nothing moves when you click into it);
+    the toolbar floats above the text without taking space, and the caret lands where you clicked.
+  - **The same toolbar in the property panel**, docked above the field. Titles get a basic toolbar (text style,
+    bold/italic/underline, colors, alignment, link, clear formatting, undo/redo, HTML); body text gets the full
+    one (adds font, size, strikethrough, sub/superscript, lists, quote, horizontal line, image, table).
+  - Headings and paragraph styles (paragraph, H1–H4, quote, code block), relative text sizes that scale with
+    the theme, text color and highlight palettes with a **site color** that follows the brand color.
+  - Links to a URL or to one of the site's pages, with **open in a new tab** (`rel="noopener"`) and **nofollow**;
+    Ctrl/Cmd+K opens the link dialog.
+  - Images from the **media library** (or an address, with alt text); **tables** with header row, add/delete
+    rows and columns.
+  - **Paste cleanup**: content from Word, Google Docs and web pages keeps headings, paragraphs, lists, links,
+    tables and bold/italic/underline, and loses fonts, sizes, colors, classes, scripts and inline images;
+    Word bullet paragraphs become real lists. Ctrl/Cmd+Shift+V pastes plain text.
+  - Edits are saved when the text loses focus, tidied (`<b>`→`<strong>`, empty fields saved as empty).
+  - `tests/rich-text.mjs` (`npm run test:rich-text`, part of `npm test`).
 - **Menu Builder reorganized into tabs** (Structure, Themes, Style, Effects, Layout & Logo, Mobile) with
   the live preview pinned on top and a Desktop/Mobile switch to check the hamburger menu.
 - **12 menu themes**: Classic, Professional, Fresh, Warm, Midnight, Minimal, Ocean, Sunset, Earth, Pastel,
@@ -51,6 +69,9 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- Selecting a text on the canvas no longer changes its layout (the old editor replaced it with a boxed editor
+  with its own padding and toolbar).
+- Ctrl/Cmd+Z while typing in a field no longer undoes the whole page.
 - Mobile menu with **center or right** button alignment: the burger no longer ends up in the middle and the
   centered logo no longer floats over the open menu; on mobile the bar always puts logo and burger at the edges.
 - Menu accent line drawn over the open submenus.
@@ -72,6 +93,9 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   "inherit the theme" option (hover color = brand color) was ignored on the published site even though it
   worked in the preview, and the same applied to disabling the global header/footer
   (`headerEnabled` / `footerEnabled`).
+
+### Removed
+- `jodit-react` and the unused `react-simple-wysiwyg` dependencies.
 
 ## [0.13.0] - 2026-10-07 — 12 new blocks
 
