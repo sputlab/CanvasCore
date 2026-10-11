@@ -23,6 +23,11 @@ try {
     if ($base_dir === '\\' || $base_dir === '/') $base_dir = '';
     $base_url = $base_dir . '/';
 
+    // Impostazioni globali: caricate prima di tutto (menu e header/footer le leggono subito sotto).
+    $settings_file = $data_dir . '/settings.json';
+    $settings = file_exists($settings_file) ? json_decode(file_get_contents($settings_file), true) : [];
+    if (!is_array($settings)) $settings = [];
+
     $menu_file = $data_dir . '/menu.json';
     $menu_json = file_exists($menu_file) ? file_get_contents($menu_file) : '{"items":[], "settings":{}}';
     $menu_html = render_menu_html($menu_json, ['inheritTheme' => !empty($settings['menuInheritTheme'])]);
@@ -41,9 +46,6 @@ try {
     } catch (Exception $e) {}
     if (isset($settings['headerEnabled']) && empty($settings['headerEnabled'])) $header_html = '';
     if (isset($settings['footerEnabled']) && empty($settings['footerEnabled'])) $footer_html = '';
-
-    $settings_file = $data_dir . '/settings.json';
-    $settings = file_exists($settings_file) ? json_decode(file_get_contents($settings_file), true) : [];
 
     $brand_color = $settings['brandColor'] ?? '#3b82f6';
     $font_family = $settings['fontFamily'] ?? 'Inter';

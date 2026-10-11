@@ -10,6 +10,12 @@ minor e l'altra: `MINOR` segnala nuove funzionalità, `PATCH` correzioni.
 
 ## [Unreleased]
 
+### Fixed
+- **Pubblicazione**: `rebuild_all.php` leggeva le impostazioni globali prima di caricarle, quindi
+  l'opzione del menu "eredita il tema" (colore hover = colore del brand) veniva ignorata nel sito
+  pubblicato pur funzionando nell'anteprima, e lo stesso valeva per la disattivazione di header/footer
+  globali (`headerEnabled` / `footerEnabled`).
+
 ## [0.13.0] - 2026-10-07 — 12 nuovi blocchi
 
 ### Added
