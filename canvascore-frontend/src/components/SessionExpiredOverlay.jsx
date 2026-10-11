@@ -4,8 +4,8 @@ import { useStore } from '../store/useStore';
 import { getSession } from '../session/runtime';
 import { listDrafts, describeDraft, storageAvailable } from '../session/drafts';
 
-// Schermata di login mostrata SOPRA l'app quando la sessione e' scaduta.
-// L'app sottostante resta montata (e inerte): dopo il login si riprende esattamente da dove si era.
+// Login screen shown ON TOP of the app when the session has expired.
+// The app underneath stays mounted (and inert): after login you resume exactly where you were.
 export default function SessionExpiredOverlay() {
   const expiredUser = useStore((s) => s.expiredUser);
   const sessionTimeout = useStore((s) => s.sessionTimeout);
@@ -32,7 +32,7 @@ export default function SessionExpiredOverlay() {
       if (!res.success) { setError(res.message || 'Authentication error'); }
       else {
         const same = getSession().completeReauth({ username: res.username, csrf: res.differentUser ? undefined : res.csrf });
-        if (!same) { setError('Signed in as a different user: reloading…'); return; }   // resta bloccato fino al reload
+        if (!same) { setError('Signed in as a different user: reloading…'); return; }   // stays blocked until the reload
       }
     } catch { setError('Server connection error'); }
     setBusy(false);

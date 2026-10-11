@@ -1,6 +1,6 @@
 <?php
 // canvascore-admin/api.php
-// CanvasCore — API backend (Fase 1: CSRF, sessione blindata, data fuori webroot, hardening)
+// CanvasCore — API backend (Phase 1: CSRF, hardened session, data outside the web root, hardening)
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
 header('Content-Type: application/json');
@@ -13,7 +13,7 @@ try {
     $pdo = new PDO("sqlite:" . $db_file);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Migrazioni schema versionate (nuove ed esistenti) + migrazioni contenuto.
+    // Versioned schema migrations (new and existing installs) + content migrations.
     cc_migrate($pdo);
     cc_migrate_content($pdo);
 } catch (Exception $e) {
@@ -22,13 +22,13 @@ try {
 
 $action = $_GET['action'] ?? '';
 
-// Una POST senza sessione valida e' "non autenticata" (401), NON "CSRF errato" (403): cosi' il client
-// distingue sempre una sessione scaduta da un token da rinfrescare.
+// A POST without a valid session is "unauthenticated" (401), NOT "bad CSRF" (403): this way the client
+// can always tell an expired session from a token that needs refreshing.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action !== 'login' && !cc_session_is_logged_in()) {
     cc_unauthorized();
 }
 
-// CSRF + same-origin su tutte le POST che modificano stato, eccetto il login.
+// CSRF + same-origin on every state-changing POST, except login.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action !== 'login') {
     cc_verify_csrf_or_die();
 }
@@ -42,8 +42,8 @@ if ($action === 'version') {
     echo json_encode($v); exit;
 }
 
-// Stato della sessione in SOLA LETTURA: non allunga la sessione (il polling in background non deve
-// impedirle di scadere per inattivita'). Rilascia subito il lock di sessione.
+// READ-ONLY session status: does not extend the session (background polling must not
+// keep it from expiring due to inactivity). Releases the session lock immediately.
 if ($action === 'session_status') {
     $out = [
         'authenticated' => cc_session_is_logged_in(),
@@ -78,13 +78,13 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($user && password_verify($password, $user['password_hash'])) {
-        session_regenerate_id(true); // mitigazione session fixation
+        session_regenerate_id(true); // session fixation mitigation
         $_SESSION['logged_in'] = true;
         $_SESSION['username'] = $username;
         $_SESSION['role'] = $user['role'];
         $_SESSION['last_seen'] = time();
         $_SESSION['csrf'] = bin2hex(random_bytes(32));
-        cc_issue_csrf(); // allinea il cookie double-submit al nuovo token di sessione
+        cc_issue_csrf(); // align the double-submit cookie with the new session token
         echo json_encode(['success' => true, 'role' => $user['role'], 'username' => $username, 'csrf' => $_SESSION['csrf'], 'must_change_pw' => (int)($user['must_change_pw'] ?? 0), 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]);
     } else {
         echo json_encode(['success' => false, 'message' => 'Invalid credentials.']);
@@ -101,20 +101,20 @@ if ($action === 'logout') {
     echo json_encode(['success' => true]); exit;
 }
 
-// Gate: tutto ciò che segue richiede login
+// Gate: everything below requires login
 if (!cc_session_is_logged_in()) {
     cc_unauthorized();
 }
-// Da qui in poi e' attivita' dell'utente: allunga la sessione.
+// From here on it is user activity: extend the session.
 cc_session_touch();
 
 // ---------------------------------------------------------------------------
-// Gestione account (solo admin)
+// Account management (admin only)
 // ---------------------------------------------------------------------------
 $is_admin = ($_SESSION['role'] ?? '') === 'admin';
 
-// Keepalive: il client lo chiama (con limite di frequenza) mentre l'utente e' attivo nell'interfaccia.
-// Il touch e' gia' avvenuto nel gate.
+// Keepalive: the client calls it (rate-limited) while the user is active in the interface.
+// The touch already happened in the gate.
 if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
@@ -153,7 +153,7 @@ if ($action === 'force_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(['success' => true, 'message' => 'Password updated.']); exit;
 }
 
-// Cambio password del PROPRIO account (qualsiasi ruolo) + azzera il flag must_change_pw
+// Change the password of one's OWN account (any role) + clear the must_change_pw flag
 if ($action === 'change_own_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $pwd = $data['password'] ?? '';
@@ -165,12 +165,12 @@ if ($action === 'change_own_password' && $_SERVER['REQUEST_METHOD'] === 'POST') 
 }
 
 // ---------------------------------------------------------------------------
-// Media (upload con whitelist + protezione esecuzione)
+// Media (upload with whitelist + execution protection)
 // ---------------------------------------------------------------------------
 $uploads_dir = __DIR__ . '/../uploads';
 if ($action === 'upload_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_dir($uploads_dir)) mkdir($uploads_dir, 0755, true);
-    // Blocca l'esecuzione di PHP nella cartella uploads (Apache)
+    // Block PHP execution in the uploads folder (Apache)
     ensure_htaccess($uploads_dir, $GLOBALS['CC_HT_UPLOADS']);
 
     if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
@@ -180,7 +180,7 @@ if ($action === 'upload_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($ext, $allowed, true)) {
             echo json_encode(['success' => false, 'message' => 'File type not allowed. Only images are accepted.']); exit;
         }
-        // Per i formati raster verifichiamo che sia davvero un'immagine
+        // For raster formats, check that it really is an image
         if (!in_array($ext, ['svg','ico'], true)) {
             if (@getimagesize($_FILES['file']['tmp_name']) === false) {
                 echo json_encode(['success' => false, 'message' => 'The file is not a valid image.']); exit;
@@ -215,7 +215,7 @@ if ($action === 'delete_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ---------------------------------------------------------------------------
-// Settings (JSON validato)
+// Settings (validated JSON)
 // ---------------------------------------------------------------------------
 if ($action === 'get_settings') {
     $file = $data_dir . '/settings.json';
@@ -233,9 +233,9 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ---------------------------------------------------------------------------
-// Pagine — modello draft/published
+// Pages — draft/published model
 // ---------------------------------------------------------------------------
-// Imposta la homepage in modo esclusivo (una sola pagina puo' essere home).
+// Set the homepage exclusively (only one page can be home).
 function apply_home($pdo, $primaryId, $val) {
     if (!$primaryId) return;
     if ($val) {
@@ -246,7 +246,7 @@ function apply_home($pdo, $primaryId, $val) {
     }
 }
 
-// Aggiorna i link interni quando cambia lo slug di una pagina pubblicata.
+// Update internal links when the slug of a published page changes.
 function relink_slug_change($pdo, $data_dir, $old_slug, $new_slug) {
     if (!$old_slug || $old_slug === $new_slug) return;
     $old_url = $old_slug . '/index.html';
@@ -291,7 +291,7 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $layout      = $data['layout'] ?? 'boxed';
     $bg_color    = $data['bg_color'] ?? '#ffffff';
     $boxed_width = $data['boxed_width'] ?? '1200px';
-    // Gli utenti non-admin non possono salvare superfici "codice" (HTML block / custom CSS).
+    // Non-admin users cannot save "code" surfaces (HTML block / custom CSS).
     if (!$is_admin && isset($data['blocks']) && is_array($data['blocks'])) {
         cc_strip_code_surfaces($data['blocks']);
     }
@@ -318,13 +318,13 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($publish) {
         if ($existing && (int)($existing['is_draft_copy'] ?? 0) === 1) {
-            // Promuovi la copia-bozza sulla pagina madre pubblicata
+            // Promote the draft copy onto the published parent page
             $parentId = $existing['parent_id'];
             $parentRow = $pdo->prepare("SELECT clean_slug FROM pages WHERE id = ?"); $parentRow->execute([$parentId]);
             $old = $parentRow->fetch(PDO::FETCH_ASSOC);
             $writeRow($parentId, 'published', 0, null);
             if ($old) relink_slug_change($pdo, $data_dir, $old['clean_slug'] ?? null, $clean);
-            $pdo->prepare("DELETE FROM pages WHERE id = ?")->execute([$id]); // rimuove la copia
+            $pdo->prepare("DELETE FROM pages WHERE id = ?")->execute([$id]); // remove the copy
             apply_home($pdo, $parentId, $is_home);
             echo json_encode(['success' => true, 'message' => 'Page published!', 'new_id' => $parentId]); exit;
         } else {
@@ -336,28 +336,28 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // --- Salvataggio bozza ---
+    // --- Save draft ---
     if (!$existing) {
-        // Pagina nuova: resta bozza con il suo stesso id
+        // New page: stays a draft with its own id
         $writeRow($id, 'draft', 0, null);
         apply_home($pdo, $id, $is_home);
         echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $id]); exit;
     }
     if ((int)($existing['is_draft_copy'] ?? 0) === 1) {
-        // Sto già editando una copia-bozza: aggiorno in place
+        // Already editing a draft copy: update in place
         $writeRow($id, 'draft', 1, $existing['parent_id']);
         apply_home($pdo, $existing['parent_id'], $is_home);
         echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $id]); exit;
     }
     if (($existing['status'] ?? '') === 'published') {
-        // Pagina live modificata: creo una copia-bozza nascosta, la live resta intatta
+        // Modified live page: create a hidden draft copy, the live one stays intact
         $copyId = 'draft-' . uniqid();
         $writeRow($copyId, 'draft', 1, $id);
         $pdo->prepare("UPDATE pages SET status='modified', updated_at=? WHERE id=?")->execute([$now, $id]);
         apply_home($pdo, $id, $is_home);
         echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $copyId]); exit;
     }
-    // Bozza / draft_new primaria: aggiorno in place
+    // Primary draft / draft_new: update in place
     $writeRow($id, 'draft', 0, null);
     apply_home($pdo, $id, $is_home);
     echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $id]); exit;
@@ -378,7 +378,7 @@ if ($action === 'delete_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $row = $pdo->prepare("SELECT clean_slug, is_draft_copy FROM pages WHERE id = ?"); $row->execute([$id]);
         $p = $row->fetch(PDO::FETCH_ASSOC);
         if ($p && (int)$p['is_draft_copy'] === 0) {
-            // Rimuove l'HTML generato sul disco
+            // Remove the generated HTML from disk
             $slug = sanitize_slug($p['clean_slug'] ?? 'index');
             if ($slug === 'index' || $slug === 'home') {
                 @unlink(__DIR__ . '/../index.html');
@@ -386,7 +386,7 @@ if ($action === 'delete_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 @unlink(__DIR__ . '/../' . $slug . '/index.html');
                 @rmdir(__DIR__ . '/../' . $slug);
             }
-            $pdo->prepare("DELETE FROM pages WHERE parent_id = ?")->execute([$id]); // elimina le copie
+            $pdo->prepare("DELETE FROM pages WHERE parent_id = ?")->execute([$id]); // delete the copies
         }
         $pdo->prepare("DELETE FROM pages WHERE id = ?")->execute([$id]);
     }
@@ -402,7 +402,7 @@ if ($action === 'preview_menu' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $sfile = $data_dir . '/settings.json';
     $gset = file_exists($sfile) ? json_decode(file_get_contents($sfile), true) : [];
     $html = render_menu_html($payload, ['preview' => true, 'inheritTheme' => !empty($gset['menuInheritTheme'])]);
-    $html = str_replace('{{BASE_URL}}', '#', $html); // link inerti nell'anteprima
+    $html = str_replace('{{BASE_URL}}', '#', $html); // inert links in the preview
     echo json_encode(['success' => true, 'html' => $html]); exit;
 }
 
@@ -429,7 +429,7 @@ if ($action === 'get_submissions') {
 
 if ($action === 'export_submissions') {
     $rows = $pdo->query("SELECT form_id, page, data_json, created_at FROM form_submissions ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
-    // colonne = unione delle etichette dei campi
+    // columns = union of the field labels
     $labels = [];
     foreach ($rows as $r) { $d = json_decode($r['data_json'], true) ?: []; foreach (array_keys($d) as $k) $labels[$k] = true; }
     $labels = array_keys($labels);
@@ -457,7 +457,7 @@ if ($action === 'clear_submissions' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(['success' => true]); exit;
 }
 
-// ---- Collezioni (gestione: admin) ----
+// ---- Collections (management: admin) ----
 if ($action === 'get_collections') {
     echo json_encode($pdo->query("SELECT id, name, slug, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC)); exit;
 }
@@ -480,7 +480,7 @@ if ($action === 'delete_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(['success' => true]); exit;
 }
 
-// ---- Voci delle collezioni (contenuto: qualsiasi utente loggato) ----
+// ---- Collection items (content: any logged-in user) ----
 if ($action === 'get_items') {
     $cid = $_GET['collection'] ?? '';
     $st = $pdo->prepare("SELECT id, collection_id, title, slug, excerpt, cover_image, date, status, archived, updated_at FROM collection_items WHERE collection_id = ? ORDER BY (date = '') ASC, date DESC, updated_at DESC");
@@ -518,7 +518,7 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $chk = $pdo->prepare("SELECT id, archived FROM collection_items WHERE id = ?"); $chk->execute([$id]);
     $existing_item = $chk->fetch(PDO::FETCH_ASSOC);
     if ($existing_item) {
-        // Un client che non invia il flag non deve mai azzerarlo: si conserva il valore salvato
+        // A client that does not send the flag must never reset it: the saved value is kept
         if (!$archived_sent) $archived = (int)($existing_item['archived'] ?? 0);
         if ($blocks !== null) {
             if (!$is_admin) cc_strip_code_surfaces($blocks);
@@ -556,7 +556,7 @@ if ($action === 'save_part' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $name = ($data['name'] ?? '') === 'footer' ? 'footer' : 'header';
     $blocks = isset($data['blocks']) && is_array($data['blocks']) ? $data['blocks'] : [];
-    if (!$is_admin) cc_strip_code_surfaces($blocks); // editor: niente blocchi "codice"
+    if (!$is_admin) cc_strip_code_surfaces($blocks); // editor: no "code" blocks
     $pdo->prepare("INSERT INTO site_parts (name, content_json, content_schema) VALUES (?, ?, ?)
                    ON CONFLICT(name) DO UPDATE SET content_json = excluded.content_json, content_schema = excluded.content_schema")
         ->execute([$name, json_encode($blocks), cc_version()['content_schema']]);

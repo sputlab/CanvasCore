@@ -1,37 +1,37 @@
-# CanvasCore 0.3.0 — Menu Builder avanzato + utente in dashboard
+# CanvasCore 0.3.0 — Advanced Menu Builder + user in the dashboard
 
-## File da sostituire
+## Files to replace
 Backend: `canvascore-admin/compiler.php`, `api.php`, `version.json`
 Frontend: `src/components/MenuBuilder.jsx`, `src/components/PageManager.jsx`,
 `src/store/useStore.js`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-## Novità principali
-- **Bug sottomenu risolto**: il Menu Builder ora usa un vero albero annidato.
-  Riordino e annidamento (⇥ annida sotto il precedente, ⇤ dis-annida) sono
-  coerenti e persistono correttamente. Riordino anche in **drag & drop** tra
-  voci dello stesso livello.
-- **Voce senza link**: lascia l'URL vuoto e la voce padre aprirà solo il
-  sottomenu (nessun href), utile quando non c'è una pagina per il livello padre.
-- **Sottomenu multilivello** con dropdown a cascata.
-- **Personalizzazioni grafiche**: bordi voci, spaziatura tra le voci, colore
-  testo, colore testo/sfondo in hover, altezza barra, sfondo con **opacità**,
-  ombra.
-- **Logo**: immagine + altezza + allineamento indipendente dai pulsanti, con
-  distanza configurabile. Logica di priorità come richiesto:
-  - logo e pulsanti sullo **stesso lato** → accostati, a distanza "Logo/Buttons gap";
-  - su **lati opposti** → logo e pulsanti agli estremi (space-between).
-- **Effetti premium**: underline animata, lift, glassmorphism (blur), glare.
-- **Anteprima live** del menu nel builder.
-- **Dashboard**: in alto compare l'utente loggato (nome + ruolo).
+## Main changes
+- **Submenu bug fixed**: the Menu Builder now uses a real nested tree.
+  Reordering and nesting (⇥ nests under the previous item, ⇤ un-nests) are
+  consistent and persist correctly. Items at the same level can also be
+  reordered with **drag & drop**.
+- **Item without a link**: leave the URL empty and the parent item will only open
+  the submenu (no href), useful when there is no page for the parent level.
+- **Multi-level submenus** with cascading dropdowns.
+- **Visual customization**: item borders, spacing between items, text color,
+  hover text/background color, bar height, background with **opacity**,
+  shadow.
+- **Logo**: image + height + alignment independent of the buttons, with a
+  configurable gap. Priority logic as requested:
+  - logo and buttons on the **same side** → side by side, separated by "Logo/Buttons gap";
+  - on **opposite sides** → logo and buttons at the two ends (space-between).
+- **Premium effects**: animated underline, lift, glassmorphism (blur), glare.
+- **Live preview** of the menu in the builder.
+- **Dashboard**: the signed-in user (name + role) is shown at the top.
 
-## Compatibilità
-I menu salvati nel vecchio formato (lista piatta con parentId) vengono convertiti
-in automatico in albero annidato sia dall'editor sia dal compiler: nessuna
-perdita di dati. Alla prima apertura del Menu Builder, salva per consolidare il
-nuovo formato.
+## Compatibility
+Menus saved in the old format (flat list with parentId) are automatically
+converted into a nested tree by both the editor and the compiler: no data is
+lost. The first time you open the Menu Builder, save to consolidate the new
+format.
 
-## Nota sugli effetti
-"Glass" rende meglio con uno sfondo semi-trasparente (abbassa l'opacità dello
-sfondo). "Glare" aggiunge un riflesso animato che scorre sulla barra.
+## Note on the effects
+"Glass" looks best with a semi-transparent background (lower the background
+opacity). "Glare" adds an animated reflection that sweeps across the bar.

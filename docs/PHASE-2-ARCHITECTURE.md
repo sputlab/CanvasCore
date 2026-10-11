@@ -1,77 +1,77 @@
-# CanvasCore — Fase 2: contratto di rendering unico + versionamento automatico
+# CanvasCore — Phase 2: single rendering contract + automatic versioning
 
-Versione: **0.2.0** (build incrementale automatico).
+Version: **0.2.0** (automatic incremental build number).
 
-Questo giro mette in piedi l'architettura definitiva per la coerenza
-editor ↔ pagina compilata, e l'auto-bump della versione.
+This round sets up the definitive architecture for editor ↔ compiled page
+consistency, plus the automatic version bump.
 
-## File NUOVI
-- `canvascore-admin/blocks.json` — default dei blocchi (unica fonte di verità).
-- `canvascore-frontend/scripts/bump.mjs` — auto-bump del numero di build.
-- `canvascore-frontend/src/render/renderBlock.mjs` — renderer canonico in JS.
-- `canvascore-frontend/tests/parity.mjs` — test di parità JS ↔ PHP.
-- `canvascore-frontend/tests/render_php.php` — helper del test (render via compiler).
+## NEW files
+- `canvascore-admin/blocks.json` — block defaults (single source of truth).
+- `canvascore-frontend/scripts/bump.mjs` — automatic build number bump.
+- `canvascore-frontend/src/render/renderBlock.mjs` — canonical renderer in JS.
+- `canvascore-frontend/tests/parity.mjs` — JS ↔ PHP parity test.
+- `canvascore-frontend/tests/render_php.php` — test helper (render via the compiler).
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Backend: `canvascore-admin/version.json`, `config.php`, `compiler.php`
 Frontend: `package.json`, `vite.config.js`, `src/store/useStore.js`,
 `src/components/PageManager.jsx`
-Più, nella root: `CHANGELOG.md`.
+Plus, in the root: `CHANGELOG.md`.
 
-Dopo l'aggiornamento:
+After updating:
 ```
 cd canvascore-frontend
-npm install        # porta cheerio (devDependency per il test di parità)
-npm run build      # il prebuild auto-incrementa il numero di build
+npm install        # brings in cheerio (devDependency for the parity test)
+npm run build      # prebuild auto-increments the build number
 npm run test:parity
 ```
 
-## 1. Versionamento automatico
-`version.json` ha ora `build` e `built`. A ogni `npm run build`, l'hook
-`prebuild` esegue `scripts/bump.mjs` che incrementa `build` e marca `built`.
-La versione semantica (`app`) resta la fonte di verità per le release e si
-bumpa a mano quando si taglia una versione (vedi VERSIONING-LEGGIMI). Il
-pannello mostra `v<app> · build <n>`, così si sa sempre a che punto si è.
+## 1. Automatic versioning
+`version.json` now has `build` and `built`. On every `npm run build`, the
+`prebuild` hook runs `scripts/bump.mjs`, which increments `build` and stamps
+`built`. The semantic version (`app`) remains the source of truth for releases
+and is bumped by hand when cutting a version (see VERSIONING.md). The panel
+shows `v<app> · build <n>`, so you always know where you are.
 
-## 2. Contratto di rendering unico (fondamenta)
-Problema storico: editor (React) e pagina compilata (PHP) erano due renderer
-separati che divergevano (bottoni, slider, ecc.).
+## 2. Single rendering contract (foundations)
+Long-standing problem: the editor (React) and the compiled page (PHP) were two
+separate renderers that drifted apart (buttons, slider, etc.).
 
-Dato che i due runtime sono diversi (editor in browser, build statica in PHP sul
-server), non possono condividere lo stesso codice a runtime. L'architettura
-adottata — lo standard per la parità cross-runtime — è:
+Since the two runtimes are different (editor in the browser, static build in PHP
+on the server), they can't share the same code at runtime. The architecture
+adopted — the standard for cross-runtime parity — is:
 
-1. **Un'unica fonte di verità per i default** dei blocchi: `blocks.json`,
-   letta dall'editor (iniettata da Vite) e dal PHP (`cc_block_defaults()`).
-   Niente più default duplicati che divergono.
-2. **Un renderer canonico** (`renderBlock.mjs`) che descrive, una volta sola in
-   JS puro, come ogni blocco diventa HTML. Il compiler PHP ne è lo specchio.
-3. **Una verifica automatica** (`npm run test:parity`) che renderizza le stesse
-   fixture con il renderer JS e con il compiler PHP e confronta **struttura e
-   stili**, fallendo in caso di divergenza. È questa la garanzia: non "stesso
-   codice", ma "codice dimostrato identico".
+1. **A single source of truth for block defaults**: `blocks.json`, read by the
+   editor (injected by Vite) and by PHP (`cc_block_defaults()`). No more
+   duplicated defaults drifting apart.
+2. **A canonical renderer** (`renderBlock.mjs`) that describes, once, in plain
+   JS, how each block becomes HTML. The PHP compiler mirrors it.
+3. **An automatic check** (`npm run test:parity`) that renders the same fixtures
+   with the JS renderer and the PHP compiler and compares **structure and
+   styles**, failing on any divergence. This is the guarantee: not "the same
+   code", but "code proven identical".
 
-Il test confronta il box e gli stili di layout (dove nascono i bug tipo
-allineamento/aspect-ratio), ignorando il testo rich-text interno (sanitizzato
-lato server) e i nodi di comportamento `<script>`/`<style>` (autoplay, media
-query), che sono di competenza di ciascun renderer.
+The test compares the box and the layout styles (where bugs such as
+alignment/aspect-ratio originate), ignoring the inner rich text (sanitized
+server-side) and the behavior nodes `<script>`/`<style>` (autoplay, media
+queries), which are each renderer's own business.
 
-Già al primo giro il test ha trovato e fatto correggere un bug reale: ICON_BOX
-aveva un attributo `style` duplicato nel compiler, che rendeva inefficace
-l'allineamento del testo.
+On its very first run the test found, and got fixed, a real bug: ICON_BOX had a
+duplicated `style` attribute in the compiler, which made the text alignment
+ineffective.
 
-Stato attuale: **19/19 blocchi in parità.**
+Current status: **19/19 blocks in parity.**
 
-## Come aggiungere/modificare un blocco mantenendo la parità
-1. Aggiorna i default in `blocks.json`.
-2. Aggiorna il rendering in `renderBlock.mjs` (JS) e in `compiler.php` (PHP).
-3. Aggiungi/aggiorna una fixture in `tests/parity.mjs`.
-4. `npm run test:parity` deve restare verde prima del commit.
+## How to add/change a block while keeping parity
+1. Update the defaults in `blocks.json`.
+2. Update the rendering in `renderBlock.mjs` (JS) and in `compiler.php` (PHP).
+3. Add/update a fixture in `tests/parity.mjs`.
+4. `npm run test:parity` must stay green before committing.
 
-## Prossimo passo
-Collegare l'editor a `renderBlock.mjs`: nello stato "non selezionato" ogni blocco
-verrà mostrato con l'HTML canonico (parità garantita con la pagina compilata),
-mantenendo gli overlay interattivi (editing testo inline, media picker, DnD)
-nello stato "selezionato". Con la parità già verificata dal test, questo passo
-diventa a basso rischio e chiuderà anche le ultime differenze di allineamento dei
-pulsanti in anteprima.
+## Next step
+Wire the editor to `renderBlock.mjs`: in the "not selected" state every block
+will be shown with the canonical HTML (parity with the compiled page
+guaranteed), while keeping the interactive overlays (inline text editing, media
+picker, DnD) in the "selected" state. With parity already verified by the test,
+this step becomes low-risk and will also close the last button-alignment
+differences in the preview.

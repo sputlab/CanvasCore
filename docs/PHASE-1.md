@@ -1,108 +1,108 @@
-# CanvasCore — Fase 1 (hardening di sicurezza)
+# CanvasCore — Phase 1 (security hardening)
 
-Questo giro chiude le falle di sicurezza rimaste dopo la Fase 0. Tutto è stato
-collaudato: sanitizer XSS, CSRF/same-origin, migrazione data dir, cambio
-password forzato, code-stripping per i non-admin, registry email dei form.
+This round closes the security holes left after Phase 0. Everything has been
+tested: XSS sanitizer, CSRF/same-origin, data dir migration, forced password
+change, code stripping for non-admins, form email registry.
 
-## 1. File NUOVI da aggiungere
+## 1. NEW files to add
 
 Backend:
-- `canvascore-admin/config.php`  ← modulo condiviso (sessione, CSRF, data dir, sanitizer)
+- `canvascore-admin/config.php`  ← shared module (session, CSRF, data dir, sanitizer)
 
 Frontend:
-- `canvascore-frontend/src/apiClient.js`                    ← wrapper fetch che inietta il token CSRF
-- `canvascore-frontend/src/components/ForcePasswordChange.jsx` ← schermata cambio password forzato
+- `canvascore-frontend/src/apiClient.js`                    ← fetch wrapper that injects the CSRF token
+- `canvascore-frontend/src/components/ForcePasswordChange.jsx` ← forced password change screen
 
-## 2. File da SOSTITUIRE
+## 2. Files to REPLACE
 
 Backend (`canvascore-admin/`)
-- `api.php`         → include config, gate CSRF, must_change_pw, change_own_password, code-strip non-admin
-- `rebuild_all.php` → usa la data dir condivisa, scrive il registry dei form
-- `compiler.php`    → sanitizza i contenuti rich-text, blinda il custom CSS, form via registry (no email nel client)
-- `submit_form.php` → destinatario solo server-side (registry per-form + fallback globale)
+- `api.php`         → includes config, CSRF gate, must_change_pw, change_own_password, code strip for non-admins
+- `rebuild_all.php` → uses the shared data dir, writes the form registry
+- `compiler.php`    → sanitizes rich-text content, locks down custom CSS, forms via registry (no email in the client)
+- `submit_form.php` → server-side recipient only (per-form registry + global fallback)
 
 Frontend (`canvascore-frontend/`)
-- `src/main.jsx`                       → importa apiClient per primo
-- `src/App.jsx`                        → gate del cambio password forzato
-- `src/store/useStore.js`              → salva csrf, must_change_pw, azione changeOwnPassword
-- `src/components/VisualEditor.jsx`    → blocco "Custom HTML" visibile solo agli admin
-- `src/components/PropertyPanel.jsx`   → pannello "Custom Code" visibile solo agli admin
+- `src/main.jsx`                       → imports apiClient first
+- `src/App.jsx`                        → forced password change gate
+- `src/store/useStore.js`              → stores csrf, must_change_pw, changeOwnPassword action
+- `src/components/VisualEditor.jsx`    → "Custom HTML" block visible to admins only
+- `src/components/PropertyPanel.jsx`   → "Custom Code" panel visible to admins only
 
-Poi:
+Then:
 
     cd canvascore-frontend && npm install && npm run build
 
-## 3. IMPORTANTE — la data dir si sposta fuori dalla webroot
+## 3. IMPORTANT — the data dir moves outside the web root
 
-Al primo caricamento, `config.php` sposta automaticamente il database e i file
-di configurazione da `canvascore-admin/data/` a **`canvascore-data/`** un livello
-SOPRA la webroot (cioè accanto a `public/`, non dentro). La migrazione:
-- copia `canvascore.sqlite`, `settings.json`, `menu.json`, `forms.json`;
-- rimuove il DB dalla vecchia posizione dentro la webroot;
-- se la cartella esterna non è scrivibile (hosting che blocca la scrittura
-  sopra la docroot), resta in `data/` con l'`.htaccess` di protezione.
+On first load, `config.php` automatically moves the database and the
+configuration files from `canvascore-admin/data/` to **`canvascore-data/`** one
+level ABOVE the web root (i.e. next to `public/`, not inside it). The migration:
+- copies `canvascore.sqlite`, `settings.json`, `menu.json`, `forms.json`;
+- removes the DB from the old location inside the web root;
+- if the outside folder isn't writable (hosting that blocks writes above the
+  docroot), it stays in `data/` with the protective `.htaccess`.
 
-Struttura risultante tipica:
+Typical resulting structure:
 
-    tuosito/
-    ├── canvascore-data/        ← DB e config, NON accessibili dal web
+    yoursite/
+    ├── canvascore-data/        ← DB and config, NOT reachable from the web
     │   └── canvascore.sqlite
-    └── public/                 ← webroot
+    └── public/                 ← web root
         ├── index.html
         ├── uploads/
         └── canvascore-admin/
 
-Se la tua webroot non è `public/` ma la radice del dominio, verifica dove
-finisce `canvascore-data/` e che non sia raggiungibile via URL.
+If your web root isn't `public/` but the domain root, check where
+`canvascore-data/` ends up and that it can't be reached via URL.
 
-## 4. Nginx — proteggere data e uploads
+## 4. Nginx — protecting data and uploads
 
-Gli `.htaccess` valgono solo su Apache. Su **Nginx** aggiungi al server block:
+The `.htaccess` files only apply on Apache. On **Nginx** add to the server block:
 
-    # Nega qualsiasi accesso diretto alla cartella dei dati (se restasse in webroot)
+    # Deny any direct access to the data folder (in case it stays in the web root)
     location ~* /canvascore-admin/data/ { deny all; return 404; }
 
-    # Blocca l'esecuzione di script caricati come "immagini"
+    # Block execution of scripts uploaded as "images"
     location ~* /uploads/.*\.(php|phtml|phar|pl|py|cgi|sh)$ { deny all; return 404; }
 
-Se `canvascore-data/` è fuori dalla webroot (default dopo la migrazione) non è
-raggiungibile via URL e la prima regola è solo una rete di sicurezza.
+If `canvascore-data/` is outside the web root (the default after the migration)
+it can't be reached via URL and the first rule is just a safety net.
 
-## 5. Cosa è stato irrobustito
+## 5. What was hardened
 
-- **CSRF**: token legato alla sessione, inviato dal client via header
-  `X-CSRF-Token` (iniettato automaticamente da `apiClient.js`). Tutte le POST
-  che modificano stato lo richiedono; in più c'è un controllo same-origin.
-  Collaudato: POST senza token → 403; Origin esterno → 403.
-- **Sessione**: cookie `HttpOnly`, `SameSite=Lax`, `Secure` in HTTPS;
-  rigenerazione dell'ID al login.
-- **Cambio password forzato**: l'admin di default (admin/admin) è obbligato a
-  impostare una nuova password (min 8 caratteri) al primo accesso. Vale anche
-  per installazioni esistenti che usano ancora admin/admin.
-- **XSS stored**: i contenuti rich-text (testo, hero, image+text, grid, cards,
-  titolo form) passano per un sanitizer allow-list che rimuove
-  `<script>`/`<iframe>`, gli handler `on*`, gli URL `javascript:` e le
-  `url(javascript:)` negli stili. Il custom CSS non può più uscire dal tag
-  `<style>`.
-- **Blocchi "codice" ristretti agli admin**: gli utenti con ruolo *editor* non
-  possono più salvare blocchi HTML o CSS custom — vengono rimossi lato server,
-  a prescindere dall'interfaccia (i pulsanti sono comunque nascosti per loro).
-- **Email dei form sicura**: il destinatario non viaggia più nel client. La
-  build scrive un registry `forms.json` (id form → email) e `submit_form.php`
-  risolve il destinatario da lì, con fallback all'email globale. Niente più
-  open relay, ma il destinatario per-form è di nuovo supportato.
+- **CSRF**: token bound to the session, sent by the client in the
+  `X-CSRF-Token` header (injected automatically by `apiClient.js`). Every POST
+  that changes state requires it; there's also a same-origin check.
+  Tested: POST without token → 403; foreign Origin → 403.
+- **Session**: `HttpOnly`, `SameSite=Lax` cookie, `Secure` over HTTPS; ID
+  regenerated on login.
+- **Forced password change**: the default admin (admin/admin) must set a new
+  password (min 8 characters) on first access. This also applies to existing
+  installations still using admin/admin.
+- **Stored XSS**: rich-text content (text, hero, image+text, grid, cards, form
+  title) goes through an allow-list sanitizer that removes
+  `<script>`/`<iframe>`, `on*` handlers, `javascript:` URLs and
+  `url(javascript:)` in styles. Custom CSS can no longer break out of the
+  `<style>` tag.
+- **"Code" blocks restricted to admins**: users with the *editor* role can no
+  longer save HTML blocks or custom CSS — they're stripped server-side,
+  regardless of the interface (the buttons are hidden for them anyway).
+- **Safe form email**: the recipient no longer travels in the client. The build
+  writes a `forms.json` registry (form id → email) and `submit_form.php`
+  resolves the recipient from there, falling back to the global email. No more
+  open relay, and per-form recipients are supported again.
 
-## 6. Note
+## 6. Notes
 
-- Il sanitizer usa `ext-dom` (DOMDocument), presente nella quasi totalità degli
-  hosting PHP. In sua assenza c'è un fallback a regex più conservativo.
-- Il blocco "HTML" resta uno strumento potente per gli **admin** (come il
-  Custom HTML di WordPress / il widget HTML di Elementor): è codice fidato per
-  definizione. Per questo è riservato agli admin e precluso agli editor.
+- The sanitizer uses `ext-dom` (DOMDocument), available on virtually all PHP
+  hosting. Without it there's a more conservative regex fallback.
+- The "HTML" block remains a powerful tool for **admins** (like WordPress's
+  Custom HTML / Elementor's HTML widget): it is trusted code by definition. For
+  this reason it's reserved for admins and unavailable to editors.
 
-## 7. Prossimi passi (Fase 2 — fondamenta per scalare)
+## 7. Next steps (Phase 2 — foundations for scaling)
 
-Non sicurezza, ma debito tecnico da ripagare prima di aggiungere molte feature:
-design token + libreria UI (via gli stili inline), schema di blocco unico con
-rendering condiviso editor/compiler (oggi duplicato), code-splitting del bundle,
-versioni dipendenze riproducibili, LICENSE + README + test.
+Not security, but technical debt to pay off before adding many features:
+design tokens + UI library (replacing inline styles), a single block schema with
+rendering shared between editor and compiler (duplicated today), bundle
+code-splitting, reproducible dependency versions, LICENSE + README + tests.

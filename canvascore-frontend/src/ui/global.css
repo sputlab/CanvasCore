@@ -1,6 +1,6 @@
-/* CanvasCore — base UI globale (premium, densa, sicura).
-   NB: niente regole su elementi generici (button/input/a/h1...) per non alterare
-   l'anteprima del canvas, che renderizza l'HTML reale dei blocchi. */
+/* CanvasCore — global base UI (premium, dense, safe).
+   NB: no rules on generic elements (button/input/a/h1...) so as not to alter
+   the canvas preview, which renders the blocks' real HTML. */
 
 :root {
   /* Palette admin */
@@ -18,7 +18,7 @@
   --cc-accent-2: #3b82f6;
   --cc-danger: #ef4444;
 
-  /* Scala di spaziatura compatta (densa) */
+  /* Compact (dense) spacing scale */
   --cc-xs: 4px;
   --cc-sm: 8px;
   --cc-md: 12px;
@@ -39,7 +39,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Scrollbar sottili e discrete (premium) */
+/* Thin, unobtrusive scrollbars (premium) */
 * { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -53,6 +53,6 @@ body {
 
 ::selection { background: rgba(56, 189, 248, 0.28); }
 
-/* Ingresso morbido dell'app */
+/* Soft app entrance */
 #root { animation: ccFadeIn 0.25s ease both; }
 @keyframes ccFadeIn { from { opacity: 0; } to { opacity: 1; } }

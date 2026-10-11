@@ -8,12 +8,12 @@ import { renderBlock, blockRoot } from '../render/renderBlock.mjs';
 
 const EDITABLE = ['TEXT', 'HERO', 'IMAGE_TEXT', 'FORM', 'HTML'];
 const CONTAINERS = ['SECTION', 'CONTAINER', 'FLEX_ROW', 'CSS_GRID'];
-// Blocchi il cui HTML canonico e' interattivo anche nel canvas (details/radio nativi, senza JS):
-// il click apre/cambia tab E seleziona il blocco (l'evento risale alla cornice).
+// Blocks whose canonical HTML is interactive in the canvas too (native details/radio, no JS):
+// a click opens/switches the tab AND selects the block (the event bubbles up to the frame).
 const INTERACTIVE = ['ACCORDION', 'TABS', 'BEFORE_AFTER'];
 
-// Proprietà che definiscono come il blocco si DIMENSIONA/POSIZIONA come item del genitore:
-// vanno sulla cornice (così flex/grid si comportano come nel sito), non duplicate nel contenuto.
+// Properties that define how the block is SIZED/POSITIONED as an item of its parent:
+// they go on the frame (so flex/grid behave as on the site), not duplicated in the content.
 const SIZING_KEYS = ['width', 'maxWidth', 'minWidth', 'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'gridColumn', 'gridRow', 'order'];
 
 function splitStyles(styles = {}) {
@@ -23,7 +23,7 @@ function splitStyles(styles = {}) {
     if (styles[k] !== undefined && styles[k] !== '') outer[k] = styles[k];
     delete inner[k];
   }
-  // Il contenuto riempie la cornice (height/minHeight restano intrinseche al blocco)
+  // The content fills the frame (height/minHeight stay intrinsic to the block)
   inner.width = '100%';
   inner.margin = '0';
   if (styles.maxWidth !== undefined) inner.maxWidth = 'none';
@@ -50,7 +50,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     disabled: isMasterPreview,
   });
 
-  // Animazione slider (fade/slide) nell'editor: pilota il DOM canonico iniettato
+  // Slider animation (fade/slide) in the editor: drives the injected canonical DOM
   const sliderRef = useRef(null);
   useEffect(() => {
     if (block.type !== 'SLIDER') return;
@@ -73,8 +73,8 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     return () => clearInterval(id);
   }, [block]);
 
-  // Prima/Dopo: nell'editor gli <script> dell'HTML iniettato non girano, quindi si collega il cursore qui
-  // (stesso comportamento dello script pubblicato: il cursore imposta --pos).
+  // Before/After: in the editor the injected HTML's <script>s don't run, so the slider is wired up here
+  // (same behavior as the published script: the slider sets --pos).
   const baRef = useRef(null);
   useEffect(() => {
     if (block.type !== 'BEFORE_AFTER') return undefined;
@@ -99,7 +99,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
   const { outer, inner } = splitStyles(block.styles || {});
   const innerBlock = { ...block, styles: inner };
 
-  // Cornice: neutra + proprietà di sizing/posizionamento (si comporta come l'item nel genitore)
+  // Frame: neutral + sizing/positioning properties (behaves like the item in its parent)
   const wrapperStyle = {
     position: 'relative',
     transform: CSS.Translate.toString(transform),
@@ -152,7 +152,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
       );
     }
 
-    // COLLECTION_LIST: blocco dinamico (le voci reali le inserisce il compiler in build)
+    // COLLECTION_LIST: dynamic block (the compiler inserts the real items at build time)
     if (block.type === 'COLLECTION_LIST') {
       const c = block.content || {};
       const cols = Math.max(1, parseInt(c.columns, 10) || 3);
@@ -179,7 +179,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
       );
     }
 
-    // CONTAINER: radice canonica (con sizing neutralizzato) + figli React interattivi
+    // CONTAINER: canonical root (with sizing neutralized) + interactive React children
     if (CONTAINERS.includes(block.type)) {
       const r = blockRoot(innerBlock);
       const style = { ...r.style, boxSizing: 'border-box' };
@@ -192,7 +192,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
       return React.createElement(r.tag, { id: r.id, className: r.className, style }, children);
     }
 
-    // EDITABILI selezionati: editing inline
+    // Selected EDITABLE blocks: inline editing
     if (EDITABLE.includes(block.type) && isSelected && !isMasterPreview) {
       const box = { boxSizing: 'border-box', width: '100%' };
       if (block.type === 'TEXT') {
@@ -242,14 +242,14 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
       }
     }
 
-    // SLIDER: HTML canonico + animazione pilotata via ref
+    // SLIDER: canonical HTML + animation driven via ref
     if (block.type === 'SLIDER') {
       return (
         <div ref={sliderRef} style={{ pointerEvents: isMasterPreview ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: canonicalHtml(innerBlock) }} />
       );
     }
 
-    // Tutto il resto (ed editabili non selezionati): HTML canonico = identico al sito
+    // Everything else (and unselected editables): canonical HTML = identical to the site
     return (
       <div ref={block.type === 'BEFORE_AFTER' ? baRef : undefined} style={{ pointerEvents: (isMasterPreview || INTERACTIVE.includes(block.type)) ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: canonicalHtml(innerBlock) }} />
     );

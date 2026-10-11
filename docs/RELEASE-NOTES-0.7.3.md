@@ -1,29 +1,29 @@
 # CanvasCore 0.7.3 — UI refresh pass 2: editor
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Frontend: `src/components/VisualEditor.jsx`, `src/components/PropertyPanel.jsx`
 Backend: `canvascore-admin/version.json`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-## Cosa cambia nell'editor
-- **Blocchi in griglia 2 colonne**: il pannello "ADD" mostra ora i blocchi come
-  tile compatte (icona + etichetta breve), molto più dense e ordinate. Si vede
-  più roba senza scrollare.
-- **Pannelli più stretti** (sinistra 250px, destra 300px) → più spazio al canvas,
-  utile sui 14".
-- **Spaziature ridotte** ovunque: barra fluttuante, accordion, header del pannello
-  proprietà, barra Save/Publish, e meno padding attorno al canvas.
-- Etichette dei blocchi accorciate per leggibilità.
+## What changes in the editor
+- **Blocks in a 2-column grid**: the "ADD" panel now shows blocks as compact
+  tiles (icon + short label), much denser and tidier. You see more without
+  scrolling.
+- **Narrower panels** (left 250px, right 300px) → more room for the canvas,
+  useful on 14" screens.
+- **Reduced spacing** everywhere: floating bar, accordions, property panel
+  header, Save/Publish bar, and less padding around the canvas.
+- Block labels shortened for readability.
 
-## Importante
-Il **rendering dei blocchi nel canvas non è stato toccato** (è sotto test di
-parità): è cambiata solo la "cornice" dell'editor. L'anteprima resta identica al
-sito pubblicato.
+## Important
+The **rendering of blocks in the canvas has not been touched** (it is under the
+parity test): only the editor's "frame" has changed. The preview stays identical
+to the published site.
 
-## Da validare
-Apri l'editor e guarda: la griglia dei blocchi, la larghezza dei pannelli e la
-densità generale. Dimmi se è il punto giusto o se stringere/allargare. Se ti
-convince, la pass UI è sostanzialmente completa e possiamo passare allo **Step A**
-(licenza + installer + docs) per sigillare il progetto, oppure rifinire altre
-schermate.
+## To validate
+Open the editor and look at: the block grid, the panel widths and the overall
+density. Tell me whether it's the right balance or whether to tighten/loosen.
+If you're convinced, the UI pass is essentially complete and we can move on to
+**Step A** (license + installer + docs) to seal the project, or polish other
+screens.

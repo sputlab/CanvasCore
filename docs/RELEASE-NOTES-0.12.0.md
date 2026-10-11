@@ -1,61 +1,62 @@
-# CanvasCore 0.12.0 — Sessione scaduta: il lavoro è al sicuro
+# CanvasCore 0.12.0 — Session expired: your work is safe
 
-## Cosa risolve
-Prima, se la sessione scadeva mentre lavoravi, non succedeva nulla finché non provavi a salvare; a
-quel punto "Draft saved!" poteva comparire anche se non era stato salvato nulla, oppure venivi
-riportato al login perdendo lo stato. Ora:
+## What it fixes
+Before, if the session expired while you were working, nothing happened until you tried to save; at
+that point "Draft saved!" could appear even though nothing had been saved, or you were taken back to
+the login and lost your state. Now:
 
-1. **La scadenza è prevedibile**: il server la impone dopo N minuti di inattività (default 30).
-   Lavorare nell'interfaccia conta come attività.
-2. **Te ne accorgi subito**, non al salvataggio: anche tornando su una scheda rimasta in background.
-   Poco prima della scadenza compare un avviso con "Stay signed in".
-3. **Il login compare sopra l'app**, che resta intatta: dopo l'accesso riprendi esattamente da dove eri.
-4. **Il salvataggio interrotto viene completato** da solo dopo il login (una volta sola).
-5. **Backup locale** automatico del lavoro non salvato: anche con refresh o scheda chiusa lo ritrovi
+1. **Expiry is predictable**: the server enforces it after N minutes of inactivity (default 30).
+   Working in the interface counts as activity.
+2. **You notice straight away**, not when saving: even when returning to a tab left in the background.
+   Shortly before expiry a notice appears with "Stay signed in".
+3. **The login appears on top of the app**, which stays intact: after signing in you pick up exactly
+   where you were.
+4. **The interrupted save is completed** by itself after login (only once).
+5. **Automatic local backup** of unsaved work: even after a refresh or a closed tab you get it back
    ("Unsaved work found" → Restore/Discard).
-6. **Niente più falsi successi**: l'esito di Save/Publish è quello reale.
+6. **No more false successes**: the outcome of Save/Publish is the real one.
 
-## File NUOVI
+## NEW files
 - `canvascore-frontend/src/session/` (drafts, draftTrackers, sessionManager, fetchGuard, runtime, hooks)
 - `src/components/` SessionExpiredOverlay, SessionWarning, DraftRestorePrompt, EditorDraftStatus
 - `tests/session.mjs`, `tests/session-ui.mjs`, `tests/stubs/jodit-react.jsx`
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Backend: `canvascore-admin/config.php`, `api.php`, `rebuild_all.php`, `version.json`
 Frontend: `package.json`, `src/apiClient.js`, `src/App.jsx`, `src/store/useStore.js`,
 `src/components/Login.jsx`, `VisualEditor.jsx`, `MenuBuilder.jsx`, `GlobalSettings.jsx`
-Più `CHANGELOG.md`.
+Plus `CHANGELOG.md`.
 
 ```
 cd canvascore-frontend
-npm install     # nessuna nuova dipendenza rispetto alla 0.11.0 (jsdom c'era già)
+npm install     # no new dependencies compared with 0.11.0 (jsdom was already there)
 npm run build
 npm test
 ```
-Nessuna migrazione DB.
+No DB migration.
 
-## Da sapere prima di aggiornare
-- **Tutti gli utenti dovranno rifare il login una volta**: le sessioni passano in una cartella dedicata
-  (`<data dir>/sessions`, permessi 0700). Su Nginx la data dir va già protetta come da istruzioni
-  precedenti; non servono regole nuove.
-- **Timeout**: Global Options → Security → "Session timeout" (5–720 minuti).
-- I backup stanno nel browser, **per utente**: non seguono l'utente su un altro dispositivo e si
-  eliminano dopo 14 giorni. Se il browser blocca il localStorage o è pieno, l'interfaccia lo segnala
-  (in quel caso non chiudere la scheda: il lavoro è ancora nella finestra).
-- Non c'è rilevamento di conflitti: se un'altra persona modifica la stessa pagina nel frattempo,
-  vince l'ultimo salvataggio (come già prima).
-- Se alla scadenza accede un utente diverso, la scheda si ricarica da zero e non esegue nulla a suo nome.
+## Before you update
+- **All users will have to log in again once**: sessions move to a dedicated folder
+  (`<data dir>/sessions`, permissions 0700). On Nginx the data dir should already be protected as per
+  the earlier instructions; no new rules are needed.
+- **Timeout**: Global Options → Security → "Session timeout" (5–720 minutes).
+- Backups live in the browser, **per user**: they don't follow the user to another device and are
+  deleted after 14 days. If the browser blocks localStorage or it is full, the interface says so
+  (in that case don't close the tab: the work is still in the window).
+- There is no conflict detection: if someone else edits the same page in the meantime,
+  the last save wins (as before).
+- If a different user signs in at expiry, the tab reloads from scratch and does nothing on their behalf.
 
-## Come è stato verificato
-- Server, sul vero `api.php` con orologio simulato: scadenza esatta (1799 s sì, 1801 s no), `session_status`
-  che non allunga la sessione, `keepalive`, 401 prima di CSRF, timeout configurabile e limitato.
-- Client: 150 controlli su backup, tracker, gestore (ore di sessione simulate), guardia sulle fetch.
-- Integrazione: la vera `App` in jsdom contro un backend finto (49 controlli): scrivo, la sessione scade,
-  premo Save → login sopra l'app → ri-login → il salvataggio avviene una sola volta con il token nuovo.
-- **Test di mutazione**: bug piantati di proposito, tutti rilevati. Ha rivelato difetti nei miei stessi
-  test e un bug reale (il lavoro di un utente poteva finire nel backup di un altro).
+## How it was verified
+- Server, on the real `api.php` with a simulated clock: exact expiry (1799 s yes, 1801 s no), `session_status`
+  not extending the session, `keepalive`, 401 before CSRF, configurable and bounded timeout.
+- Client: 150 checks on backups, trackers, the manager (hours of simulated session), the fetch guard.
+- Integration: the real `App` in jsdom against a fake backend (49 checks): I type, the session expires,
+  I press Save → login on top of the app → re-login → the save happens exactly once with the new token.
+- **Mutation testing**: bugs planted on purpose, all caught. It revealed flaws in my own tests and a
+  real bug (one user's work could end up in another user's backup).
 
-## Non verificato
-L'aspetto reale in un browser vero (in particolare il comportamento dell'attributo `inert` che blocca
-l'app dietro il login) e l'esecuzione su un hosting reale. Prova in particolare: lascia una scheda ferma
-oltre il timeout, poi tornaci e premi Save.
+## Not verified
+The real look in an actual browser (in particular the behavior of the `inert` attribute that blocks
+the app behind the login) and running on real hosting. In particular, try this: leave a tab idle past
+the timeout, then come back to it and press Save.

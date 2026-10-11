@@ -1,29 +1,29 @@
-# CanvasCore 0.3.1 — fix e rifiniture Menu Builder
+# CanvasCore 0.3.1 — Menu Builder fixes and polish
 
-## File da sostituire
+## Files to replace
 Backend: `canvascore-admin/compiler.php`, `api.php`, `version.json`
 Frontend: `src/components/MenuBuilder.jsx`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-## Bug risolti
-1. **Colori del menu** (testo, testo/sfondo in hover) non cambiavano: erano
-   sovrascritti da regole globali del template a specificità più alta. Ora le
-   regole del menu sono prefissate con `.cc-navigation` e vincono.
-2. **Sticky** non funzionante: `body { overflow-x: clip }` del template rompe
-   `position: sticky`. Il menu sticky ora usa `position: fixed` e resta in alto
-   (con compensazione automatica dell'altezza del contenuto).
-3. **Glare** tagliava i sottomenu: ora il bagliore è su un overlay dedicato
-   clippato solo alla barra; i dropdown non vengono più tagliati.
+## Bugs fixed
+1. **Menu colors** (text, hover text/background) did not change: they were
+   overridden by global template rules with higher specificity. The menu rules
+   are now prefixed with `.cc-navigation` and win.
+2. **Sticky** not working: the template's `body { overflow-x: clip }` breaks
+   `position: sticky`. The sticky menu now uses `position: fixed` and stays at
+   the top (with automatic compensation for the content height).
+3. **Glare** clipped the submenus: the glow now lives on a dedicated overlay
+   clipped to the bar only; dropdowns are no longer cut off.
 
-## Aggiunte
-- **Item border**: menu a tendina con preset (none/thin/solid/dashed/dotted) +
+## Additions
+- **Item border**: dropdown with presets (none/thin/solid/dashed/dotted) +
   Custom.
-- **Item radius**: regolabile con le frecce ↑/↓ della tastiera.
-- **Logo**: oltre a incollare l'URL, ora puoi **caricare** l'immagine con un
-  pulsante; il file viene salvato in /uploads ed è quindi disponibile nel
-  Media Manager. L'endpoint di upload ora restituisce l'URL del file.
+- **Item radius**: adjustable with the ↑/↓ arrow keys.
+- **Logo**: besides pasting the URL, you can now **upload** the image with a
+  button; the file is saved in /uploads and is therefore available in the
+  Media Manager. The upload endpoint now returns the file URL.
 
-## Nota
-Dopo l'aggiornamento, hard refresh (Ctrl/Cmd+Shift+R). Se avevi un menu già
-salvato, riaprilo e salvalo di nuovo per applicare i fix di stile.
+## Note
+After updating, hard refresh (Ctrl/Cmd+Shift+R). If you already had a saved
+menu, open it and save it again to apply the style fixes.

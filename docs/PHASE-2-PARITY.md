@@ -1,75 +1,75 @@
-# CanvasCore — Fase 2 (pass 1): parità editor ↔ pagina compilata
+# CanvasCore — Phase 2 (pass 1): editor ↔ compiled page parity
 
-Obiettivo: ridurre le discrepanze tra il canvas editor (React, `SortableBlock.jsx`)
-e la pagina compilata (PHP, `compiler.php`). Questo è il primo passo verso lo
-schema di blocco unico.
+Goal: reduce the discrepancies between the editor canvas (React, `SortableBlock.jsx`)
+and the compiled page (PHP, `compiler.php`). This is the first step towards the
+single block schema.
 
-## File da sostituire
+## Files to replace
 Backend: `canvascore-admin/compiler.php`
 Frontend: `src/components/SortableBlock.jsx`, `src/components/PropertyPanel.jsx`
-→ poi `npm run build`.
+→ then `npm run build`.
 
-Nessun cambio di formato dati: `content_schema` resta 1 (i nuovi campi
-`aspectRatio` / `objectPosition` sono opzionali, con default retrocompatibili).
+No data format change: `content_schema` stays 1 (the new `aspectRatio` /
+`objectPosition` fields are optional, with backward-compatible defaults).
 
-## Anomalie segnalate — risolte
+## Reported issues — resolved
 
-### 1. Bottone: allineamento assente/diverso e padding/bordi ignorati
-Causa doppia:
-- **Strutture diverse.** Il compiler allineava col contenitore (`text-align`) e un
-  bottone `inline-block` (giusto); l'editor rendeva un bottone a tutta larghezza
-  con gli stili applicati due volte, quindi l'allineamento non aveva effetto.
-- **Ordine degli stili.** Con `useGlobal` attivo (default) il compiler aggiungeva
-  gli stili globali *dopo* i tuoi, sovrascrivendo padding/bordi modificati.
+### 1. Button: missing/different alignment and ignored padding/borders
+Two causes:
+- **Different structures.** The compiler aligned via the container
+  (`text-align`) and an `inline-block` button (correct); the editor rendered a
+  full-width button with the styles applied twice, so alignment had no effect.
+- **Style order.** With `useGlobal` on (the default) the compiler added the
+  global styles *after* yours, overriding edited padding/borders.
 
-Correzione (identica nei due renderer): contenitore con `text-align` + `margin`,
-bottone `inline-block`; stili globali applicati **prima**, stili utente **dopo**
-(quindi vincono). Margin e text-align non vengono più applicati due volte.
+Fix (identical in both renderers): container with `text-align` + `margin`,
+`inline-block` button; global styles applied **first**, user styles **after**
+(so they win). Margin and text-align are no longer applied twice.
 
-### 2. Slider/immagini: il rapporto della prima immagine vincolava le altre
-Causa: gli slide avevano `height:auto`, quindi l'altezza del box la dettava la
-prima immagine.
+### 2. Slider/images: the first image's ratio constrained the others
+Cause: slides had `height:auto`, so the first image dictated the box height.
 
-Correzione: lo slider ora ha un **box con rapporto definito** (`aspect-ratio`,
-default 16:9, configurabile) e ogni immagine lo riempie con `object-fit:cover` +
-`object-position`. Così tutte le immagini mostrano lo stesso riquadro con lo zoom
-corretto, a prescindere dal loro rapporto. Se imposti un'altezza esplicita sul
-blocco, quella ha la precedenza sul rapporto.
+Fix: the slider now has a **box with a defined ratio** (`aspect-ratio`, default
+16:9, configurable) and every image fills it with `object-fit:cover` +
+`object-position`. This way all images show the same frame with the correct
+zoom, whatever their own ratio. If you set an explicit height on the block, it
+takes precedence over the ratio.
 
-Anche il blocco **IMAGE** ora ha `aspectRatio` (default Auto) + `object-position`,
-così una singola immagine può essere inquadrata/zoomata in modo coerente.
+The **IMAGE** block now also has `aspectRatio` (default Auto) +
+`object-position`, so a single image can be framed/zoomed consistently.
 
-Nuovi controlli nel pannello: Aspect Ratio, Image Fit, Focus/Object Position per
-Slider e Immagine.
+New panel controls: Aspect Ratio, Image Fit, Focus/Object Position for Slider
+and Image.
 
-## Altre divergenze trovate nell'audit e sistemate
-- **VIDEO**: l'editor usava uno split ingenuo dell'URL; ora usa lo stesso parsing
-  robusto del compiler (YouTube/Vimeo), quindi l'anteprima coincide.
-- **HERO**: il `min-height` in anteprima finiva solo sul wrapper esterno, non sul
-  contenitore flex che centra verticalmente; ora è applicato come nel compiler.
+## Other divergences found in the audit and fixed
+- **VIDEO**: the editor used a naive URL split; it now uses the same robust
+  parsing as the compiler (YouTube/Vimeo), so the preview matches.
+- **HERO**: the preview's `min-height` ended up only on the outer wrapper, not on
+  the flex container that centers vertically; it's now applied as in the
+  compiler.
 
-## Verificato
-- `box-sizing: border-box` globale già presente in `master.html`: padding e
-  larghezze si calcolano allo stesso modo nei due renderer (nessuna divergenza).
-- Tutti i 19 tipi di blocco vengono renderizzati dal compiler senza errori.
-- Build del frontend pulita.
+## Verified
+- Global `box-sizing: border-box` already present in `master.html`: padding and
+  widths are computed the same way in both renderers (no divergence).
+- All 19 block types are rendered by the compiler without errors.
+- Clean frontend build.
 
-## Divergenze residue (per-anteprima, accettabili)
-Alcuni blocchi, per natura, mostrano un'anteprima nell'editor diversa dall'output
-finale, senza impatto sul risultato pubblicato:
-- **MAPS**: in editor un segnaposto, in pagina l'iframe reale di Google Maps.
-- **FORM**: in editor campi disabilitati (anteprima), in pagina il form reale.
-- **VIDEO**: in editor l'anteprima ha i click disabilitati.
+## Remaining divergences (preview-only, acceptable)
+Some blocks, by their nature, show a preview in the editor that differs from the
+final output, with no impact on the published result:
+- **MAPS**: a placeholder in the editor, the real Google Maps iframe on the page.
+- **FORM**: disabled fields in the editor (preview), the real form on the page.
+- **VIDEO**: clicks are disabled in the editor preview.
 
-## Prossimo passo (pass 2): schema di blocco unico
-Resta una divergenza strutturale di fondo: l'editor usa un wrapper per il drag &
-drop che porta width/margin, mentre il compiler applica tutti gli stili a un
-singolo elemento. Oggi i due risultati coincidono (grazie a `box-sizing` globale e
-agli allineamenti sopra), ma ogni blocco nuovo richiede ancora due implementazioni
-da tenere sincronizzate a mano.
+## Next step (pass 2): single block schema
+One underlying structural divergence remains: the editor uses a drag & drop
+wrapper that carries width/margin, while the compiler applies all styles to a
+single element. Today the two results match (thanks to global `box-sizing` and
+the alignments above), but every new block still needs two implementations kept
+in sync by hand.
 
-Il pass 2 introdurrà un **contratto di rendering unico**: una descrizione del
-blocco (tipo + stile root + markup interno) condivisa, da cui editor e compiler
-producono lo stesso HTML per costruzione, con una suite di test che confronta i
-due output blocco per blocco. Sarà anche il primo candidato per una migrazione
-`content_schema` → 2.
+Pass 2 will introduce a **single rendering contract**: a shared block description
+(type + root style + inner markup) from which editor and compiler produce the
+same HTML by construction, with a test suite comparing the two outputs block by
+block. It will also be the first candidate for a `content_schema` → 2
+migration.

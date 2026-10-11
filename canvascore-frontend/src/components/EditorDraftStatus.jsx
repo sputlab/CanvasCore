@@ -2,7 +2,7 @@ import React from 'react';
 import { CheckCircle2, CloudOff, ShieldCheck } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
-// Stato del salvataggio nell'editor: l'utente deve sempre sapere se c'e' lavoro non salvato e se e' al sicuro.
+// Save status in the editor: the user must always know whether there is unsaved work and whether it is safe.
 export default function EditorDraftStatus() {
   const dirty = useStore((s) => s.editorDirty);
   const failed = useStore((s) => s.draftBackupFailed);

@@ -10,7 +10,7 @@ export default function GlobalSettings() {
   const { setView, publishSiteAsync, setActivePage, setBlocks, setSelectedBlockId } = useStore();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
-  // Backup locale del lavoro non salvato (vedi src/session/)
+  // Local backup of unsaved work (see src/session/)
   const draft = useDraftSync('settings', settings);
   const [restoredAt, setRestoredAt] = useState(null);
 
@@ -19,7 +19,7 @@ export default function GlobalSettings() {
       .then(res => res.json())
       .then(data => {
         const server = { ...DEFAULT_SETTINGS, ...(data && typeof data === 'object' ? data : {}) };
-        const pending = draft.loaded(server);            // bozza locale non salvata (sessione scaduta, refresh...)
+        const pending = draft.loaded(server);            // unsaved local draft (expired session, refresh...)
         setSettings(pending ? pending.value : server);
         if (pending) setRestoredAt(pending.savedAt);
       })
@@ -94,7 +94,7 @@ export default function GlobalSettings() {
       )}
 
       <div style={{ display: 'grid', gap: '30px' }}>
-        {/* STILE E BRAND */}
+        {/* STYLE AND BRAND */}
         <div style={{ background: '#1e293b', borderRadius: '12px', border: '1px solid #334155', padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><Palette size={18} color="#f472b6"/> Visual & Brand</h3>
           <div>
@@ -183,7 +183,7 @@ export default function GlobalSettings() {
           ))}
         </div>
 
-        {/* SEO E SITO */}
+        {/* SEO AND SITE */}
         <div style={{ background: '#1e293b', borderRadius: '12px', border: '1px solid #334155', padding: '30px' }}>
           <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><Globe size={18} color="#10b981"/> SEO & Identity</h3>
           <label style={labelStyle}>Site Title Suffix (e.g. " | My Site")</label>

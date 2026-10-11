@@ -1,40 +1,40 @@
-# CanvasCore 0.7.0 — SEO/pubblicazione + Form avanzati
+# CanvasCore 0.7.0 — SEO/publishing + advanced Forms
 
-## File NUOVI
+## NEW files
 - `canvascore-frontend/src/components/Submissions.jsx`
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Backend: `canvascore-admin/api.php`, `rebuild_all.php`, `compiler.php`,
 `submit_form.php`, `migrations.php`, `version.json`
 Frontend: `src/App.jsx`, `src/render/renderBlock.mjs`,
 `src/components/PageManager.jsx`, `GlobalSettings.jsx`, `PropertyPanel.jsx`,
 `VisualEditor.jsx`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-## Migrazione DB (automatica)
-Questa release porta lo schema DB a **v2** (colonna `seo_image` + tabella
-`form_submissions`). La migrazione gira da sola al primo caricamento del pannello
-(verificata su DB nuovi ed esistenti, idempotente). Non devi fare nulla a mano.
+## DB migration (automatic)
+This release brings the DB schema to **v2** (`seo_image` column +
+`form_submissions` table). The migration runs by itself on the first load of the
+panel (verified on new and existing DBs, idempotent). You don't need to do
+anything by hand.
 
-## SEO & pubblicazione (punto 2)
-- Ad ogni "Publish" vengono generati `sitemap.xml`, `robots.txt`, `404.html` e un
-  `.htaccess` con `ErrorDocument` (Apache; su Nginx configura il 404 a mano).
-- Ogni pagina riceve meta OpenGraph/Twitter + favicon nel `<head>`.
-- In **Global Options** → sezione "SEO & Publishing": Site URL, Site Name,
-  Favicon URL, immagine social di default, toggle indicizzazione.
-- Nel pannello SEO di ogni pagina puoi impostare l'immagine social (OG) specifica.
-- Imposta **Site URL** per avere sitemap e og:url con URL assoluti.
+## SEO & publishing (point 2)
+- Every "Publish" generates `sitemap.xml`, `robots.txt`, `404.html` and a
+  `.htaccess` with `ErrorDocument` (Apache; on Nginx configure the 404 by hand).
+- Every page gets OpenGraph/Twitter meta tags + favicon in the `<head>`.
+- In **Global Options** → "SEO & Publishing" section: Site URL, Site Name,
+  Favicon URL, default social image, indexing toggle.
+- In each page's SEO panel you can set a page-specific social (OG) image.
+- Set **Site URL** to get absolute URLs in the sitemap and og:url.
 
-## Form avanzati (punto 3)
-- Ogni invio form viene archiviato nel database (anche senza email configurata).
-- Nuova sezione **Submissions** (solo admin) in dashboard: elenco invii, **Export
-  CSV**, elimina singolo / svuota tutto.
-- **Honeypot** anti-spam integrato: gli invii dei bot vengono scartati in
-  silenzio.
+## Advanced forms (point 3)
+- Every form submission is stored in the database (even with no email configured).
+- New **Submissions** section (admins only) in the dashboard: list of
+  submissions, **Export CSV**, delete one / clear all.
+- Built-in anti-spam **honeypot**: bot submissions are silently discarded.
 
-## Verificato
-- Migrazione v1→v2 (dati preservati, idempotente).
-- Archiviazione invii + honeypot (spam escluso) + export CSV.
-- Generazione sitemap/robots/404 + meta OG/favicon.
-- seo_image round-trip (save/get/export). Build, lint (0 errori), parità verdi.
+## Verified
+- v1→v2 migration (data preserved, idempotent).
+- Submission storage + honeypot (spam excluded) + CSV export.
+- sitemap/robots/404 generation + OG meta/favicon.
+- seo_image round trip (save/get/export). Build, lint (0 errors), parity green.

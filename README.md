@@ -1,71 +1,72 @@
 # CanvasCore
 
-CMS a blocchi che genera siti **HTML statici**: un editor visuale React (drag & drop)
-e un backend PHP + SQLite che compila le pagine in file `.html` pronti da servire.
+Block-based CMS that generates **static HTML** sites: a React visual editor (drag & drop)
+and a PHP + SQLite backend that compiles pages into `.html` files ready to serve.
 
-## Struttura
+## Structure
 
 ```
 .
-├── docs/                  Changelog, note di rilascio (LEGGIMI-x.y.z) e di fase
-├── canvascore-admin/      Backend PHP (gira sul server, nella cartella admin del sito)
-│   ├── api.php            API JSON dell'editor (auth, pagine, media, menu, utenti…)
-│   ├── compiler.php       Renderer PHP dei blocchi → HTML
-│   ├── rebuild_all.php    Pubblica l'intero sito nella cartella superiore
-│   ├── submit_form.php    Endpoint pubblico per l'invio dei form
-│   ├── install.php        Wizard di installazione (da eliminare dopo l'uso)
-│   ├── config.php         Sessione, CSRF, data dir, sanitizer HTML
-│   ├── migrations.php     Migrazioni schema DB e contenuti
-│   ├── blocks.json        Default dei blocchi (condivisi con l'editor)
-│   ├── starters.json      Template di pagina iniziali
-│   ├── master.html        Template HTML delle pagine pubblicate
-│   └── version.json       Fonte unica della versione (app, db_schema, build)
-└── canvascore-frontend/   Editor React 19 + Vite + Zustand
-    ├── src/               Componenti, store, gestione sessione, renderer JS dei blocchi
-    ├── tests/             Test di parità JS↔PHP, blocchi, sessione, pannelli
-    └── scripts/bump.mjs   Incrementa il numero di build in version.json
+├── docs/                  Changelog, release notes (RELEASE-NOTES-x.y.z.md) and phase notes (PHASE-*.md)
+├── canvascore-admin/      PHP backend (runs on the server, in the site's admin folder)
+│   ├── api.php            Editor JSON API (auth, pages, media, menu, users…)
+│   ├── compiler.php       PHP block renderer → HTML
+│   ├── rebuild_all.php    Publishes the whole site into the parent folder
+│   ├── submit_form.php    Public endpoint for form submissions
+│   ├── install.php        Setup wizard (delete after use)
+│   ├── config.php         Session, CSRF, data dir, HTML sanitizer
+│   ├── migrations.php     DB schema and content migrations
+│   ├── blocks.json        Block defaults (shared with the editor)
+│   ├── starters.json      Starter page templates
+│   ├── master.html        HTML template for published pages
+│   └── version.json       Single source of the version (app, db_schema, build)
+└── canvascore-frontend/   React 19 + Vite + Zustand editor
+    ├── src/               Components, store, session handling, JS block renderer
+    ├── tests/             JS↔PHP parity, blocks, session and panel tests
+    └── scripts/bump.mjs   Increments the build number in version.json
 ```
 
-## Requisiti
+## Requirements
 
-- Node.js ≥ 20 (sviluppato con 24) e npm
-- PHP ≥ 8 con `pdo_sqlite` (e `dom` consigliato per il sanitizer); il PHP CLI serve anche per i test
+- Node.js ≥ 20 (developed with 24) and npm
+- PHP ≥ 8 with `pdo_sqlite` (`dom` recommended for the sanitizer); the PHP CLI is also needed for the tests
 
-## Sviluppo
+## Development
 
 ```bash
 cd canvascore-frontend
 npm install
-npm run dev        # editor in sviluppo (le chiamate ad api.php richiedono un server PHP)
+npm run dev        # editor in development (calls to api.php need a PHP server)
 npm run lint       # oxlint
-npm test           # parità JS↔PHP, blocchi, contenuti, sessione, UI
-npm run build      # build in dist/ (incrementa il build in canvascore-admin/version.json)
+npm test           # JS↔PHP parity, blocks, content, session, UI
+npm run build      # build into dist/ (increments the build in canvascore-admin/version.json)
 ```
 
 ## Deploy
 
 1. `npm run build` in `canvascore-frontend/`.
-2. Carica `canvascore-admin/` sul server, dentro la webroot del sito (es. `/admin/`).
-3. Copia il contenuto di `canvascore-frontend/dist/` dentro quella cartella.
-4. Apri `install.php` nel browser (es. `https://www.example.com/admin/install.php`): verifica i requisiti
-   del server, crea il database, l'account amministratore (al posto del default `admin` / `admin`),
-   le impostazioni base e, se vuoi, una homepage da uno starter. Ti lascia già connesso all'editor.
-5. Elimina `install.php` (il wizard offre un pulsante apposito). A installazione completata
-   il file si blocca comunque da solo.
+2. Upload `canvascore-admin/` to the server, inside the site's web root (e.g. `/admin/`).
+3. Copy the contents of `canvascore-frontend/dist/` into that folder.
+4. Open `install.php` in the browser (e.g. `https://www.example.com/admin/install.php`): it checks the
+   server requirements and creates the database, the administrator account (replacing the default
+   `admin` / `admin`), the base settings and, if you like, a homepage from a starter. It leaves you
+   signed in to the editor.
+5. Delete `install.php` (the wizard offers a button for it). Once installation is complete the
+   file locks itself anyway.
 
-Senza wizard, al primo accesso l'utente è `admin` / `admin` e viene richiesto il cambio password.
+Without the wizard, the first login is `admin` / `admin` and a password change is required.
 
-Il sito pubblicato viene scritto nella cartella **sopra** `canvascore-admin/`
-(`index.html`, una cartella per slug, `sitemap.xml`, `robots.txt`, `404.html`, `uploads/`).
-I dati (DB SQLite, impostazioni, sessioni) vanno in `../../canvascore-data` se scrivibile,
-altrimenti in `canvascore-admin/data/` (protetta da `.htaccess` solo su Apache: su Nginx
-aggiungi una regola di deny).
+The published site is written to the folder **above** `canvascore-admin/`
+(`index.html`, one folder per slug, `sitemap.xml`, `robots.txt`, `404.html`, `uploads/`).
+Data (SQLite DB, settings, sessions) goes to `../../canvascore-data` if writable,
+otherwise to `canvascore-admin/data/` (protected by `.htaccess` on Apache only: on Nginx
+add a deny rule).
 
-> In locale la radice di questo repository coincide con quella webroot: il `.gitignore`
-> ignora tutto in radice tranne i file elencati esplicitamente, così l'output generato
-> non finisce mai nei commit.
+> Locally, the root of this repository is that same web root: the `.gitignore`
+> ignores everything at the root except the files listed explicitly, so generated
+> output never ends up in commits.
 
-## Versionamento
+## Versioning
 
-Versionamento semantico; la versione vive in `canvascore-admin/version.json` ed è letta
-sia dal PHP sia da Vite. Changelog e note di rilascio sono in [`docs/`](docs/CHANGELOG.md).
+Semantic versioning; the version lives in `canvascore-admin/version.json` and is read
+by both PHP and Vite. Changelog and release notes are in [`docs/`](docs/CHANGELOG.md).

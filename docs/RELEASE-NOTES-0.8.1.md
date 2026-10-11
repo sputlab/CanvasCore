@@ -1,22 +1,22 @@
-# CanvasCore 0.8.1 — abilita/disabilita ed elimina Header/Footer
+# CanvasCore 0.8.1 — enable/disable and delete Header/Footer
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Backend: `canvascore-admin/api.php`, `rebuild_all.php`, `version.json`
 Frontend: `src/components/GlobalSettings.jsx`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-## Cosa cambia
-In **Global Options** c'è una nuova sezione "Global Header & Footer" con, per
-header e footer:
-- un interruttore **Enabled** (se spento, quella parte non viene mostrata su
-  nessuna pagina, ma i blocchi restano salvati);
-- **Edit** (apre l'editor su quella parte);
-- **Delete** (elimina tutti i blocchi di quella parte — era ciò che mancava).
+## What changes
+In **Global Options** there is a new "Global Header & Footer" section with, for
+both the header and the footer:
+- an **Enabled** switch (when off, that part is not shown on any page, but its
+  blocks stay saved);
+- **Edit** (opens the editor on that part);
+- **Delete** (deletes all the blocks of that part — this was what was missing).
 
-Ricorda di salvare le Global Options dopo aver cambiato gli interruttori (il
-salvataggio ripubblica il sito). Delete ripubblica automaticamente.
+Remember to save the Global Options after changing the switches (saving
+republishes the site). Delete republishes automatically.
 
-## Verificato
-delete_part rimuove la parte; i flag enabled sopprimono correttamente il
-rendering (default = mostrati). Build e lint verdi.
+## Verified
+delete_part removes the part; the enabled flags correctly suppress rendering
+(default = shown). Build and lint green.

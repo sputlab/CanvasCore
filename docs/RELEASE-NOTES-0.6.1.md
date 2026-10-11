@@ -1,21 +1,21 @@
-# CanvasCore 0.6.1 — ritocchi richiesti
+# CanvasCore 0.6.1 — requested tweaks
 
-## File da sostituire
+## Files to replace
 Frontend: `src/components/PageManager.jsx`, `src/components/Login.jsx`,
 `src/components/PropertyPanel.jsx`
 Backend: `canvascore-admin/version.json`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-## Modifiche
-- "CanvasCore Pro" → "CanvasCore" (login) e "Custom Code (Pro)" → "Custom Code".
-- Icone Export/Import invertite nella toolbar della dashboard.
-- Nuovo pulsante ⧉ nella lista pagine per aprire la pagina pubblicata in una
-  nuova scheda. (Funziona per le pagine già pubblicate: apre `../<slug>/` o la
-  root per la homepage.)
-- Colonna azioni allargata per i tre pulsanti + hover sulle righe.
+## Changes
+- "CanvasCore Pro" → "CanvasCore" (login) and "Custom Code (Pro)" → "Custom Code".
+- Export/Import icons swapped in the dashboard toolbar.
+- New ⧉ button in the page list to open the published page in a new tab.
+  (It works for pages that are already published: it opens `../<slug>/` or the
+  root for the homepage.)
+- Actions column widened for the three buttons + hover on rows.
 
-## Nota
-Il restyle UI/UX "premium" completo (design token + libreria componenti) è un
-intervento dedicato: vedi la feature #6/#UI nella lista delle 30. Questo giro
-contiene solo ritocchi sicuri e le modifiche richieste.
+## Note
+The full "premium" UI/UX restyle (design tokens + component library) is a
+dedicated piece of work: see feature #6/#UI in the list of 30. This round
+contains only safe tweaks and the requested changes.

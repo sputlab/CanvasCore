@@ -13,13 +13,13 @@ const ago = (ts) => {
   return Math.round(h / 24) + ' d ago';
 };
 
-// All'avvio (dopo un refresh o una nuova sessione): propone di recuperare il lavoro non salvato.
+// On startup (after a refresh or a new session): offers to recover unsaved work.
 export default function DraftRestorePrompt() {
   const isAuthenticated = useStore((s) => s.isAuthenticated);
   const username = useStore((s) => s.username);
   const sessionExpired = useStore((s) => s.sessionExpired);
   const user = isAuthenticated && username ? username : null;
-  // Un solo controllo per accesso: si rilegge il backup solo quando cambia l'utente connesso.
+  // One check per sign-in: the backup is re-read only when the signed-in user changes.
   const [check, setCheck] = useState({ user: null, items: null });
   if (check.user !== user) {
     const found = user ? listDrafts(user) : [];

@@ -1,12 +1,12 @@
 <?php
 // canvascore-admin/install.php
-// Wizard di installazione: verifica dei requisiti, creazione del DB (stesse migrazioni di api.php),
-// account amministratore al posto del default admin/admin, impostazioni base del sito e
-// homepage opzionale da uno starter. A installazione completata si blocca e propone di eliminarsi.
+// Setup wizard: requirements check, DB creation (same migrations as api.php),
+// administrator account replacing the default admin/admin, basic site settings and
+// optional homepage from a starter. Once installation is complete it locks itself and offers to delete itself.
 //
-// Si considera "installato" quando:
-//   - cc_meta contiene installed_at (installazione fatta da questo wizard), oppure
-//   - esiste almeno un account diverso dal default admin/admin (installazione preesistente).
+// The site counts as "installed" when:
+//   - cc_meta contains installed_at (installation done by this wizard), or
+//   - at least one account other than the default admin/admin exists (pre-existing installation).
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
 
@@ -26,7 +26,7 @@ $site_dir = dirname(__DIR__);
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
 // ---------------------------------------------------------------------------
-// Stato dell'installazione
+// Installation state
 // ---------------------------------------------------------------------------
 function cc_install_state($db_file) {
     if (!file_exists($db_file)) return 'fresh';
@@ -51,7 +51,7 @@ function cc_is_default_admin($row) {
 }
 
 // ---------------------------------------------------------------------------
-// Requisiti: [etichetta, 'ok'|'warn'|'fail', dettaglio]
+// Requirements: [label, 'ok'|'warn'|'fail', detail]
 // ---------------------------------------------------------------------------
 function cc_dir_writable_or_creatable($dir) {
     if (is_dir($dir)) return cc_can_write($dir);
@@ -119,7 +119,7 @@ function cc_load_starters() {
     return is_array($list) ? $list : [];
 }
 
-// Rigenera gli id dei blocchi (come Templates.jsx) per evitare collisioni tra pagine.
+// Regenerate block ids (like Templates.jsx) to avoid collisions between pages.
 function cc_regen_block_ids(array $blocks) {
     static $seq = 0;
     foreach ($blocks as &$b) {
@@ -139,7 +139,7 @@ function cc_default_site_url() {
 }
 
 // ---------------------------------------------------------------------------
-// Installazione
+// Installation
 // ---------------------------------------------------------------------------
 function cc_install_validate($in, $starters) {
     $err = [];
@@ -170,12 +170,12 @@ function cc_install_validate($in, $starters) {
 function cc_run_install($db_file, $data_dir, $in, $starters) {
     $pdo = new PDO('sqlite:' . $db_file);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    cc_migrate($pdo);           // crea lo schema (e il default admin/admin, sostituito qui sotto)
+    cc_migrate($pdo);           // create the schema (and the default admin/admin, replaced below)
     cc_migrate_content($pdo);
 
     $pdo->beginTransaction();
     try {
-        // Rimuove il default admin/admin: l'unico account ammesso a questo punto.
+        // Remove the default admin/admin: the only account allowed at this point.
         $del = $pdo->prepare("DELETE FROM admin WHERE id = ?");
         foreach ($pdo->query("SELECT id, username, password_hash FROM admin")->fetchAll(PDO::FETCH_ASSOC) as $u) {
             if (cc_is_default_admin($u)) $del->execute([$u['id']]);
@@ -183,7 +183,7 @@ function cc_run_install($db_file, $data_dir, $in, $starters) {
         $pdo->prepare("INSERT INTO admin (username, password_hash, role, must_change_pw) VALUES (?, ?, 'admin', 0)")
             ->execute([$in['admin_user'], password_hash($in['admin_pass'], PASSWORD_DEFAULT)]);
 
-        // Homepage (bozza) dallo starter scelto, solo se il sito non ha ancora pagine.
+        // Homepage (draft) from the chosen starter, only if the site has no pages yet.
         $page_created = false;
         if ($in['starter'] !== '' && (int)$pdo->query("SELECT COUNT(*) FROM pages")->fetchColumn() === 0) {
             foreach ($starters as $s) {
@@ -196,7 +196,7 @@ function cc_run_install($db_file, $data_dir, $in, $starters) {
             }
         }
 
-        // Impostazioni (unite a quelle gia' presenti): scritte prima del commit, cosi' un errore annulla tutto.
+        // Settings (merged with any existing ones): written before the commit, so an error rolls everything back.
         $file = $data_dir . '/settings.json';
         $settings = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
         if (!is_array($settings)) $settings = [];
@@ -219,7 +219,7 @@ function cc_run_install($db_file, $data_dir, $in, $starters) {
     return $page_created;
 }
 
-// Accesso automatico con il nuovo account (stessa sessione di api.php?action=login).
+// Automatic sign-in with the new account (same session as api.php?action=login).
 function cc_install_login($username) {
     session_regenerate_id(true);
     $_SESSION['logged_in'] = true;
@@ -255,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $view = $state === 'installed' ? 'installed' : 'form';
         $notice = 'Your session expired. Please submit the form again.';
     } elseif (($_POST['action'] ?? '') === 'delete_installer') {
-        // Consentito solo a installazione completata: rimuove questo file dal server.
+        // Allowed only once installation is complete: removes this file from the server.
         if ($state === 'installed') {
             $view = @unlink(__FILE__) ? 'deleted' : 'installed';
             if ($view !== 'deleted') $notice = 'install.php could not be deleted automatically. Remove it from the server manually.';
@@ -282,7 +282,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Le password non vengono mai rimandate al browser.
+// Passwords are never sent back to the browser.
 $in['admin_pass'] = $in['admin_pass2'] = '';
 $version = cc_version()['app'];
 $has_failures = cc_has_failures($reqs);

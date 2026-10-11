@@ -1,57 +1,57 @@
-# CanvasCore 0.11.0 — Accordion, Tabs, Pricing, Gallery con lightbox
+# CanvasCore 0.11.0 — Accordion, Tabs, Pricing, Gallery with lightbox
 
-## File NUOVI
-- `canvascore-frontend/tests/blocks.mjs` — test comportamentali dei nuovi blocchi
+## NEW files
+- `canvascore-frontend/tests/blocks.mjs` — behavioral tests for the new blocks
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Backend: `canvascore-admin/compiler.php`, `blocks.json`, `version.json`
 Frontend: `package.json`, `src/render/renderBlock.mjs`,
 `src/components/PropertyPanel.jsx`, `SortableBlock.jsx`, `VisualEditor.jsx`,
 `tests/parity.mjs`
-Più: `CHANGELOG.md`
-→ poi:
+Plus: `CHANGELOG.md`
+→ then:
 ```
 cd canvascore-frontend
-npm install          # porta jsdom (devDependency, solo per i test)
+npm install          # brings in jsdom (devDependency, for the tests only)
 npm run build
-npm test             # parità + comportamento
+npm test             # parity + behavior
 ```
-Nessuna migrazione DB.
+No DB migration.
 
-## Come si usano
-Nel pannello ADD → PREMIUM trovi **Accordion, Tabs, Pricing, Gallery**. Selezionato
-il blocco, il pannello a destra permette di aggiungere, riordinare (↑/↓) e
-rimuovere voci/piani/immagini, e di regolare stile e layout.
+## How to use them
+In the ADD → PREMIUM panel you'll find **Accordion, Tabs, Pricing, Gallery**. With
+the block selected, the right-hand panel lets you add, reorder (↑/↓) and remove
+items/plans/images, and adjust style and layout.
 
-- **Accordion** — contenuto ricco per voce; Cards o Flat; icona; prima voce
-  aperta; esclusivo (una sola aperta) o multiplo. Il blocco **FAQ** resta per
-  domande/risposte in testo semplice.
-- **Tabs** — Underline o Pills, allineamento delle schede. Solo CSS, niente JS.
-- **Pricing** — nome, prezzo, periodo, descrizione, funzionalità (una per riga),
-  pulsante (URL, `mailto:` o "Link to a page…"), piano evidenziato con badge.
-  Colonne automatiche (max 4); su mobile i piani si impilano.
-- **Gallery** — Grid (miniature uniformi, rapporto a scelta) o Masonry; 1–6
-  colonne; gap; didascalie; lightbox (←/→/Esc, swipe, click sullo sfondo).
-  Aggiungi le immagini dal Media Manager ("+ Add image from media").
+- **Accordion** — rich content per item; Cards or Flat; icon; first item open;
+  exclusive (only one open) or multiple. The **FAQ** block remains for
+  plain-text questions/answers.
+- **Tabs** — Underline or Pills, tab alignment. CSS only, no JS.
+- **Pricing** — name, price, period, description, features (one per line),
+  button (URL, `mailto:` or "Link to a page…"), highlighted plan with badge.
+  Automatic columns (max 4); on mobile the plans stack.
+- **Gallery** — Grid (uniform thumbnails, choice of ratio) or Masonry; 1–6
+  columns; gap; captions; lightbox (←/→/Esc, swipe, click on the backdrop).
+  Add images from the Media Manager ("+ Add image from media").
 
-## Cose da sapere (onestà)
-- Il contenuto dei pannelli Accordion/Tabs si scrive come **testo/HTML** nel
-  pannello laterale (come Grid/Cards), non con l'editor visuale inline.
-- I Tabs sono radio+label in CSS: si navigano con le frecce da tastiera, ma non
-  implementano il pattern ARIA "tabs" completo (ho evitato i ruoli finti).
-- Nell'editor la lightbox non si apre (è un comportamento della pagina
-  pubblicata); Accordion e Tabs invece sono interattivi anche nel canvas.
-- Il Pricing non ha ancora un selettore mensile/annuale.
+## Things to know (being honest)
+- The content of Accordion/Tabs panels is written as **text/HTML** in the side
+  panel (like Grid/Cards), not with the inline visual editor.
+- Tabs are radio+label in CSS: they can be navigated with the keyboard arrows,
+  but they don't implement the full ARIA "tabs" pattern (I avoided fake roles).
+- In the editor the lightbox doesn't open (it is a behavior of the published
+  page); Accordion and Tabs, however, are interactive in the canvas too.
+- Pricing doesn't have a monthly/yearly switch yet.
 
-## Verificato
-- Parità editor↔compiler (inclusi i default reali di `blocks.json`), con
-  confronto anche dei tag `<style>` per questi blocchi.
-- Test comportamentali: Tabs (la CSS mostra esattamente il pannello/tab k),
-  lightbox in jsdom (apri, avanti/indietro con loop, Esc, sfondo, due gallerie
-  nella stessa pagina), sanificazione, accordion esclusivo/multiplo, URL Pricing.
-- **Test di mutazione**: ho piantato bug di proposito nel compiler (tab sbagliati,
-  Esc rotto, contenuto non sanificato) e i test li hanno rilevati. Così è emerso
-  e corretto un difetto nel mio stesso test dei Tabs.
-- Pagina finale compilata (con `master.html`) caricata in jsdom: blocchi presenti,
-  nessun segnaposto non risolto, lightbox funzionante.
-- Build e lint (0 errori).
+## Verified
+- Editor↔compiler parity (including the real defaults from `blocks.json`), also
+  comparing the `<style>` tags for these blocks.
+- Behavioral tests: Tabs (the CSS shows exactly panel/tab k), lightbox in jsdom
+  (open, next/previous with looping, Esc, backdrop, two galleries on the same
+  page), sanitization, exclusive/multiple accordion, Pricing URLs.
+- **Mutation testing**: I deliberately planted bugs in the compiler (wrong tabs,
+  broken Esc, unsanitized content) and the tests caught them. This surfaced and
+  fixed a flaw in my own Tabs test.
+- Final compiled page (with `master.html`) loaded in jsdom: blocks present, no
+  unresolved placeholders, lightbox working.
+- Build and lint (0 errors).

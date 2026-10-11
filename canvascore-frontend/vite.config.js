@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-// Unica fonte di verità: canvascore-admin/version.json e blocks.json (lato PHP).
+// Single source of truth: canvascore-admin/version.json and blocks.json (PHP side).
 function readJson(rel, fallback) {
   try { return JSON.parse(readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf-8')) }
   catch { return fallback }

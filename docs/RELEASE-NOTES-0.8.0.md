@@ -1,29 +1,30 @@
-# CanvasCore 0.8.0 — Header/Footer globali
+# CanvasCore 0.8.0 — Global Header/Footer
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Backend: `canvascore-admin/api.php`, `rebuild_all.php`, `migrations.php`,
 `version.json`
 Frontend: `src/components/VisualEditor.jsx`, `src/components/PageManager.jsx`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-## Migrazione DB (automatica)
-Schema DB → **v3** (tabella `site_parts`). Si applica da sola al primo caricamento
-del pannello. Verificata su DB nuovi ed esistenti.
+## DB migration (automatic)
+DB schema → **v3** (`site_parts` table). It applies itself on the first load of
+the panel. Verified on new and existing DBs.
 
-## Come funziona
-- Nella dashboard trovi due nuovi pulsanti: **Header** e **Footer**.
-- Aprono l'editor a blocchi su quell'area globale: costruisci header e footer
-  come costruisci una pagina (section, logo, menu secondario, colonne, testo…).
-- Salvando e pubblicando, header e footer compaiono **su tutte le pagine**:
-  l'header prima del contenuto, il footer dopo, a tutta larghezza.
-- I blocchi "codice" (HTML/CSS custom) restano riservati agli admin anche qui.
-- Export/Import del sito includono ora anche header e footer.
+## How it works
+- In the dashboard you'll find two new buttons: **Header** and **Footer**.
+- They open the block editor on that global area: you build the header and
+  footer the same way you build a page (section, logo, secondary menu, columns,
+  text…).
+- When you save and publish, the header and footer appear **on every page**:
+  the header before the content, the footer after it, full width.
+- "Code" blocks (custom HTML/CSS) remain reserved for admins here too.
+- Site Export/Import now also includes the header and footer.
 
-## Verificato
-- Migrazione v3, endpoint save/get, rendering e ordine header→contenuto→footer,
-  round-trip export/import. Build, lint (0 errori) e parità verdi.
+## Verified
+- v3 migration, save/get endpoints, rendering and header→content→footer order,
+  export/import round trip. Build, lint (0 errors) and parity green.
 
-## Prossime feature (come da tua lista)
-blog/collezioni → revisioni pagina con rollback → nuovi blocchi (Accordion/Tabs,
-Pricing, Gallery+lightbox) → breakpoint responsive per blocco.
+## Upcoming features (as per your list)
+blog/collections → page revisions with rollback → new blocks (Accordion/Tabs,
+Pricing, Gallery+lightbox) → per-block responsive breakpoints.

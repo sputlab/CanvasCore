@@ -1,2 +1,2 @@
-// Stub di jodit-react per i test in jsdom (l'editor WYSIWYG reale richiede un browser vero).
+// jodit-react stub for the jsdom tests (the real WYSIWYG editor needs a real browser).
 export default function JoditEditor() { return null; }

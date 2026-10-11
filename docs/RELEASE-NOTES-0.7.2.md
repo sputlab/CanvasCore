@@ -1,27 +1,27 @@
-# CanvasCore 0.7.2 — densità alta + dashboard riorganizzata
+# CanvasCore 0.7.2 — high density + reorganized dashboard
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Frontend: `src/components/PageManager.jsx`, `GlobalSettings.jsx`,
 `MediaManager.jsx`, `MenuBuilder.jsx`, `Submissions.jsx`, `Templates.jsx`,
 `UserManager.jsx`, `PropertyPanel.jsx`
 Backend: `canvascore-admin/version.json`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-(Richiede anche `src/ui/global.css` dalla 0.7.1, se non l'hai già applicata.)
+(Also requires `src/ui/global.css` from 0.7.1, if you haven't applied it already.)
 
-## Cosa cambia
-- **Densità molto più alta**: padding dei contenitori più stretti e **campi
-  input/label più compatti** (meno altezza, font 12–13px) nelle schermate di
-  form. Più contenuto utile a schermo sui portatili 14" FHD.
-- **Dashboard riorganizzata** come richiesto:
-  - pillola utente (nome + ruolo) **in alto a sinistra**, con **Logout** accanto;
-  - azioni primarie (New Page, Publish All) in alto a destra;
-  - navigazione secondaria in una barra compatta dedicata (pulsanti più piccoli);
+## What changes
+- **Much higher density**: tighter container padding and **more compact
+  input/label fields** (less height, 12–13px font) on form screens. More useful
+  content on screen on 14" FHD laptops.
+- **Dashboard reorganized** as requested:
+  - user pill (name + role) **at the top left**, with **Logout** next to it;
+  - primary actions (New Page, Publish All) at the top right;
+  - secondary navigation in a dedicated compact bar (smaller buttons);
   - "Account" → **"Accounts"**.
 
-## Da validare
-Guarda la dashboard sul tuo monitor e dimmi se la densità è giusta: posso
-stringere ancora o allentare di un filo. Se ti va bene, passiamo alla **pass 2**
-con il rifacimento dell'editor (barra, pannelli, canvas) sulla stessa linea di
-densità ed eleganza.
+## To validate
+Look at the dashboard on your monitor and tell me whether the density is right:
+I can tighten it further or loosen it a touch. If you're happy with it, we move
+on to **pass 2** with the redesign of the editor (bar, panels, canvas) along the
+same lines of density and elegance.

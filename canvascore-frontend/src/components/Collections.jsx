@@ -5,7 +5,7 @@ import { ChevronLeft, Library, Plus, Trash2, Edit3, FileText, Folder, Archive, A
 export default function Collections() {
   const { setView, userRole, setActivePage, setBlocks, setSelectedBlockId, publishSiteAsync } = useStore();
   const [collections, setCollections] = useState([]);
-  const [active, setActive] = useState(null); // collezione selezionata
+  const [active, setActive] = useState(null); // selected collection
   const [items, setItems] = useState([]);
   const [needsPublish, setNeedsPublish] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -40,7 +40,7 @@ export default function Collections() {
       const data = await res.json();
       if (data) full = { ...data, blocks: JSON.parse(data.content_json || '[]') };
     }
-    // apro l'editor a blocchi sul contenuto della voce
+    // open the block editor on the item's content
     setActivePage({
       id: full.id || ('item_' + Date.now()),
       __item: true, collection_id: active.id,
@@ -102,7 +102,7 @@ export default function Collections() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '16px', alignItems: 'start' }}>
-        {/* Elenco collezioni */}
+        {/* Collection list */}
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '11px', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.5px' }}>COLLECTIONS</span>
@@ -120,7 +120,7 @@ export default function Collections() {
           ))}
         </div>
 
-        {/* Voci della collezione selezionata */}
+        {/* Items of the selected collection */}
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '14px', minHeight: '260px' }}>
           {!active ? (
             <div style={{ textAlign: 'center', color: '#64748b', padding: '60px 20px' }}>

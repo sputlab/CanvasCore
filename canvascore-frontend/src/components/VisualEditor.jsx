@@ -40,7 +40,7 @@ export default function VisualEditor() {
   const [rightOpen, setRightOpen] = useState(true);
   const [leftTab, setLeftTab] = useState('add');
 
-  // Backup locale del lavoro non salvato + stato "modificato" (vedi src/session/)
+  // Local backup of unsaved work + "modified" state (see src/session/)
   const draft = useEditorDraft();
   const editorRestored = useStore((s) => s.editorRestored);
 
@@ -48,7 +48,7 @@ export default function VisualEditor() {
     fetchTemplates();
     fetchMasters();
     const handleKeyDown = (e) => {
-      if (useStore.getState().sessionExpired) return;   // con il login sopra non si deve modificare l'editor "dietro"
+      if (useStore.getState().sessionExpired) return;   // with the login on top, the editor "behind" must not be modified
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault();
         if (e.shiftKey) redo(); else undo();
@@ -60,14 +60,14 @@ export default function VisualEditor() {
 
   const savePageRaw = async (publish = false) => {
     if (isEditingMaster) return null;
-    // Header/Footer globali: salvataggio su site_parts
+    // Global header/footer: saved to site_parts
     if (activePage.__part) {
       try {
         const res = await fetch('api.php?action=save_part', { method: 'POST', body: JSON.stringify({ name: activePage.__part, blocks }) });
         return await res.json();
       } catch { alert('Error saving part.'); return null; }
     }
-    // Voce di collezione: salvataggio su collection_items
+    // Collection item: saved to collection_items
     if (activePage.__item) {
       try {
         const res = await fetch('api.php?action=save_item', { method: 'POST', body: JSON.stringify({
@@ -92,11 +92,11 @@ export default function VisualEditor() {
       const res = await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify(payload) });
       const data = await res.json();
 
-      // Se abbiamo appena creato una copia draft nascosta (perché era published e abbiamo salvato in draft)
+      // If we just created a hidden draft copy (because it was published and we saved as draft)
       if (!publish && data.new_id && data.new_id !== activePage.id) {
          updateActivePage({ id: data.new_id, is_draft_copy: 1, parent_id: activePage.id });
       }
-      // Se abbiamo pubblicato una copia draft, l'ID torna ad essere quello del genitore
+      // If we published a draft copy, the ID goes back to being the parent's
       if (publish && data.new_id) {
          updateActivePage({ id: data.new_id, is_draft_copy: 0, status: 'published' });
       }
@@ -104,7 +104,7 @@ export default function VisualEditor() {
     } catch { alert("Error saving page."); return null; }
   };
 
-  // Dopo OGNI salvataggio riuscito lo stato corrente diventa quello "salvato": il backup locale non serve piu'.
+  // After EVERY successful save the current state becomes the "saved" one: the local backup is no longer needed.
   const savePage = async (publish = false) => {
     const data = await savePageRaw(publish);
     if (data && data.success) draft.markSaved();
@@ -126,7 +126,7 @@ export default function VisualEditor() {
       if (res && res.success) alert(`🎉 Success! ${res.message}`);
       else alert(`Error: ${res?.message || 'Server unreachable'}`);
 
-      // Aggiorna lo stato globale per riflettere le modifiche nella dashboard
+      // Update the global state to reflect the changes in the dashboard
       fetch('api.php?action=get_pages').then(r => r.json()).then(d => setPages(d));
     } catch {
       alert("Error publishing.");

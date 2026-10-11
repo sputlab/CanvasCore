@@ -1,33 +1,33 @@
 // canvascore-frontend/src/session/drafts.js
-// Backup LOCALE del lavoro non salvato (rete di sicurezza per refresh, chiusura scheda, crash).
+// LOCAL backup of unsaved work (safety net for refresh, tab close, crash).
 //
-// - Le bozze stanno nel localStorage del browser, separate per utente: non finiscono mai sul server
-//   e un altro utente dello stesso computer non le vede.
-// - Se il localStorage non e' disponibile o e' pieno NON si lancia nulla: saveDraft() restituisce
-//   { ok:false } e la UI lo segnala (un backup che fallisce in silenzio sarebbe peggio di nessun backup).
-// - Modulo senza dipendenze da React/store: e' testabile in Node con uno storage finto.
+// - Drafts live in the browser's localStorage, separated per user: they never reach the server
+//   and another user of the same computer cannot see them.
+// - If localStorage is unavailable or full, nothing is thrown: saveDraft() returns
+//   { ok:false } and the UI reports it (a backup that fails silently would be worse than no backup).
+// - Module with no React/store dependencies: it is testable in Node with a fake storage.
 
 const NS = 'cc_draft:v1:';
 const NOTICE_KEY = 'cc_expired_notice:v1';
-export const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;   // le bozze piu' vecchie di 14 giorni vengono eliminate
+export const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;   // drafts older than 14 days are deleted
 
 let storage = null;
 let user = null;
-const mem = new Map();          // fallback in memoria (quota piena / storage assente)
+const mem = new Map();          // in-memory fallback (quota full / no storage)
 
 function probe(s) {
   try { const k = '__cc_probe__'; s.setItem(k, '1'); s.removeItem(k); return s; } catch { return null; }
 }
 try { if (typeof window !== 'undefined' && window.localStorage) storage = probe(window.localStorage); } catch { storage = null; }
 
-// Solo per i test: sostituisce lo storage (senza sonda, per poter simulare errori di quota).
+// Tests only: replaces the storage (without probing, so quota errors can be simulated).
 export function __setStorage(s) { storage = s || null; mem.clear(); user = null; }
 export function storageAvailable() { return !!storage; }
 export function setDraftUser(u) { user = u || null; }
 export function getDraftUser() { return user; }
 
-// JSON canonico: chiavi ordinate, quindi lo stesso stato logico produce sempre la stessa stringa
-// (evita falsi "modificato" quando cambia solo l'ordine delle chiavi).
+// Canonical JSON: sorted keys, so the same logical state always produces the same string
+// (avoids false "modified" when only the key order changes).
 export function canon(v) {
   if (v === null || v === undefined) return 'null';
   if (typeof v !== 'object') return String(JSON.stringify(v) ?? 'null');
@@ -48,7 +48,7 @@ export function saveDraft(scope, payload, meta = {}) {
     mem.delete(key);
     return { ok: true };
   } catch {
-    mem.set(key, raw);            // almeno in memoria (utile con la schermata di login sovrapposta)
+    mem.set(key, raw);            // at least in memory (useful with the overlaid login screen)
     return { ok: false, reason: 'quota', volatile: true };
   }
 }
@@ -115,7 +115,7 @@ export function purgeOldDrafts(nowMs = Date.now()) {
   return removed;
 }
 
-// Etichetta leggibile per la UI ("Page · Home", "Menu", ...).
+// Human-readable label for the UI ("Page · Home", "Menu", ...).
 export function describeDraft(entry) {
   const scope = entry.scope || '';
   if (scope === 'menu') return { kind: 'Menu', title: 'Navigation menu' };
@@ -133,15 +133,15 @@ export function describeDraft(entry) {
   return { kind: 'Changes', title: scope };
 }
 
-// ---- registro dei "flusher": salvataggi sincroni dei backup, richiamati prima di mostrare il login
-// per scadenza, alla chiusura della scheda e al logout ----
+// ---- registry of "flushers": synchronous backup saves, called before showing the login
+// on expiry, on tab close and on logout ----
 const flushers = new Set();
 export function registerFlusher(fn) { flushers.add(fn); return () => flushers.delete(fn); }
 export function flushDrafts() {
-  for (const f of [...flushers]) { try { f(); } catch { /* un flusher guasto non deve bloccare gli altri */ } }
+  for (const f of [...flushers]) { try { f(); } catch { /* a broken flusher must not block the others */ } }
 }
 
-// ---- avviso persistente "la sessione e' scaduta" (mostrato dalla schermata di login dopo un refresh) ----
+// ---- persistent "session expired" notice (shown by the login screen after a refresh) ----
 export function setExpiredNotice(info) {
   try { if (storage) storage.setItem(NOTICE_KEY, JSON.stringify({ user: info.user || null, at: info.at || Date.now() })); } catch { /* noop */ }
 }

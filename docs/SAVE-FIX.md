@@ -1,36 +1,35 @@
-# CanvasCore — Fix salvataggio (post Fase 1)
+# CanvasCore — Saving fix (post Phase 1)
 
-Su installazioni aggiornate (non pulite) i salvataggi potevano fallire mentre le
-letture funzionavano. Due cause, entrambe risolte in `config.php` (+ un ritocco a
-`apiClient.js`).
+On upgraded (non-clean) installations saves could fail while reads worked. Two
+causes, both fixed in `config.php` (+ a small tweak to `apiClient.js`).
 
-## File da sostituire
+## Files to replace
 - `canvascore-admin/config.php`
-- `canvascore-frontend/src/apiClient.js`  → poi `npm run build`
+- `canvascore-frontend/src/apiClient.js`  → then `npm run build`
 
-## Cosa è stato corretto
+## What was fixed
 
-1) **CSRF robusto (double-submit).** La tua sessione era nata prima della Fase 1:
-   col cambio dei parametri cookie il token in sessione poteva non essere più
-   visibile nella richiesta di salvataggio → 403 su tutte le POST. Ora il token
-   viaggia anche in un cookie `cc_csrf` (SameSite=Lax) e la verifica accetta il
-   match su sessione OPPURE su cookie. È sicuro (SameSite + same-origin) e non
-   dipende più dalla persistenza perfetta della sessione.
-   Inoltre ho rimosso il blocco rigido su Origin (falsi positivi dietro proxy/CDN):
-   la difesa resta solida grazie a token + SameSite.
+1) **Robust CSRF (double submit).** Your session was created before Phase 1:
+   with the changed cookie parameters, the token in the session could stop being
+   visible in the save request → 403 on every POST. The token now also travels
+   in a `cc_csrf` cookie (SameSite=Lax) and the check accepts a match on the
+   session OR on the cookie. It's safe (SameSite + same-origin) and no longer
+   depends on the session persisting perfectly.
+   I also removed the strict Origin block (false positives behind proxies/CDNs):
+   the defence stays solid thanks to token + SameSite.
 
-2) **Data dir con test di scrittura reale + migrazione bidirezionale.** Se la
-   cartella esterna `canvascore-data/` risultava leggibile ma non scrivibile
-   dall'utente del web server, le letture funzionavano e le scritture no. Ora la
-   sede dei dati viene scelta con un test di scrittura effettivo e, se serve, i
-   dati vengono riportati automaticamente dove si può scrivere (anche tornando in
-   `canvascore-admin/data/` protetta da .htaccess). Nessuna perdita di dati.
+2) **Data dir with a real write test + two-way migration.** If the outside
+   `canvascore-data/` folder was readable but not writable by the web server
+   user, reads worked and writes didn't. The data location is now chosen with an
+   actual write test and, if needed, the data is moved back automatically to
+   where it can be written (even returning to `canvascore-admin/data/`, protected
+   by .htaccess). No data is lost.
 
-## IMPORTANTE dopo l'aggiornamento
-- Ricompila il frontend (`npm run build`) e **ricarica con hard refresh**
-  (Ctrl/Cmd+Shift+R) per scaricare il nuovo bundle: se il browser serve ancora il
-  vecchio JS, i salvataggi falliranno comunque perché il vecchio codice non invia
-  il token CSRF.
-- Se un salvataggio fallisse ancora, apri gli strumenti sviluppatore → Rete,
-  guarda la risposta di `save_page`: il messaggio dice esattamente la causa
-  ("Invalid CSRF token" = bundle vecchio in cache / token mancante).
+## IMPORTANT after updating
+- Rebuild the frontend (`npm run build`) and **reload with a hard refresh**
+  (Ctrl/Cmd+Shift+R) to download the new bundle: if the browser still serves the
+  old JS, saves will fail anyway because the old code doesn't send the CSRF
+  token.
+- If a save still fails, open the developer tools → Network and look at the
+  `save_page` response: the message states the exact cause
+  ("Invalid CSRF token" = old bundle in cache / missing token).

@@ -1,32 +1,33 @@
-# CanvasCore 0.5.1 — fix editor (flex/grid, FAQ/FORM, slider, navigator)
+# CanvasCore 0.5.1 — editor fixes (flex/grid, FAQ/FORM, slider, navigator)
 
-## File da sostituire
+## Files to replace
 Frontend: `src/components/SortableBlock.jsx`, `src/store/useStore.js`,
 `src/render/renderBlock.mjs`, `tests/parity.mjs`
 Backend: `canvascore-admin/version.json`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build` (e volendo `npm run test:parity`)
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build` (and optionally `npm run test:parity`)
 
-## Bug risolti
-1. **FAQ e FORM non apparivano nel canvas editor** (ok sul sito pubblicato):
-   mancavano nel renderer canonico JS. Aggiunti e messi sotto test di parità.
-2. **Flex Row / CSS Grid nell'editor**: i figli non si dimensionavano/allineavano
-   bene. Ora la cornice di selezione/drag porta le proprietà di sizing
-   (width, flex, grid, margin, ...) e si comporta come l'item vero; il contenuto
-   canonico le neutralizza al suo interno (niente doppia applicazione). Flex e
-   grid nell'editor ora combaciano col sito.
-3. **Slider nell'editor**: ora anima fade e slide (prima era statico).
-4. **DOM Navigator**: il drag verso il basso non funzionava; ora il riordino è
-   direzionale e funziona in entrambi i versi.
+## Bugs fixed
+1. **FAQ and FORM did not appear in the editor canvas** (fine on the published
+   site): they were missing from the canonical JS renderer. Added and put under
+   the parity test.
+2. **Flex Row / CSS Grid in the editor**: children did not size/align properly.
+   The selection/drag frame now carries the sizing properties
+   (width, flex, grid, margin, ...) and behaves like the real item; the canonical
+   content neutralizes them inside (no double application). Flex and grid in the
+   editor now match the site.
+3. **Slider in the editor**: it now animates fade and slide (it used to be static).
+4. **DOM Navigator**: dragging downwards didn't work; reordering is now
+   directional and works in both directions.
 
-## Test incrociati (come richiesto)
-Il test di parità (`npm run test:parity`) ora include FAQ, FORM e casi incrociati
-con **Flex Row e CSS Grid che contengono blocchi annidati** (immagini, testo,
-pulsanti, icon-box, flex dentro grid). 23 fixture, tutte verdi: l'HTML dell'editor
-e quello del sito pubblicato coincidono.
+## Cross tests (as requested)
+The parity test (`npm run test:parity`) now includes FAQ, FORM and cross cases
+with **Flex Row and CSS Grid containing nested blocks** (images, text,
+buttons, icon-box, flex inside grid). 23 fixtures, all green: the editor's HTML
+and the published site's HTML match.
 
-## Da validare
-Prova nell'editor: flex row e css grid con elementi dentro (dimensioni e
-allineamenti), slider fade/slide, e il drag nel Navigator in entrambe le direzioni
-e tra container. L'output pubblicato è garantito dai test; l'aspetto dell'editor
-è ciò che conviene verificare a occhio.
+## To validate
+Try in the editor: flex row and css grid with elements inside (sizes and
+alignment), fade/slide slider, and dragging in the Navigator in both directions
+and between containers. The published output is guaranteed by the tests; the
+editor's appearance is what is worth checking by eye.

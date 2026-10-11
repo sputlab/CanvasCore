@@ -1,32 +1,32 @@
-# CanvasCore 0.2.1 — fix ruolo editor + CSRF lifecycle
+# CanvasCore 0.2.1 — editor role fix + CSRF lifecycle
 
-## File da sostituire
+## Files to replace
 - `canvascore-admin/api.php`
 - `canvascore-admin/version.json`
 - `CHANGELOG.md`
 
-(Nessun rebuild del frontend strettamente necessario: le modifiche sono backend.
-Se però vuoi aggiornare il numero di build mostrato, lancia comunque `npm run build`.)
+(No frontend rebuild is strictly required: the changes are backend-only.
+If you want to update the build number shown, run `npm run build` anyway.)
 
-## Cosa cambia
-1. **Cambio password forzato per i nuovi utenti.** `add_user` ora imposta
-   `must_change_pw=1`: al primo login il nuovo editor/admin viene obbligato a
-   scegliere una nuova password. Anche il reset password dall'area Account
-   (`force_password`) forza il cambio al successivo accesso dell'utente.
+## What changes
+1. **Forced password change for new users.** `add_user` now sets
+   `must_change_pw=1`: on first login the new editor/admin must choose a new
+   password. A password reset from the Account area (`force_password`) also
+   forces a change at the user's next login.
 
-2. **CSRF robusto nei cambi utente.** Il login allinea il cookie double-submit
-   `cc_csrf` al token di sessione appena generato e il logout lo cancella. Così,
-   passando da un utente all'altro nello stesso browser, non resta un token
-   "vecchio" che possa far rifiutare le richieste POST (salvataggio pagina,
-   upload immagine, ecc.).
+2. **Robust CSRF when switching users.** Login aligns the `cc_csrf` double-submit
+   cookie with the freshly generated session token, and logout deletes it. So
+   when switching from one user to another in the same browser, no "old" token
+   is left behind that could cause POST requests to be rejected (page save,
+   image upload, etc.).
 
-## Nota sul bug 2 (alcune funzioni della dashboard)
-Nei test lato server tutte le operazioni dell'editor (creare pagina, salvare
-menu, eliminare media) funzionano correttamente: non è un blocco di permessi.
-La causa più probabile di "alcune POST non funzionano dopo essere entrati come
-utente diverso" è proprio il token CSRF stantio, ora risolto dal punto 2.
+## Note on bug 2 (some dashboard functions)
+In server-side tests all editor operations (create page, save menu, delete
+media) work correctly: it is not a permissions block. The most likely cause of
+"some POSTs fail after signing in as a different user" is precisely the stale
+CSRF token, now fixed by point 2.
 
-Dopo l'aggiornamento: **logout e login di nuovo**, poi hard refresh
-(Ctrl/Cmd+Shift+R). Se una funzione dovesse ancora fallire, apri DevTools → Rete,
-guarda la risposta della chiamata che fallisce (`save_page` o `upload_media`): il
-messaggio dirà la causa esatta (es. "Invalid CSRF token").
+After updating: **log out and log in again**, then hard refresh
+(Ctrl/Cmd+Shift+R). If a function still fails, open DevTools → Network and look
+at the response of the failing call (`save_page` or `upload_media`): the message
+will state the exact cause (e.g. "Invalid CSRF token").

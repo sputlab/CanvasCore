@@ -3,8 +3,8 @@ import { Clock } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { getSession } from '../session/runtime';
 
-// Avviso non bloccante poco prima della scadenza per inattivita'. Compare solo se l'utente e' fermo:
-// qualunque movimento/tasto estende la sessione e lo chiude.
+// Non-blocking warning shortly before the inactivity timeout. Shown only while the user is idle:
+// any mouse movement/keypress extends the session and closes it.
 export default function SessionWarning() {
   const expiresAt = useStore((s) => s.sessionExpiresAt);
   const [now, setNow] = useState(() => Date.now());

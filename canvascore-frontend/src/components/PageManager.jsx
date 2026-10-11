@@ -25,11 +25,11 @@ export default function PageManager() {
       seo_title: '', seo_description: '', content_json: '[]',
       status: 'draft', is_draft_copy: 0, parent_id: null, is_home: 0
     };
-    // Persistiamo subito: cosi' la pagina e' un record reale e il pannello di destra
-    // si comporta esattamente come quando la si riapre dalla dashboard.
+    // Persist right away: this way the page is a real record and the right-hand panel
+    // behaves exactly as when it is reopened from the dashboard.
     try {
       await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, blocks: [], publish: false }) });
-    } catch { /* in caso di errore sara' il primo Save Draft a crearla */ }
+    } catch { /* on error, the first Save Draft will create it */ }
     setPages([newPage, ...pages]);
     setActivePage(newPage);
     setBlocks([]);
@@ -71,7 +71,7 @@ export default function PageManager() {
 
   const editPage = (page) => {
     let targetPage = page;
-    // Se la pagina è stata modificata e ha una copia draft nascosta, apriamo la copia!
+    // If the page was modified and has a hidden draft copy, open the copy!
     if (page.status === 'modified' && page.draft_copy) {
       targetPage = page.draft_copy;
     }
@@ -200,7 +200,7 @@ export default function PageManager() {
         &copy; {new Date().getFullYear()}
         {serverVersion && appVersion && serverVersion.app !== appVersion && (
           <div style={{ color: '#f59e0b', marginTop: '6px' }}>
-            Interfaccia v{appVersion} / server v{serverVersion.app}: ricarica dopo l'aggiornamento.
+            Editor v{appVersion} / server v{serverVersion.app}: reload the page after updating.
           </div>
         )}
       </div>

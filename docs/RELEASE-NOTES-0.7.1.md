@@ -1,31 +1,30 @@
-# CanvasCore 0.7.1 — UI refresh (pass 1): densità + base premium
+# CanvasCore 0.7.1 — UI refresh (pass 1): density + premium base
 
-## File NUOVI
+## NEW files
 - `canvascore-frontend/src/ui/global.css`
 
-## File da SOSTITUIRE
-Frontend: `src/main.jsx` e i componenti
+## Files to REPLACE
+Frontend: `src/main.jsx` and the components
 `PageManager, GlobalSettings, MediaManager, MenuBuilder, Submissions, Templates,
 UserManager, VisualEditor, LayerNavigator, PropertyPanel`
 Backend: `canvascore-admin/version.json`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-## Cosa cambia
-- **Base globale premium** (`global.css`): token di palette/spaziatura condivisi,
-  scrollbar sottili, migliore rendering del testo, colore di selezione, fade-in
-  dell'app. È scritta in modo da NON toccare gli elementi generici
-  (button/input/a/h…): così l'anteprima del canvas resta identica al sito.
-- **Densità** su tutta l'interfaccia admin: padding dei contenitori, della
-  dashboard (titolo, toolbar, righe), dell'editor (barra superiore, pannelli) e
-  del DOM Navigator ridotti con misura — più informazioni a schermo su 14" FHD,
-  senza sacrificare leggibilità.
+## What changes
+- **Premium global base** (`global.css`): shared palette/spacing tokens,
+  thin scrollbars, better text rendering, selection color, app fade-in. It is
+  written so that it does NOT touch generic elements
+  (button/input/a/h…): that way the canvas preview stays identical to the site.
+- **Density** across the whole admin interface: padding of containers, the
+  dashboard (title, toolbar, rows), the editor (top bar, panels) and the
+  DOM Navigator reduced in moderation — more information on screen on a 14" FHD,
+  without sacrificing readability.
 
-## Nota di metodo (importante)
-Questo è un **primo passo sicuro e incrementale**: base globale + densità. Un
-restyle "premium" più profondo (libreria di componenti UI tokenizzata che
-sostituisca tutti gli stili inline, stati hover/focus coerenti, micro-animazioni)
-è un lavoro a parte che conviene fare superficie per superficie con la tua
-validazione, per non introdurre regressioni invisibili. Provalo e dimmi se la
-densità è a tuo gusto (posso stringere/allargare) e da quale schermata partire
-per la pass 2.
+## Note on approach (important)
+This is a **first safe, incremental step**: global base + density. A deeper
+"premium" restyle (a tokenized UI component library replacing all the inline
+styles, consistent hover/focus states, micro-animations) is a separate job best
+done surface by surface with your validation, so as not to introduce invisible
+regressions. Try it and tell me whether the density suits you (I can tighten or
+loosen it) and which screen to start from for pass 2.

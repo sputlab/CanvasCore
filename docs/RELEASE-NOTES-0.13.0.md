@@ -1,59 +1,61 @@
-# CanvasCore 0.13.0 — 12 nuovi blocchi
+# CanvasCore 0.13.0 — 12 new blocks
 
 Divider · Callout · Steps · Counters · Progress bars · Data table · Countdown · Timeline · Logo cloud ·
 Team · Before/After · Business info
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Backend: `canvascore-admin/compiler.php`, `blocks.json`, `version.json`
 Frontend: `package.json`, `src/render/renderBlock.mjs`, `src/components/PropertyPanel.jsx`,
 `VisualEditor.jsx`, `SortableBlock.jsx`, `tests/parity.mjs`
-## File NUOVI
+## NEW files
 `tests/blocks-content.mjs`, `tests/panels-ui.mjs`
-Più `CHANGELOG.md`.
+Plus `CHANGELOG.md`.
 
 ```
 cd canvascore-frontend
-npm install     # nessuna nuova dipendenza
+npm install     # no new dependencies
 npm run build
-npm test        # 6 suite: parità, blocchi, contenuto, sessione, sessione-UI, pannelli
+npm test        # 6 suites: parity, blocks, content, session, session UI, panels
 ```
-Nessuna migrazione DB. Il compiler **non richiede mbstring**.
+No DB migration. The compiler **does not require mbstring**.
 
-## Dove si trovano
-Pannello ADD → **CONTENT BLOCKS**. Selezionato il blocco, il pannello a destra permette di modificare
-contenuti, aggiungere/riordinare/rimuovere voci e regolare il layout.
+## Where to find them
+ADD panel → **CONTENT BLOCKS**. With the block selected, the right-hand panel lets you edit the
+content, add/reorder/remove items and adjust the layout.
 
-## Come si comportano (cose utili da sapere)
-- **Counters / Progress / Countdown**: il valore finale c'è già nell'HTML; gli script lo animano solo se il
-  browser lo permette (non per chi preferisce meno animazioni). Nel canvas dell'editor vedi lo stato finale.
-- **Countdown**: "ora locale del visitatore" oppure UTC fisso (non segue l'ora legale: scegli l'offset valido
-  alla data di scadenza).
-- **Data table**: incolla da Excel/Sheets (le celle arrivano separate da Tab) o scrivi `Nome | Ruolo | Città`.
-- **Logo cloud** a scorrimento: solo CSS, si ferma al passaggio del mouse e per chi preferisce meno movimento.
-- **Before/After**: due immagini della stessa dimensione/inquadratura; si usa anche da tastiera (frecce).
-- **Business info**: genera i dati strutturati per Google solo se il blocco ha un nome. I giorni si possono
-  etichettare in qualsiasi lingua: a Google arrivano sempre i nomi standard, in ordine Lunedì → Domenica.
-  Non c'è l'indicatore "aperto ora".
-- **Callout / Team / ecc.**: i testi sono escapati; dove è previsto HTML (Callout) viene sanificato.
+## How they behave (useful things to know)
+- **Counters / Progress / Countdown**: the final value is already in the HTML; the scripts only animate
+  it if the browser allows it (not for people who prefer reduced motion). In the editor canvas you see
+  the final state.
+- **Countdown**: "visitor's local time" or a fixed UTC offset (it doesn't follow daylight saving time:
+  choose the offset that applies on the expiry date).
+- **Data table**: paste from Excel/Sheets (cells arrive separated by Tabs) or type `Name | Role | City`.
+- **Scrolling logo cloud**: CSS only; it stops on mouse hover and for people who prefer reduced motion.
+- **Before/After**: two images with the same size/framing; also usable from the keyboard (arrows).
+- **Business info**: generates structured data for Google only if the block has a name. Days can be
+  labeled in any language: Google always receives the standard names, in Monday → Sunday order.
+  There is no "open now" indicator.
+- **Callout / Team / etc.**: text is escaped; where HTML is allowed (Callout) it is sanitized.
 
-## Come è stato verificato
-- Parità editor ↔ compiler su tutte le varianti e casi limite (compresi i **default reali** di `blocks.json`),
-  con confronto anche dei tag `<style>`.
-- 149 controlli comportamentali sul compiler: validatori anti-iniezione per colori e numeri, formattazione
-  numerica **identica in PHP e JS** su casi difficili (2.675, 1.005, negativi…), JSON-LD (anche con un nome che
-  tenta di chiudere lo `<script>`), e gli script eseguiti in jsdom con orologio, `requestAnimationFrame` e
-  `IntersectionObserver` controllati (countdown con fusi +02:00 / −05:00, contatori, barre, prima/dopo).
-- 71 controlli sull'editor con i componenti veri (jsdom): `addBlock` → pannello → modifica → store, e ogni
-  blocco disegnato nel canvas.
-- **Test di mutazione**: 14 bug piantati di proposito (sanificazione, JSON-LD, fusi, arrotondamenti,
-  accessibilità dei loghi duplicati, validazione email…), tutti rilevati.
-- Pagina reale pubblicata con `rebuild_all.php` (con `master.html`) e caricata in jsdom con gli script attivi.
+## How it was verified
+- Editor ↔ compiler parity on all variants and edge cases (including the **real defaults** from
+  `blocks.json`), also comparing the `<style>` tags.
+- 149 behavioral checks on the compiler: anti-injection validators for colors and numbers, number
+  formatting **identical in PHP and JS** on tricky cases (2.675, 1.005, negatives…), JSON-LD (including a
+  name that tries to close the `<script>`), and the scripts run in jsdom with a controlled clock,
+  `requestAnimationFrame` and `IntersectionObserver` (countdown with +02:00 / −05:00 offsets, counters,
+  bars, before/after).
+- 71 checks on the editor with the real components (jsdom): `addBlock` → panel → edit → store, and every
+  block drawn in the canvas.
+- **Mutation testing**: 14 bugs planted on purpose (sanitization, JSON-LD, time zones, rounding,
+  accessibility of the duplicated logos, email validation…), all caught.
+- A real page published with `rebuild_all.php` (with `master.html`) and loaded in jsdom with scripts enabled.
 
-## Trovato e corretto lungo la strada
-- `mb_strtoupper()` non esiste senza mbstring: avrebbe fatto fallire la pubblicazione su hosting senza
-  l'estensione. Ora le iniziali usano PCRE e la maiuscola la fa il CSS.
-- PHP e JS arrotondavano diversamente (2,675 → 2.68 sul sito, 2.67 nell'editor): ora identici.
-- Il pannello proprietà perdeva una modifica se ne arrivava un'altra prima del re-render (difetto preesistente).
+## Found and fixed along the way
+- `mb_strtoupper()` doesn't exist without mbstring: it would have made publishing fail on hosting
+  without the extension. Initials now use PCRE and the CSS does the uppercasing.
+- PHP and JS rounded differently (2.675 → 2.68 on the site, 2.67 in the editor): now identical.
+- The property panel lost an edit if another one arrived before the re-render (a pre-existing flaw).
 
-## Non verificato
-L'aspetto reale in un browser vero: lo giudichi tu a video (spaziature, colori, resa su mobile).
+## Not verified
+The real look in an actual browser: that's for you to judge on screen (spacing, colors, mobile rendering).

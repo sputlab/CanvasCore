@@ -1,5 +1,5 @@
 <?php
-// Rende un singolo blocco (JSON su stdin) tramite il compiler reale.
+// Renders a single block (JSON on stdin) through the real compiler.
 require __DIR__ . '/../../canvascore-admin/compiler.php';
 $block = json_decode(stream_get_contents(STDIN), true);
 echo render_block($block);

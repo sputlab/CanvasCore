@@ -1,8 +1,8 @@
 <?php
 // canvascore-admin/submit_form.php
-// Riceve i form del sito pubblico e invia l'email.
-// SICUREZZA: il destinatario NON viene MAI preso dal client (niente open relay):
-// si usa esclusivamente l'email globale configurata in Global Options.
+// Receives forms from the public site and sends the email.
+// SECURITY: the recipient is NEVER taken from the client (no open relay):
+// only the global email configured in Global Options is used.
 require_once __DIR__ . '/config.php';
 header('Content-Type: text/html; charset=utf-8');
 
@@ -10,7 +10,7 @@ $data_dir = cc_data_dir();
 $settings_file = $data_dir . '/settings.json';
 $settings = file_exists($settings_file) ? json_decode(file_get_contents($settings_file), true) : [];
 
-// Registry dei destinatari per-form (scritta dalla build). Il client NON puo' scegliere il destinatario.
+// Per-form recipient registry (written by the build). The client can NOT choose the recipient.
 $forms_file = $data_dir . '/forms.json';
 $forms = file_exists($forms_file) ? json_decode(file_get_contents($forms_file), true) : [];
 $form_id = $_POST['_form'] ?? '';
@@ -28,10 +28,10 @@ function cc_finish($message) {
 
 $successMsg = $_POST['_success'] ?? 'Message sent successfully!';
 
-// Anti-spam honeypot: i bot compilano il campo nascosto -> fingi successo e fermati
+// Honeypot anti-spam: bots fill in the hidden field -> pretend success and stop
 if (!empty($_POST['_hp'])) { cc_finish($successMsg); }
 
-// Archivia l'invio nel database (indipendentemente dall'esito email)
+// Store the submission in the database (regardless of the email outcome)
 try {
     $db = $data_dir . '/canvascore.sqlite';
     if (file_exists($db)) {
@@ -49,9 +49,9 @@ try {
         $pdo->prepare("INSERT INTO form_submissions (form_id, page, data_json) VALUES (?,?,?)")
             ->execute([$form_id, $page_ref, json_encode($fields, JSON_UNESCAPED_UNICODE)]);
     }
-} catch (Exception $e) { /* l'archiviazione non deve bloccare l'invio */ }
+} catch (Exception $e) { /* storage must not block sending */ }
 
-// Priorita': destinatario specifico del form (registry) -> email globale delle impostazioni.
+// Priority: form-specific recipient (registry) -> global email from the settings.
 $to = $form_to !== '' ? $form_to : (!empty($settings['adminEmail']) ? trim($settings['adminEmail']) : '');
 if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
     cc_finish('Form is not configured: set a valid receiving email in Global Options.');
@@ -60,7 +60,7 @@ if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
 $from = !empty($settings['emailFrom']) ? trim($settings['emailFrom']) : 'noreply@' . preg_replace('/[^a-zA-Z0-9.\-]/', '', ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 if (!filter_var($from, FILTER_VALIDATE_EMAIL)) $from = 'noreply@localhost';
 $subject = !empty($settings['emailSubject']) ? $settings['emailSubject'] : "New submission from your website";
-// Rimuove eventuali tentativi di header injection
+// Remove any header injection attempts
 $subject = str_replace(["\r", "\n"], ' ', $subject);
 
 $body  = "You have received a new message from your website:\n";

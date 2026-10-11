@@ -1,29 +1,29 @@
-# CanvasCore 0.9.1 — Blog/Collezioni parte 2: blocco "Collection List"
+# CanvasCore 0.9.1 — Blog/Collections part 2: "Collection List" block
 
-## File da SOSTITUIRE
+## Files to REPLACE
 Backend: `canvascore-admin/compiler.php`, `blocks.json`, `version.json`
 Frontend: `src/render/renderBlock.mjs`, `src/components/SortableBlock.jsx`,
 `src/components/PropertyPanel.jsx`, `src/components/VisualEditor.jsx`
-Più: `CHANGELOG.md`
-→ poi `cd canvascore-frontend && npm run build`
+Plus: `CHANGELOG.md`
+→ then `cd canvascore-frontend && npm run build`
 
-(Nessuna migrazione DB: usa le tabelle della 0.9.0.)
+(No DB migration: it uses the tables from 0.9.0.)
 
-## Come funziona
-- Nell'editor, pannello blocchi → PREMIUM → **Collection List**.
-- Selezionalo e nel pannello a destra scegli la **collezione**, quante voci
-  mostrare, le **colonne** e se mostrare cover/data/excerpt.
-- In pubblicazione il blocco elenca le voci **pubblicate** della collezione come
-  card con link alla pagina della voce (`/<collezione>/<voce>/`), ordinate per
-  data (più recenti prima). Responsive: 1 colonna su mobile.
-- Nell'editor vedi un'**anteprima segnaposto** (il blocco è dinamico: le voci
-  vere compaiono in build, come accade per i Master).
+## How it works
+- In the editor, blocks panel → PREMIUM → **Collection List**.
+- Select it and in the right-hand panel choose the **collection**, how many items
+  to show, the **columns** and whether to show cover/date/excerpt.
+- When published, the block lists the collection's **published** items as cards
+  linking to the item's page (`/<collection>/<item>/`), sorted by date (newest
+  first). Responsive: 1 column on mobile.
+- In the editor you see a **placeholder preview** (the block is dynamic: the real
+  items appear at build time, as happens for Masters).
 
-Flusso tipico del blog: crea la collezione "Blog" e le voci (0.9.0), poi metti un
-**Collection List** nella home o in una pagina "Blog" per elencarle.
+Typical blog workflow: create the "Blog" collection and its items (0.9.0), then
+put a **Collection List** on the home page or on a "Blog" page to list them.
 
-## Verificato
-Rendering reale del compiler (card, link `/blog/<slug>/`, ordine per data, bozze
-escluse, cover, griglia responsive, fallback "nessuna voce"). Build, lint
-(0 errori) e parità verdi (il blocco dinamico è escluso dalla parità, come i
-Master).
+## Verified
+Real compiler rendering (cards, `/blog/<slug>/` links, sorting by date, drafts
+excluded, cover, responsive grid, "no items" fallback). Build, lint
+(0 errors) and parity green (the dynamic block is excluded from parity, like
+Masters).

@@ -1,93 +1,93 @@
-# CanvasCore — Fase 0 (punto zero stabile)
+# CanvasCore — Phase 0 (stable starting point)
 
-Questo pacchetto rende l'app **funzionante end-to-end** e chiude le falle di
-sicurezza che vivevano nei file riscritti. Sotto trovi cosa sostituire, cosa
-cancellare e come verificare.
+This package makes the app **work end-to-end** and closes the security holes
+that lived in the rewritten files. Below you'll find what to replace, what to
+delete and how to verify.
 
-## 1. File da SOSTITUIRE
+## 1. Files to REPLACE
 
 Backend (`public/canvascore-admin/`)
-- `api.php`          → schema draft/publish completo, azioni mancanti, hardening
-- `rebuild_all.php`  → query coerente col nuovo schema, routing via clean_slug
-- `submit_form.php`  → destinatario solo server-side (niente open relay), output escapato
+- `api.php`          → complete draft/publish schema, missing actions, hardening
+- `rebuild_all.php`  → query consistent with the new schema, routing via clean_slug
+- `submit_form.php`  → server-side recipient only (no open relay), escaped output
 
 Frontend (`public/canvascore-frontend/`)
-- `src/store/useStore.js`              → moveBlock reale, isEditingMaster/exitMasterEditMode
-- `src/components/SortableBlock.jsx`   → drag & drop funzionante a ogni livello
-- `src/components/UserManager.jsx`     → JSX ricostruito (l'originale era troncato)
-- `package.json`                       → rimossa dipendenza morta react-simple-wysiwyg
+- `src/store/useStore.js`              → real moveBlock, isEditingMaster/exitMasterEditMode
+- `src/components/SortableBlock.jsx`   → drag & drop working at every level
+- `src/components/UserManager.jsx`     → JSX rebuilt (the original was truncated)
+- `package.json`                       → removed the dead react-simple-wysiwyg dependency
 
-NB: `compiler.php` e `master.html` NON sono stati toccati (funzionano). Qui li
-trovi solo per comodità di riferimento.
+NB: `compiler.php` and `master.html` were NOT touched (they work). They're
+included here only for convenient reference.
 
-## 2. File da CANCELLARE (codice morto)
+## 2. Files to DELETE (dead code)
 
     public/canvascore-frontend/src/store/useEditorStore.js
     public/canvascore-frontend/src/components/MenuManager.jsx
     public/canvascore-frontend/src/components/SiteSettings.jsx
 
-Poi rimuovi la dipendenza morta:
+Then remove the dead dependency:
 
     cd canvascore-frontend
     npm remove react-simple-wysiwyg
 
-## 3. Rebuild del frontend
+## 3. Frontend rebuild
 
     cd canvascore-frontend
     npm install
-    npm run build      # genera /dist
+    npm run build      # generates /dist
 
-Carica il contenuto di `dist/` nella cartella `canvascore-admin/` (dove gira
-l'editor) oppure servila dove preferisci: l'editor parla con `api.php` e
-`rebuild_all.php` tramite path relativi.
+Upload the contents of `dist/` into the `canvascore-admin/` folder (where the
+editor runs), or serve it wherever you prefer: the editor talks to `api.php` and
+`rebuild_all.php` through relative paths.
 
-## 4. Primo avvio
+## 4. First run
 
-1. Apri l'editor nel browser.
-2. Login con **admin / admin** (creato in automatico al primo avvio).
-3. **Cambia subito la password** da "Account".
-4. Crea una pagina con slug `index`, trascina qualche blocco, "Publish Online".
-5. Verifica che venga generato `index.html` nella root del sito.
+1. Open the editor in the browser.
+2. Log in with **admin / admin** (created automatically on first run).
+3. **Change the password right away** from "Account".
+4. Create a page with slug `index`, drag in a few blocks, "Publish Online".
+5. Check that `index.html` is generated in the site root.
 
-## 5. Cosa è stato corretto
+## 5. What was fixed
 
-### Bug bloccanti
-- La pubblicazione non funzionava più (colonne `is_draft_copy`/`status`
-  mancanti): ora lo schema è completo e migrato in automatico.
-- Flusso draft → copia nascosta → publish → discard: implementato lato server
-  e allineato a ciò che il frontend già si aspettava (`new_id`, `clean_slug`,
+### Blocking bugs
+- Publishing no longer worked (missing `is_draft_copy`/`status` columns): the
+  schema is now complete and migrated automatically.
+- Draft → hidden copy → publish → discard flow: implemented server-side and
+  aligned with what the frontend already expected (`new_id`, `clean_slug`,
   `draft_copy`, `discard_draft`, `force_password`).
-- `moveBlock` era un no-op: ora il riordino dei blocchi funziona (tra fratelli,
-  a qualsiasi livello dell'albero).
-- `UserManager.jsx` non compilava (JSX troncato): ricostruito.
-- Rimosso codice morto che poteva crashare (`useEditorStore.js` usa una
-  sintassi Zustand non più valida).
+- `moveBlock` was a no-op: block reordering now works (between siblings, at any
+  level of the tree).
+- `UserManager.jsx` didn't compile (truncated JSX): rebuilt.
+- Removed dead code that could crash (`useEditorStore.js` uses Zustand syntax
+  that is no longer valid).
 
-### Sicurezza (inclusa perché vive in questi stessi file)
-- **Upload RCE**: whitelist di estensioni immagine + verifica `getimagesize` +
-  `.htaccess` che disabilita l'esecuzione PHP in `/uploads`.
-- **SQL injection** nel rename slug: ora prepared statement.
-- **Path traversal** nella generazione file: slug sanitizzato `[a-z0-9-]`.
-- **Open relay** nel form mailer: il destinatario viene preso SOLO dalle
-  impostazioni globali server-side, mai dal client.
-- **XSS riflesso** nel form mailer: messaggi escapati.
-- `.htaccess` in `/data` per non far scaricare il DB (Apache).
-- `session_regenerate_id` al login (anti session-fixation).
+### Security (included because it lives in these same files)
+- **Upload RCE**: image-extension whitelist + `getimagesize` check + an
+  `.htaccess` that disables PHP execution in `/uploads`.
+- **SQL injection** in the slug rename: now a prepared statement.
+- **Path traversal** in file generation: slug sanitized to `[a-z0-9-]`.
+- **Open relay** in the form mailer: the recipient is taken ONLY from the
+  server-side global settings, never from the client.
+- **Reflected XSS** in the form mailer: messages escaped.
+- `.htaccess` in `/data` so the DB can't be downloaded (Apache).
+- `session_regenerate_id` on login (anti session fixation).
 
-## 6. Limiti noti — restano per le Fasi 1-2 (come concordato)
+## 6. Known limits — left for Phases 1-2 (as agreed)
 
-Queste cose funzionano ma vanno irrobustite dopo:
-- **Protezione `/data` e `/uploads` su Nginx**: gli `.htaccess` valgono solo su
-  Apache. Su Nginx va spostata `data/` fuori dalla webroot o aggiunta una
-  `location` di deny. **Finché non lo fai, su Nginx il DB è scaricabile.**
-- **XSS stored** nei blocchi HTML/GRID/CARDS/Custom CSS: il compiler emette
-  ancora quel contenuto raw (è il comportamento voluto per il blocco "HTML",
-  ma va incapsulato/filtrato). Da affrontare in Fase 1.
-- **Email per-form**: per chiudere l'open relay il destinatario è ora globale.
-  Il destinatario per singolo form tornerà in Fase 1 via registry server-side.
-- **Drag & drop tra contenitori diversi**: oggi il riordino avviene tra
-  fratelli nello stesso contenitore. Lo spostamento cross-container richiede
-  droppable dedicati (Fase 2).
-- **CSRF token**, forzatura cambio password al primo login: Fase 1.
-- Bundle da ~1.1 MB (Jodit pesante), stili inline, schema blocco unico
-  editor/compiler: Fase 2.
+These things work but need hardening later:
+- **Protecting `/data` and `/uploads` on Nginx**: the `.htaccess` files only
+  apply on Apache. On Nginx, move `data/` outside the web root or add a deny
+  `location`. **Until you do, the DB can be downloaded on Nginx.**
+- **Stored XSS** in the HTML/GRID/CARDS/Custom CSS blocks: the compiler still
+  outputs that content raw (intended behavior for the "HTML" block, but it
+  needs to be encapsulated/filtered). To be tackled in Phase 1.
+- **Per-form email**: to close the open relay the recipient is now global.
+  Per-form recipients will return in Phase 1 via a server-side registry.
+- **Drag & drop between different containers**: today reordering happens
+  between siblings in the same container. Moving across containers requires
+  dedicated droppables (Phase 2).
+- **CSRF token**, forced password change on first login: Phase 1.
+- ~1.1 MB bundle (heavy Jodit), inline styles, single editor/compiler block
+  schema: Phase 2.

@@ -1,5 +1,5 @@
-// Auto-bump: incrementa il numero di build e marca la data a ogni `npm run build`.
-// La versione semantica (app) resta la fonte di verità per le release.
+// Auto-bump: increments the build number and stamps the date on every `npm run build`.
+// The semantic version (app) remains the source of truth for releases.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -12,10 +12,10 @@ try {
   console.log(`CanvasCore ${v.app} — build ${v.build} (${v.built})`);
   syncPackageVersion(v.app);
 } catch (e) {
-  console.warn('bump.mjs: impossibile aggiornare version.json:', e.message);
+  console.warn('bump.mjs: could not update version.json:', e.message);
 }
 
-// Allinea "version" di package.json e package-lock.json a version.json (app).
+// Aligns "version" in package.json and package-lock.json with version.json (app).
 function syncPackageVersion(app) {
   if (!app) return;
   for (const rel of ['../package.json', '../package-lock.json']) {
@@ -28,7 +28,7 @@ function syncPackageVersion(app) {
       writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
       console.log(`bump.mjs: ${rel.slice(3)} → ${app}`);
     } catch (e) {
-      console.warn(`bump.mjs: impossibile aggiornare ${rel.slice(3)}:`, e.message);
+      console.warn(`bump.mjs: could not update ${rel.slice(3)}:`, e.message);
     }
   }
 }

@@ -3,11 +3,11 @@ import { useStore } from '../store/useStore';
 import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, MoveUp, Globe, FileEdit, ChevronLeft, Sliders, Palette, Shield, Save, Image as ImageIcon, X, Upload, Trash2, Eraser, MapPin, Images, HelpCircle, Columns3, Mail, SquareChartGantt, Type, Code, MonitorPlay, Star, MessageSquareQuote, Crown, Library, Rows3, PanelTop, CreditCard, GalleryHorizontal, ArrowUp, ArrowDown, SeparatorHorizontal, Info, ListOrdered, Hash, BarChart3, Table2, Timer, History, Building2, Users, GitCompare, Store, Clock } from 'lucide-react';
 import JoditEditor from 'jodit-react';
 
-// Converte un titolo in slug: minuscole, trattini al posto degli spazi/caratteri.
+// Converts a title to a slug: lowercase, dashes instead of spaces/characters.
 const slugify = (str) => (str || '')
   .toString()
   .toLowerCase()
-  .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // rimuove accenti
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strips accents
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '');
 
@@ -68,7 +68,7 @@ const SpacingControl = ({ label, value, onChange }) => {
   );
 };
 
-// ---- UI condivisa per i blocchi a liste (Accordion, Tabs, Pricing, Gallery) ----
+// ---- shared UI for list blocks (Accordion, Tabs, Pricing, Gallery) ----
 const lstIconBtn = (disabled) => ({ background: 'transparent', border: 'none', color: '#94a3b8', cursor: disabled ? 'default' : 'pointer', padding: '3px', display: 'flex', opacity: disabled ? 0.3 : 1 });
 const lstAddBtn = { width: '100%', padding: '8px', background: 'transparent', color: '#38bdf8', border: '2px dashed #334155', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' };
 
@@ -86,7 +86,7 @@ const ItemCard = ({ title, index, total, onMove, onRemove, children }) => (
   </div>
 );
 
-// ---- campi riusabili per i pannelli dei blocchi "contenuto" (Divider, Callout, Steps, ...) ----
+// ---- reusable fields for the "content" block panels (Divider, Callout, Steps, ...) ----
 const fldInput = { width: '100%', padding: '6px 9px', border: '1px solid #334155', borderRadius: '6px', fontSize: '12px', backgroundColor: '#1e293b', color: '#f8fafc', boxSizing: 'border-box' };
 const fldLabel = { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '700', color: '#94a3b8', marginBottom: '4px', marginTop: '7px' };
 const Fld = ({ label, children }) => (<div>{label && <label style={fldLabel}>{label}</label>}{children}</div>);
@@ -232,8 +232,8 @@ export default function PropertyPanel() {
   const coverInputRef = useRef(null);
   useEffect(() => { fetch('api.php?action=get_collections').then(r => r.json()).then(d => { if (Array.isArray(d)) setCollections(d); }).catch(() => {}); }, []);
 
-  // Il contenuto si legge SEMPRE dallo store (non dalla copia dell'ultimo render): due modifiche ravvicinate
-  // non devono sovrascriversi a vicenda.
+  // Content is ALWAYS read from the store (not from the last render's copy): two edits in quick succession
+  // must not overwrite each other.
   const liveContent = () => {
     const cur = selectedBlock ? findLiveBlock(useStore.getState().blocks, selectedBlock.id) : null;
     return (cur || selectedBlock || {}).content || {};
@@ -241,7 +241,7 @@ export default function PropertyPanel() {
   const handleContentChange = (property, value) => updateBlock(selectedBlock.id, { content: { ...liveContent(), [property]: value } });
   const handleStyleChange = (property, value) => updateBlock(selectedBlock.id, { styles: { ...selectedBlock.styles, [property]: value } });
 
-  // Helper per i blocchi a liste: aggiornamenti immutabili (niente mutazione dello stato dello store)
+  // Helper for list blocks: immutable updates (no mutation of the store state)
   const lstOf = (key) => { const v = liveContent()[key]; return Array.isArray(v) ? v : []; };
   const lstPatch = (key, idx, patch) => handleContentChange(key, lstOf(key).map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const lstRemove = (key, idx) => handleContentChange(key, lstOf(key).filter((_, i) => i !== idx));
@@ -253,7 +253,7 @@ export default function PropertyPanel() {
     handleContentChange(key, l);
   };
 
-  // Pannelli dei blocchi "contenuto". Ogni modifica passa da handleContentChange (aggiornamenti immutabili).
+  // "Content" block panels. Every change goes through handleContentChange (immutable updates).
   const renderContentPanels = () => {
     const t = selectedBlock.type;
     const c = selectedBlock.content || {};
@@ -567,7 +567,7 @@ export default function PropertyPanel() {
   };
 
   if (!selectedBlock) {
-    // Nascondiamo il suffisso di bozza dall'utente in UI per evitare confusione
+    // Hide the draft suffix from the user in the UI to avoid confusion
     const displaySlug = activePage?.slug || '';
 
     return (

@@ -34,10 +34,10 @@ const insertNode = (blocks, parentId, newBlock) => {
   });
 };
 
-// Riordina due blocchi FRATELLI (stesso genitore) a qualsiasi profondità dell'albero.
-// Restituisce { found, nodes }. Se active e over non sono fratelli, found = false (no-op).
+// Reorders two SIBLING blocks (same parent) at any depth of the tree.
+// Returns { found, nodes }. If active and over are not siblings, found = false (no-op).
 
-// Spostamento generale nell'albero (cross-container, anti-ciclo)
+// General move within the tree (cross-container, cycle-safe)
 const findInTree = (list, id) => {
   for (let i = 0; i < list.length; i++) {
     if (list[i].id === id) return { list, index: i, node: list[i] };
@@ -64,10 +64,10 @@ const moveInTree = (roots, activeId, overId) => {
   const tree = JSON.parse(JSON.stringify(roots));
   const a = findInTree(tree, activeId);
   if (!a) return null;
-  if (nodeContainsId(a.node, overId)) return null; // no cicli
+  if (nodeContainsId(a.node, overId)) return null; // no cycles
   const oPre = findInTree(tree, overId);
   if (!oPre) return null;
-  // Stesso genitore: riordino direzionale (corregge il drag verso il basso)
+  // Same parent: directional reorder (fixes dragging downwards)
   if (a.list === oPre.list) {
     const reordered = arrayMoveImpl(a.list, a.index, oPre.index);
     a.list.length = 0; a.list.push(...reordered);
@@ -93,18 +93,18 @@ export const useStore = create((set, get) => ({
   appBuild: (typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 0),
   serverVersion: null,
 
-  // ---- sessione (vedi src/session/) ----
-  sessionExpired: false,        // true: login mostrato SOPRA l'app (che resta montata con tutto il suo stato)
+  // ---- session (see src/session/) ----
+  sessionExpired: false,        // true: login shown ON TOP of the app (which stays mounted with all its state)
   expiredUser: null,
   expiredAt: null,
   expiredReason: null,
-  sessionExpiresAt: null,       // timestamp locale (ms) previsto di scadenza, dato dal server
-  sessionTimeout: null,         // secondi di inattivita' consentiti
-  sessionWarning: false,        // meno di ~2 minuti alla scadenza
-  // ---- backup locale del lavoro non salvato ----
+  sessionExpiresAt: null,       // expected local expiry timestamp (ms), from the server
+  sessionTimeout: null,         // seconds of inactivity allowed
+  sessionWarning: false,        // less than ~2 minutes to expiry
+  // ---- local backup of unsaved work ----
   editorDirty: false,
-  editorRestored: false,        // l'editor e' stato ripristinato da una bozza locale
-  draftBackupFailed: false,     // il backup locale non e' riuscito (storage pieno/non disponibile)
+  editorRestored: false,        // the editor was restored from a local draft
+  draftBackupFailed: false,     // the local backup failed (storage full/unavailable)
 
   fetchVersion: async () => {
     try {
@@ -125,7 +125,7 @@ export const useStore = create((set, get) => ({
         sessionExpiresAt: data.authenticated && data.expires_in != null ? Date.now() + data.expires_in * 1000 : null,
         sessionTimeout: data.timeout ?? null,
       });
-    } catch { /* offline: resta non autenticato */ }
+    } catch { /* offline: stays unauthenticated */ }
   },
   login: async (username, password) => {
     try {
@@ -142,8 +142,8 @@ export const useStore = create((set, get) => ({
       return data;
     } catch { return { success: false, message: 'Server error' }; }
   },
-  // Login dalla schermata "sessione scaduta". NON adotta l'identita' di un utente diverso: questa scheda contiene
-  // il lavoro non salvato di un altro utente e non deve ne' ereditarlo ne' scrivere i suoi backup nell'altro account.
+  // Login from the "session expired" screen. Does NOT adopt a different user's identity: this tab holds
+  // another user's unsaved work and must neither inherit it nor write its backups into the other account.
   reauth: async (username, password) => {
     try {
       const res = await fetch('api.php?action=login', { method: 'POST', body: JSON.stringify({ username, password }) });
@@ -161,13 +161,13 @@ export const useStore = create((set, get) => ({
     } catch { return { success: false, message: 'Server error' }; }
   },
   logout: async () => {
-    flushDrafts();                                   // backup del lavoro non salvato PRIMA di azzerare lo stato
-    try { await fetch('api.php?action=logout'); } catch { /* senza rete si esce comunque dall'interfaccia */ }
+    flushDrafts();                                   // back up unsaved work BEFORE resetting the state
+    try { await fetch('api.php?action=logout'); } catch { /* without network, still sign out of the interface */ }
     window.__CC_CSRF = null;
     setDraftUser(null);
     set({
       isAuthenticated: false, userRole: 'editor', username: null, mustChangePw: false,
-      // nessuno stato di lavoro deve sopravvivere al logout (il prossimo utente non deve ereditarlo)
+      // no work state may survive the logout (the next user must not inherit it)
       currentView: 'manager', activePage: null, blocks: [], pastBlocks: [], futureBlocks: [], selectedBlockId: null,
       isEditingMaster: false, editingMaster: null, pages: [],
       sessionExpired: false, expiredUser: null, expiredAt: null, expiredReason: null, sessionExpiresAt: null, sessionWarning: false,
@@ -186,7 +186,7 @@ export const useStore = create((set, get) => ({
 
   publishSiteAsync: async () => {
     try {
-      // Una sessione scaduta e' gestita dalla guardia sulle fetch: login sopra l'app e richiesta rieseguita.
+      // An expired session is handled by the fetch guard: login on top of the app and the request retried.
       const res = await fetch('rebuild_all.php');
       const text = await res.text();
       return JSON.parse(text);
@@ -300,7 +300,7 @@ export const useStore = create((set, get) => ({
     });
   },
 
-  // save = true -> salva e chiude; save = false -> annulla e ripristina
+  // save = true -> save and close; save = false -> cancel and restore
   exitMasterEditMode: async (save = true) => {
     const state = get();
     if (!state.editingMaster) return;
@@ -315,7 +315,7 @@ export const useStore = create((set, get) => ({
         const data = await res.json();
         if (!data || !data.success) {
           alert('Master NOT saved: ' + ((data && data.message) || 'unknown error') + '\nYour changes are still here: try again.');
-          return;                                      // resta in modifica: nessuna perdita
+          return;                                      // stays in edit mode: nothing lost
         }
         await get().fetchMasters();
       } catch {
@@ -370,7 +370,7 @@ export const useStore = create((set, get) => ({
     const defs = (typeof __BLOCK_DEFS__ !== 'undefined') ? __BLOCK_DEFS__ : { _baseStyles: {}, types: {} };
     const def = defs.types[type] || {};
     const styles = { ...(defs._baseStyles || {}), ...(def.styles || {}) };
-    // clone profondo del content per non condividere riferimenti tra blocchi
+    // deep clone of content so blocks don't share references
     const content = def.content ? JSON.parse(JSON.stringify(def.content)) : {};
     if (type === 'HERO' && Array.isArray(content.buttons)) {
       content.buttons = content.buttons.map(b => ({ id: Date.now() + Math.floor(Math.random() * 1000), ...b }));
@@ -390,7 +390,7 @@ export const useStore = create((set, get) => ({
     return { ...historyState, selectedBlockId: state.selectedBlockId === id ? null : state.selectedBlockId };
   }),
 
-  // Riordino reale: funziona tra fratelli a qualsiasi livello dell'albero.
+  // Real reorder: works among siblings at any level of the tree.
   moveBlock: (activeId, overId) => set((state) => {
     const moved = moveInTree(state.blocks, activeId, overId);
     if (!moved) return state;

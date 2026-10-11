@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { ChevronLeft, LayoutTemplate, Plus, FileText } from 'lucide-react';
 
-// Rigenera gli id dell'albero di blocchi per evitare collisioni
+// Regenerates the block tree's ids to avoid collisions
 let _seq = 0;
 const newPageId = () => 'page-' + Date.now();
 const regenIds = (node) => {
