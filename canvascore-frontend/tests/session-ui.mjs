@@ -125,6 +125,8 @@ function setInput(el, value) {
 const submit = (form) => form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
 const draftKeys = () => snapshotStorage().map(([k]) => k).filter((k) => k.startsWith('cc_draft:'));
 const bodyText = () => dom.window.document.body.textContent;
+// outcome messages: alert() dialogs and the non-blocking notifications (src/ui/toast.jsx)
+const messages = () => [...alerts, ...$$('.ui-toast').map((t) => t.textContent)];
 
 // ------------------------------------------------------------------ vite SSR
 const vite = await createServer({
@@ -177,7 +179,7 @@ try {
   click(buttonByText('Save & Publish'));
   const overlay = await waitFor(() => $('[role="alertdialog"]'));
   check('Save with an expired session: the login appears ON TOP of the app (overlay)', !!overlay && /Session expired/.test(overlay.textContent));
-  check('NO error message or false success shown to the user', alerts.length === 0, JSON.stringify(alerts));
+  check('NO error message or false success shown to the user', messages().length === 0, JSON.stringify(messages()));
   check('the app was NOT replaced by the login page', !bodyText().includes('Enter your credentials'));
   const stillThere = $('input[placeholder="Label"]');
   check('the Menu Builder is still mounted and keeps the unsaved edit', !!stillThere && stillThere.value === 'Modified');
@@ -207,8 +209,8 @@ try {
   check('…with the user\'s edit ("Modified")', be.savedMenus[0] && be.savedMenus[0].items[0].title === 'Modified');
   const saveCalls = be.log.filter((l) => l.action === 'save_menu');
   check('…the first attempt with the old token (rejected), the retry with the NEW one', saveCalls.length === 2 && saveCalls[0].csrf === 'T1' && saveCalls[1].csrf === be.csrf && be.csrf !== 'T1');
-  const okAlert = await waitFor(() => alerts.length >= 1, { timeout: 4000 });
-  check('the user sees the real success ("Menu saved and site updated")', !!okAlert && /Menu saved and site updated/.test(alerts[0]) && !/NOT saved/.test(alerts[0]), JSON.stringify(alerts));
+  const okAlert = await waitFor(() => messages().length >= 1, { timeout: 4000 });
+  check('the user sees the real success ("Menu saved and site updated")', !!okAlert && /Menu saved and site updated/.test(messages()[0]) && !/NOT saved/.test(messages().join(' ')), JSON.stringify(messages()));
   check('the local backup is deleted after the successful save', !(await waitFor(() => draftKeys().some((k) => k.endsWith(':menu')), { timeout: 1200 })));
   check('the edit is still on screen and the app is not inert', $('input[placeholder="Label"]').value === 'Modified' && !$('[inert]'));
 
@@ -305,13 +307,13 @@ try {
   alerts.length = 0; be6.authenticated = false;
   click(buttonByText('Save & Publish'));
   await waitFor(() => $('[role="alertdialog"]'));
-  check('Save with an expired session: overlay, no false "saved successfully"', alerts.length === 0 && !!$('[role="alertdialog"]'));
+  check('Save with an expired session: overlay, no false "saved successfully"', !messages().some((m) => /saved/i.test(m)) && !!$('[role="alertdialog"]'));
   setInput($('#cc-exp-pw'), 'pw');
   submit($('[role="alertdialog"] form'));
   await waitFor(() => be6.savedSettings.length >= 1, { timeout: 5000 });
   check('after re-login the settings are saved (once, with the user\'s value)', be6.savedSettings.length === 1 && be6.savedSettings[0].brandColor === '#abcdef');
-  await waitFor(() => alerts.length >= 1, { timeout: 4000 });
-  check('outcome shown: real success', /saved and site updated/.test(alerts[0] || ''), JSON.stringify(alerts));
+  await waitFor(() => messages().some((m) => /saved and site updated/.test(m)), { timeout: 4000 });
+  check('outcome shown: real success', messages().some((m) => /saved and site updated/.test(m)), JSON.stringify(messages()));
   await shutdown();
 } catch (e) {
   failedRun = true; fails++; total++;

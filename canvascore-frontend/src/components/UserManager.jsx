@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { ChevronLeft, UserPlus, Users, Trash2, Edit } from 'lucide-react';
+import { UserPlus, Users, Trash2, KeyRound } from 'lucide-react';
+import { Button, Card, Field, Input, Select, PageHeader, Badge } from '../ui/kit';
+import { notify } from '../ui/notify';
 
 export default function UserManager() {
-  const { setView } = useStore();
+  const me = useStore((st) => st.username);
   const [users, setUsers] = useState([]);
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -24,12 +26,12 @@ export default function UserManager() {
     try {
       const res = await fetch('api.php?action=add_user', { method: 'POST', body: JSON.stringify({ username: newUsername, password: newPassword, role: newRole }) });
       const data = await res.json();
-      alert(data.message);
+      notify(data.message || (data.success ? 'User added.' : 'Error adding user.'), data.success ? 'success' : 'error');
       if (data.success) {
         setNewUsername(''); setNewPassword(''); setNewRole('editor');
         fetchUsers();
       }
-    } catch { alert("Error adding user"); }
+    } catch { notify('Error adding user.', 'error'); }
   };
 
   const handleForcePassword = async (id, username) => {
@@ -38,8 +40,8 @@ export default function UserManager() {
     try {
       const res = await fetch('api.php?action=force_password', { method: 'POST', body: JSON.stringify({ id, password: newPwd }) });
       const data = await res.json();
-      alert(data.message);
-    } catch { alert("Network Error"); }
+      notify(data.message || 'Done.', data.success === false ? 'error' : 'success');
+    } catch { notify('Network error.', 'error'); }
   };
 
   const handleDeleteUser = async (id, username) => {
@@ -47,69 +49,49 @@ export default function UserManager() {
     try {
       const res = await fetch('api.php?action=delete_user', { method: 'POST', body: JSON.stringify({ id }) });
       const data = await res.json();
-      alert(data.message);
+      notify(data.message || 'Done.', data.success ? 'success' : 'error');
       if (data.success) fetchUsers();
-    } catch { alert("Network Error"); }
+    } catch { notify('Network error.', 'error'); }
   };
 
-  const inputStyle = { width: '100%', padding: '7px 9px', background: '#0f172a', color: '#fff', border: '1px solid #334155', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' };
-  const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '750', color: '#94a3b8', marginBottom: '5px' };
-
   return (
-    <div style={{ padding: '16px 22px', maxWidth: '800px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif', color: '#f8fafc' }}>
-      <button onClick={() => setView('manager')} style={{ background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', padding: 0, marginBottom: '20px' }}>
-        <ChevronLeft size={16} /> Back to Dashboard
-      </button>
+    <div style={{ maxWidth: 860 }}>
+      <PageHeader icon={Users} title="Accounts" description="People who can sign in to the editor. Editors manage content; administrators also manage accounts, backups and custom code." />
 
-      <h2 style={{ fontSize: '24px', fontWeight: '800', marginBottom: '30px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <Users size={24} color="#38bdf8" /> User Management
-      </h2>
-
-      <div style={{ background: '#1e293b', padding: '25px', borderRadius: '12px', border: '1px solid #334155', marginBottom: '30px' }}>
-        <h3 style={{ margin: '0 0 15px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <UserPlus size={18} color="#10b981" /> Add New User
-        </h3>
-        <form onSubmit={handleAddUser} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '150px' }}>
-            <label style={labelStyle}>USERNAME</label>
-            <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} style={inputStyle} required />
+      <Card title="Add a user" icon={UserPlus}>
+        <form onSubmit={handleAddUser}>
+          <div className="ui-grid" style={{ '--ui-min': '180px' }}>
+            <Field label="Username"><Input value={newUsername} onChange={e => setNewUsername(e.target.value)} required autoComplete="off" /></Field>
+            <Field label="Password"><Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required autoComplete="new-password" /></Field>
+            <Field label="Role">
+              <Select value={newRole} onChange={e => setNewRole(e.target.value)} options={[['editor', 'Editor (content only)'], ['admin', 'Administrator (full control)']]} />
+            </Field>
           </div>
-          <div style={{ flex: 1, minWidth: '150px' }}>
-            <label style={labelStyle}>PASSWORD</label>
-            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} style={inputStyle} required />
-          </div>
-          <div style={{ flex: 1, minWidth: '150px' }}>
-            <label style={labelStyle}>ROLE</label>
-            <select value={newRole} onChange={e => setNewRole(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-              <option value="editor">Editor (No Account Management)</option>
-              <option value="admin">Administrator (Full Control)</option>
-            </select>
-          </div>
-          <button type="submit" style={{ padding: '10px 20px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', height: '40px' }}>Add User</button>
+          <Button type="submit" variant="success" icon={UserPlus}>Add user</Button>
         </form>
-      </div>
+      </Card>
 
-      <div style={{ background: '#1e293b', padding: '25px', borderRadius: '12px', border: '1px solid #334155' }}>
-        <h3 style={{ margin: '0 0 15px 0', fontSize: '16px' }}>Account List</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {users.map(u => (
-            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a', padding: '15px', borderRadius: '8px', border: '1px solid #334155' }}>
-              <div>
-                <span style={{ fontWeight: 'bold', display: 'block', fontSize: '15px' }}>{u.username}</span>
-                <span style={{ fontSize: '11px', color: u.role === 'admin' ? '#38bdf8' : '#a78bfa', fontWeight: 'bold', textTransform: 'uppercase' }}>{u.role}</span>
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={() => handleForcePassword(u.id, u.username)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 12px', background: '#334155', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>
-                  <Edit size={14} /> Change Pw
-                </button>
-                <button onClick={() => handleDeleteUser(u.id, u.username)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 12px', background: '#450a0a', color: '#fca5a5', border: '1px solid #7f1d1d', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>
-                  <Trash2 size={14} /> Delete
-                </button>
-              </div>
-            </div>
-          ))}
+      <Card title={`Accounts (${users.length})`} icon={Users}>
+        <div className="ui-table-wrap">
+          <table className="ui-table">
+            <thead><tr><th>User</th><th>Role</th><th className="ui-cell-actions">Actions</th></tr></thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id}>
+                  <td className="ui-cell-title">{u.username}{u.username === me && <span className="ui-hint" style={{ fontWeight: 400 }}> (you)</span>}</td>
+                  <td><Badge tone={u.role === 'admin' ? 'accent' : 'neutral'}>{u.role}</Badge></td>
+                  <td className="ui-cell-actions">
+                    <span className="ui-row" style={{ justifyContent: 'flex-end', gap: 6, flexWrap: 'nowrap' }}>
+                      <Button size="sm" icon={KeyRound} onClick={() => handleForcePassword(u.id, u.username)}>Change password</Button>
+                      <Button size="sm" variant="danger" icon={Trash2} onClick={() => handleDeleteUser(u.id, u.username)} disabled={u.username === me} title={u.username === me ? 'You cannot delete your own account' : undefined}>Delete</Button>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

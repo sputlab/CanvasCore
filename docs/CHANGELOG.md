@@ -11,6 +11,40 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Effects in the Advanced tab** of every block: 12 entrance animations (fade, slide in from left/right,
+  zoom in/out, flip, rotate, blur, bounce…) with speed and delay, **hover effects** (lift, grow, shrink,
+  shadow, glow, tilt, brighten, black & white → color) and **looping motion** (float, pulse, bounce, swing,
+  heartbeat, shake, spin), plus **Preview animation** in the editor. All of it stays still for visitors who ask
+  their system for less motion. The CSS lives in `canvascore-admin/effects.css`, shared by the site and the canvas.
+- **Button hovers**: hover background, text and border colors and a hover effect (lift, grow, press, shadow,
+  glow, shine sweep, outline ring, pulse) for the Button block and for each Hero button.
+- **Transparent / outline buttons**: every color field in the panels has a **Transparent** option and a clear
+  button; Hero buttons get Solid / Outline / Text only looks and an optional border; the Button block gets a
+  Colors section; the Style tab gets a **Text color**.
+- **Reorganized admin UI**:
+  - **Sidebar navigation** for every section (Pages, Collections, Templates, Media, Menu, Global Options and,
+    for admins, Submissions, Accounts, Backup), with Publish Site, the signed-in user, logout and the version;
+    on small screens it collapses behind a menu button. No more "Back to Dashboard" round trips.
+  - **Pages**: search by title or URL, status filters with counts, sorting, a Home badge, **duplicate page**,
+    click a title to edit.
+  - **Page editor**: a top bar with the page name and status, save state, preview sizes, undo/redo, Save Draft
+    and Publish; side panels beside the canvas instead of over it, each collapsible (remembered per browser).
+    Shortcuts: **Ctrl/Cmd+S** saves the draft, **Esc** deselects the block.
+  - **Add panel**: blocks grouped by category (Layout, Basic, Sections, Interactive, Lists & data, Business &
+    dynamic) with **search** by name or keyword, and it says where the block will go; your templates and
+    global masters in the same panel.
+  - **Property panel**: the block's name and icon in the header, Content / Style / Advanced tabs that behave
+    the same for every block, the first section of each panel open, **Spacing moved to Style**.
+  - **Media**: drag & drop and multiple uploads, search, copy an image's address.
+  - **Global Options** grouped into cards (Brand & typography, Site identity & SEO, Header & footer, Form
+    emails, Security); **Submissions** search; **Accounts** as a table (you can't delete yourself);
+    **Backup** page for export/import (moved out of the Pages header).
+  - **Notifications** ("Draft saved", "Published", errors) instead of blocking alert dialogs.
+  - A shared **UI kit** (`src/ui/kit.jsx`, `kit.css`) so buttons, fields, cards, tabs and tables look and
+    behave the same everywhere, with visible keyboard focus.
+- The property panel is split into one file per block (`src/components/panel/blocks/`), plus shared Style,
+  Advanced and Page Settings panels; block names and icons come from one catalog (`src/editor/blockCatalog.js`).
+- `tests/ui-shell.mjs` (`npm run test:ui`, part of `npm test`).
 - **New rich text editor** (`src/editor/`), replacing Jodit everywhere with one consistent editor:
   - **Edits the text in place on the canvas**: the block's own HTML becomes editable, so a selected text keeps
     exactly the size, spacing and margins it has on the published page (nothing moves when you click into it);
@@ -69,6 +103,13 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- **Editor text was pale**: the canvas inherited the dark editor's light text color; it now starts from the
+  same base as the published page (dark text, the site font and brand color from Global Options).
+- **Layers drag & drop**: rows no longer stretch or shrink while dragging; a line shows where the block will
+  land (before/after), a highlight when it goes inside a Section/Container, and blocks can be dropped
+  after the last item or into a container that already has blocks.
+- **Cards**: the slider showed 2 for a block with 3 cards; it now counts the cards ("Number of cards").
+- **Button size** (Small/Medium/Large) only applied the font size, not the padding.
 - Selecting a text on the canvas no longer changes its layout (the old editor replaced it with a boxed editor
   with its own padding and toolbar).
 - Ctrl/Cmd+Z while typing in a field no longer undoes the whole page.

@@ -1,0 +1,108 @@
+/* ====== CanvasCore effects ======
+   Inlined into every published page (master.html, by rebuild_all.php) and into the editor canvas.
+   The classes come from effectClasses()/buttonHover() (renderBlock.mjs) = cc_effect_classes()/cc_button_hover() (compiler.php).
+   Scroll animations and looping motion animate the individual translate/scale/rotate properties,
+   hovers animate transform: so a block can enter, loop and react to the mouse all at once. */
+
+/* ---- scroll (entrance) animations: hidden until the page script adds .is-visible ---- */
+.cc-reveal { opacity: 0; }
+.cc-reveal.is-visible {
+  opacity: 1;
+  animation: var(--cc-in, cc-in-fade) var(--cc-dur, .8s) cubic-bezier(.22, .61, .36, 1) var(--cc-delay, 0s) backwards;
+}
+.cc-reveal.fade-in { --cc-in: cc-in-fade; }
+.cc-reveal.fade-up { --cc-in: cc-in-up; }
+.cc-reveal.fade-down { --cc-in: cc-in-down; }
+.cc-reveal.fade-left { --cc-in: cc-in-left; }
+.cc-reveal.fade-right { --cc-in: cc-in-right; }
+.cc-reveal.zoom-in { --cc-in: cc-in-zoom; }
+.cc-reveal.zoom-out { --cc-in: cc-in-zoom-out; }
+.cc-reveal.flip-up { --cc-in: cc-in-flip-up; transform-origin: 50% 0; }
+.cc-reveal.flip-left { --cc-in: cc-in-flip-left; }
+.cc-reveal.rotate-in { --cc-in: cc-in-rotate; }
+.cc-reveal.blur-in { --cc-in: cc-in-blur; }
+.cc-reveal.bounce-in { --cc-in: cc-in-bounce; }
+
+.cc-dur-fast { --cc-dur: .5s; }
+.cc-dur-slow { --cc-dur: 1.2s; }
+.cc-dur-slower { --cc-dur: 1.8s; }
+.cc-delay-100 { --cc-delay: .1s; }
+.cc-delay-200 { --cc-delay: .2s; }
+.cc-delay-300 { --cc-delay: .3s; }
+.cc-delay-500 { --cc-delay: .5s; }
+.cc-delay-800 { --cc-delay: .8s; }
+.cc-delay-1000 { --cc-delay: 1s; }
+.cc-delay-1500 { --cc-delay: 1.5s; }
+
+@keyframes cc-in-fade { from { opacity: 0; } }
+@keyframes cc-in-up { from { opacity: 0; translate: 0 50px; } }
+@keyframes cc-in-down { from { opacity: 0; translate: 0 -50px; } }
+@keyframes cc-in-left { from { opacity: 0; translate: -70px 0; } }
+@keyframes cc-in-right { from { opacity: 0; translate: 70px 0; } }
+@keyframes cc-in-zoom { from { opacity: 0; scale: .9; } }
+@keyframes cc-in-zoom-out { from { opacity: 0; scale: 1.12; } }
+@keyframes cc-in-flip-up { from { opacity: 0; rotate: x 70deg; } }
+@keyframes cc-in-flip-left { from { opacity: 0; rotate: y 70deg; } }
+@keyframes cc-in-rotate { from { opacity: 0; rotate: -8deg; scale: .9; } }
+@keyframes cc-in-blur { from { opacity: 0; filter: blur(14px); } }
+@keyframes cc-in-bounce {
+  0% { opacity: 0; scale: .6; }
+  55% { opacity: 1; scale: 1.06; }
+  75% { scale: .97; }
+  100% { opacity: 1; scale: 1; }
+}
+
+/* ---- hover effects (whole block) ---- */
+[class*="cc-hover-"] { transition: transform .35s ease, box-shadow .35s ease, filter .35s ease; }
+.cc-hover-lift:hover { transform: translateY(-6px) !important; box-shadow: 0 16px 34px rgba(15, 23, 42, .16) !important; }
+.cc-hover-grow:hover { transform: scale(1.04) !important; }
+.cc-hover-shrink:hover { transform: scale(.97) !important; }
+.cc-hover-shadow:hover { box-shadow: 0 18px 44px rgba(15, 23, 42, .2) !important; }
+.cc-hover-glow:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-color, #3b82f6) 30%, transparent), 0 12px 34px color-mix(in srgb, var(--brand-color, #3b82f6) 35%, transparent) !important; }
+.cc-hover-tilt:hover { transform: perspective(900px) rotateX(4deg) rotateY(-5deg) !important; }
+.cc-hover-brighten:hover { filter: brightness(1.08) saturate(1.12); }
+.cc-hover-grayscale { filter: grayscale(1); }
+.cc-hover-grayscale:hover { filter: none; }
+
+/* ---- looping motion (starts after the entrance animation, if any) ---- */
+[class*="cc-loop-"] { animation: var(--cc-loop) var(--cc-loop-dur, 3s) ease-in-out infinite; }
+.cc-reveal.is-visible[class*="cc-loop-"] {
+  animation: var(--cc-in, cc-in-fade) var(--cc-dur, .8s) cubic-bezier(.22, .61, .36, 1) var(--cc-delay, 0s) backwards,
+             var(--cc-loop) var(--cc-loop-dur, 3s) ease-in-out calc(var(--cc-delay, 0s) + var(--cc-dur, .8s)) infinite;
+}
+.cc-loop-float { --cc-loop: cc-loop-float; }
+.cc-loop-pulse { --cc-loop: cc-loop-pulse; --cc-loop-dur: 2s; }
+.cc-loop-bounce { --cc-loop: cc-loop-bounce; --cc-loop-dur: 2.2s; }
+.cc-loop-swing { --cc-loop: cc-loop-swing; transform-origin: 50% 0; }
+.cc-loop-heartbeat { --cc-loop: cc-loop-heartbeat; --cc-loop-dur: 1.6s; }
+.cc-loop-shake { --cc-loop: cc-loop-shake; --cc-loop-dur: 4s; }
+.cc-loop-spin { --cc-loop: cc-loop-spin; --cc-loop-dur: 14s; }
+@keyframes cc-loop-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -12px; } }
+@keyframes cc-loop-pulse { 0%, 100% { scale: 1; } 50% { scale: 1.045; } }
+@keyframes cc-loop-bounce { 0%, 20%, 50%, 80%, 100% { translate: 0 0; } 40% { translate: 0 -16px; } 60% { translate: 0 -8px; } }
+@keyframes cc-loop-swing { 0%, 100% { rotate: 0deg; } 25% { rotate: 3deg; } 75% { rotate: -3deg; } }
+@keyframes cc-loop-heartbeat { 0%, 28%, 70%, 100% { scale: 1; } 14%, 42% { scale: 1.08; } }
+@keyframes cc-loop-shake { 0%, 80%, 100% { translate: 0 0; } 84%, 92% { translate: -5px 0; } 88%, 96% { translate: 5px 0; } }
+@keyframes cc-loop-spin { from { rotate: 0deg; animation-timing-function: linear; } to { rotate: 360deg; } }
+
+/* ---- buttons: hover colors (set per button) and hover effects ---- */
+.cc-btn { transition: background-color .25s ease, color .25s ease, border-color .25s ease, transform .25s ease, box-shadow .25s ease; }
+.cc-hbg:hover { background: var(--cc-hover-bg) !important; }
+.cc-hcol:hover { color: var(--cc-hover-color) !important; }
+.cc-hbd:hover { border-color: var(--cc-hover-border) !important; }
+.cc-bfx-lift:hover { transform: translateY(-3px) !important; box-shadow: 0 10px 22px rgba(15, 23, 42, .2) !important; }
+.cc-bfx-grow:hover { transform: scale(1.06) !important; }
+.cc-bfx-press:hover { transform: scale(.95) !important; }
+.cc-bfx-shadow:hover { box-shadow: 0 12px 28px rgba(15, 23, 42, .28) !important; }
+.cc-bfx-glow:hover { box-shadow: 0 0 0 4px color-mix(in srgb, var(--cc-hover-bg, var(--brand-color, #3b82f6)) 30%, transparent), 0 0 24px color-mix(in srgb, var(--cc-hover-bg, var(--brand-color, #3b82f6)) 55%, transparent) !important; }
+.cc-bfx-ring:hover { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--cc-hover-bg, var(--brand-color, #3b82f6)) !important; }
+.cc-bfx-shine { position: relative; overflow: hidden; }
+.cc-bfx-shine::after { content: ""; position: absolute; top: 0; left: -80%; width: 50%; height: 100%; background: linear-gradient(110deg, transparent, rgba(255, 255, 255, .5), transparent); transform: skewX(-20deg); transition: left .65s ease; pointer-events: none; }
+.cc-bfx-shine:hover::after { left: 130%; }
+.cc-bfx-pulse:hover { animation: cc-loop-pulse 1s ease-in-out infinite; }
+
+/* ---- visitors who ask for less motion get the content without movement ---- */
+@media (prefers-reduced-motion: reduce) {
+  .cc-reveal.is-visible, [class*="cc-loop-"], .cc-bfx-pulse:hover { animation: none !important; }
+  [class*="cc-hover-"], .cc-btn, .cc-bfx-shine::after { transition: none !important; }
+}

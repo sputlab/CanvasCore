@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useDraftSync } from '../session/hooks';
 import { useStore } from '../store/useStore';
-import { PanelTop, PanelBottom, Edit3, Trash2 } from 'lucide-react';
-import { ChevronLeft, Save, Palette, Mail, Globe } from 'lucide-react';
+import { PanelTop, PanelBottom, Edit3, Trash2, Save, Palette, Mail, Search, ShieldCheck, Settings2 } from 'lucide-react';
+import { Button, Card, Field, Input, Select, Checkbox, PageHeader } from '../ui/kit';
+import { notify } from '../ui/notify';
 
 const DEFAULT_SETTINGS = { brandColor: '#3b82f6', fontFamily: 'Inter', adminEmail: '', emailFrom: '', emailSubject: '', siteSuffix: ' | My Site' };
 
@@ -32,15 +33,16 @@ export default function GlobalSettings() {
       const r = await fetch('api.php?action=save_settings', { method: 'POST', body: JSON.stringify(settings) });
       const saved = await r.json();
       if (!saved || !saved.success) {
-        alert('Global options NOT saved: ' + ((saved && saved.message) || 'unexpected response') + '\nYour changes are still here and backed up on this device.');
+        notify('Global options NOT saved: ' + ((saved && saved.message) || 'unexpected response') + '\nYour changes are still here and backed up on this device.', 'error');
         setIsSaving(false);
         return;
       }
       draft.saved(settings);
       setRestoredAt(null);
       const pub = await publishSiteAsync();
-      alert(pub && pub.success ? "✅ Global options saved and site updated successfully!" : 'Global options saved, but publishing the site had an issue.');
-    } catch { alert("Error saving settings. Your changes are still here and backed up on this device."); }
+      if (pub && pub.success) notify('Global options saved and site updated.');
+      else notify('Global options saved, but publishing the site had an issue.', 'error');
+    } catch { notify('Error saving settings. Your changes are still here and backed up on this device.', 'error'); }
     setIsSaving(false);
   };
 
@@ -52,168 +54,96 @@ export default function GlobalSettings() {
       setBlocks(Array.isArray(parts[name]) ? parts[name] : []);
       setSelectedBlockId(null);
       setView('editor');
-    } catch { alert('Could not open ' + name); }
+    } catch { notify('Could not open the ' + name + '.', 'error'); }
   };
   const deletePart = async (name) => {
     if (!window.confirm(`Delete the global ${name}? This removes all its blocks.`)) return;
     try {
       await fetch('api.php?action=delete_part', { method: 'POST', body: JSON.stringify({ name }) });
       await publishSiteAsync();
-      alert(`${name.charAt(0).toUpperCase() + name.slice(1)} deleted.`);
-    } catch { alert('Delete failed.'); }
+      notify(`${name.charAt(0).toUpperCase() + name.slice(1)} deleted.`);
+    } catch { notify('Delete failed.', 'error'); }
   };
 
-  const inputStyle = { width: '100%', padding: '7px 9px', background: '#0f172a', color: '#fff', border: '1px solid #334155', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' };
-  const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' };
+  const set = (patch) => setSettings({ ...settings, ...patch });
+  const FONTS = [['Inter', 'Inter (Clean, Modern)'], ['Roboto', 'Roboto (Google Standard)'], ['Poppins', 'Poppins (Soft, Web)'], ['Open Sans', 'Open Sans (Readable)'],
+    ['Montserrat', 'Montserrat (Geometric)'], ['Lato', 'Lato (Elegant)'], ['Oswald', 'Oswald (High Impact)'], ['Playfair Display', 'Playfair Display (Elegant Serif)'],
+    ['Raleway', 'Raleway (Thin, Chic)'], ['Ubuntu', 'Ubuntu (Tech)'], ['Lora', 'Lora (Editorial Serif)']];
 
   return (
-    <div style={{ padding: '16px 22px', maxWidth: '800px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif', color: '#f8fafc', paddingBottom: '60px' }}>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <div>
-          <button onClick={() => setView('manager')} style={{ background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', padding: 0, marginBottom: '10px' }}>
-            <ChevronLeft size={16} /> Back to Dashboard
-          </button>
-          <h2 style={{ fontSize: '24px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Globe size={24} color="#38bdf8" /> Global Options
-          </h2>
-        </div>
-        <button onClick={saveSettings} disabled={isSaving} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
-          <Save size={18} /> {isSaving ? 'Saving...' : 'Save & Publish'}
-        </button>
-      </div>
+    <div style={{ maxWidth: 860 }}>
+      <PageHeader icon={Settings2} title="Global Options" description="Settings that apply to the whole site. Saving also republishes the site."
+        actions={<Button variant="primary" icon={Save} onClick={saveSettings} disabled={isSaving}>{isSaving ? 'Saving…' : 'Save & Publish'}</Button>} />
 
       {restoredAt && (
-        <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', background: '#0c4a6e', border: '1px solid #0369a1', borderRadius: '10px', padding: '9px 13px', marginBottom: '16px', fontSize: '13px', color: '#e0f2fe' }}>
+        <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#0c4a6e', border: '1px solid #0369a1', borderRadius: 10, padding: '9px 13px', marginBottom: 16, fontSize: 13, color: '#e0f2fe' }}>
           <span><strong>Restored unsaved changes</strong> from {new Date(restoredAt).toLocaleString()}. They are <strong>not saved to the site yet</strong>: click Save &amp; Publish to keep them.</span>
-          <button onClick={() => {
+          <Button size="sm" variant="ghost" onClick={() => {
             if (!window.confirm('Discard the restored changes and reload the saved options?')) return;
             setSettings(draft.discard()); setRestoredAt(null);
-          }} style={{ background: 'transparent', color: '#bae6fd', border: '1px solid #0369a1', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12px' }}>Discard</button>
+          }}>Discard</Button>
         </div>
       )}
 
-      <div style={{ display: 'grid', gap: '30px' }}>
-        {/* STYLE AND BRAND */}
-        <div style={{ background: '#1e293b', borderRadius: '12px', border: '1px solid #334155', padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><Palette size={18} color="#f472b6"/> Visual & Brand</h3>
-          <div>
-            <label style={labelStyle}>Primary Brand Color</label>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <input type="color" value={settings.brandColor || '#3b82f6'} onChange={e => setSettings({...settings, brandColor: e.target.value})} style={{ width: '40px', height: '40px', border: 'none', borderRadius: '6px', cursor: 'pointer', padding: 0 }} />
-              <input type="text" value={settings.brandColor || '#3b82f6'} onChange={e => setSettings({...settings, brandColor: e.target.value})} style={{...inputStyle, flex: 1}} />
+      <Card title="Brand & typography" icon={Palette} description="The brand color is used by buttons, links and the site color in the text editor.">
+        <div className="ui-grid">
+          <Field label="Primary brand color">
+            <div className="ui-row" style={{ flexWrap: 'nowrap' }}>
+              <input type="color" aria-label="Pick the brand color" value={settings.brandColor || '#3b82f6'} onChange={e => set({ brandColor: e.target.value })} style={{ width: 38, height: 34, border: 'none', borderRadius: 6, cursor: 'pointer', padding: 0, background: 'none', flexShrink: 0 }} />
+              <Input type="text" value={settings.brandColor || '#3b82f6'} onChange={e => set({ brandColor: e.target.value })} />
             </div>
-          </div>
-          <div>
-            <label style={labelStyle}>Primary Font (Google Fonts)</label>
-            <select style={inputStyle} value={settings.fontFamily || 'Inter'} onChange={e => setSettings({...settings, fontFamily: e.target.value})}>
-              <option value="Inter">Inter (Clean, Modern)</option>
-              <option value="Roboto">Roboto (Google Standard)</option>
-              <option value="Poppins">Poppins (Soft, Web)</option>
-              <option value="Open Sans">Open Sans (Readable)</option>
-              <option value="Montserrat">Montserrat (Geometric)</option>
-              <option value="Lato">Lato (Elegant)</option>
-              <option value="Oswald">Oswald (High Impact)</option>
-              <option value="Playfair Display">Playfair Display (Elegant Serif)</option>
-              <option value="Raleway">Raleway (Thin, Chic)</option>
-              <option value="Ubuntu">Ubuntu (Tech)</option>
-              <option value="Lora">Lora (Editorial Serif)</option>
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Navigation Menu Theme</label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#cbd5e1', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '12px', cursor: 'pointer' }}>
-              <input type="checkbox" checked={!!settings.menuInheritTheme} onChange={e => setSettings({...settings, menuInheritTheme: e.target.checked})} style={{ width: 18, height: 18 }} />
-              Let the menu inherit the global brand color on hover
-            </label>
-            <p style={{ fontSize: '11px', color: '#64748b', margin: '6px 0 0 0' }}>When off, the menu uses only its own colors set in the Menu Builder.</p>
-          </div>
+          </Field>
+          <Field label="Primary font (Google Fonts)">
+            <Select value={settings.fontFamily || 'Inter'} onChange={e => set({ fontFamily: e.target.value })} options={FONTS} />
+          </Field>
         </div>
+        <Checkbox label="Let the menu inherit the brand color on hover" checked={!!settings.menuInheritTheme} onChange={e => set({ menuInheritTheme: e.target.checked })} />
+        <p className="ui-hint" style={{ margin: '4px 0 0 24px' }}>When off, the menu uses only its own colors set in the Menu Builder.</p>
+      </Card>
 
-        <h3 style={{ margin: '28px 0 14px 0', fontSize: '15px', borderTop: '1px solid #334155', paddingTop: '20px' }}>SEO & Publishing</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
-          <div>
-            <label style={labelStyle}>SITE URL (for sitemap & social)</label>
-            <input type="text" value={settings.siteUrl || ''} onChange={e => setSettings({ ...settings, siteUrl: e.target.value })} placeholder="https://www.example.com" style={inputStyle} />
-          </div>
-          <div>
-            <label style={labelStyle}>SITE NAME</label>
-            <input type="text" value={settings.siteName || ''} onChange={e => setSettings({ ...settings, siteName: e.target.value })} placeholder="My Site" style={inputStyle} />
-          </div>
-          <div>
-            <label style={labelStyle}>FAVICON URL</label>
-            <input type="text" value={settings.faviconUrl || ''} onChange={e => setSettings({ ...settings, faviconUrl: e.target.value })} placeholder="/uploads/favicon.png" style={inputStyle} />
-          </div>
-          <div>
-            <label style={labelStyle}>DEFAULT SOCIAL IMAGE (OG)</label>
-            <input type="text" value={settings.defaultOgImage || ''} onChange={e => setSettings({ ...settings, defaultOgImage: e.target.value })} placeholder="/uploads/og-default.png" style={inputStyle} />
-          </div>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#cbd5e1', cursor: 'pointer' }}>
-              <input type="checkbox" checked={settings.robotsAllow !== false} onChange={e => setSettings({ ...settings, robotsAllow: e.target.checked })} style={{ width: 18, height: 18 }} />
-              Allow search engines to index the site (robots.txt)
-            </label>
-          </div>
+      <Card title="Site identity & SEO" icon={Search} description="How the site appears in browser tabs, search engines and social shares.">
+        <div className="ui-grid">
+          <Field label="Site name"><Input value={settings.siteName || ''} onChange={e => set({ siteName: e.target.value })} placeholder="My Site" /></Field>
+          <Field label="Site address (for sitemap & social)"><Input value={settings.siteUrl || ''} onChange={e => set({ siteUrl: e.target.value })} placeholder="https://www.example.com" /></Field>
+          <Field label="Page title suffix" hint="Added to every page title in the browser tab. Leave empty for none.">
+            <Input value={settings.siteSuffix !== undefined ? settings.siteSuffix : ' | My Site'} onChange={e => set({ siteSuffix: e.target.value })} placeholder=" | My Site" />
+          </Field>
+          <Field label="Favicon address"><Input value={settings.faviconUrl || ''} onChange={e => set({ faviconUrl: e.target.value })} placeholder="/uploads/favicon.png" /></Field>
+          <Field label="Default social image (OG)"><Input value={settings.defaultOgImage || ''} onChange={e => set({ defaultOgImage: e.target.value })} placeholder="/uploads/og-default.png" /></Field>
         </div>
+        <Checkbox label="Allow search engines to index the site (robots.txt)" checked={settings.robotsAllow !== false} onChange={e => set({ robotsAllow: e.target.checked })} />
+      </Card>
 
-        <h3 style={{ margin: '28px 0 14px 0', fontSize: '15px', borderTop: '1px solid #334155', paddingTop: '20px' }}>Security</h3>
-        <div style={{ maxWidth: '360px' }}>
-          <label style={labelStyle}>SESSION TIMEOUT (MINUTES OF INACTIVITY)</label>
-          <input type="number" min="5" max="720" value={settings.sessionTimeoutMinutes ?? 30} onChange={e => setSettings({ ...settings, sessionTimeoutMinutes: e.target.value === '' ? '' : parseInt(e.target.value, 10) })} style={inputStyle} />
-          <p style={{ fontSize: '11px', color: '#64748b', margin: '6px 0 0 0' }}>Between 5 and 720 (12 h). Working in the editor counts as activity. When it expires you are asked to sign in again and your unsaved work is kept.</p>
-        </div>
-
-        <h3 style={{ margin: '28px 0 14px 0', fontSize: '15px', borderTop: '1px solid #334155', paddingTop: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><PanelTop size={16} color="#38bdf8" /> Global Header & Footer</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+      <Card title="Global header & footer" icon={PanelTop} description="Blocks shown at the top and bottom of every page, under or above the menu.">
+        <div className="ui-grid">
           {[['header', PanelTop], ['footer', PanelBottom]].map(([name, Icon]) => (
-            <div key={name} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '10px', padding: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                <Icon size={16} color="#38bdf8" />
-                <strong style={{ textTransform: 'capitalize' }}>{name}</strong>
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#cbd5e1', cursor: 'pointer', marginBottom: '12px' }}>
-                <input type="checkbox" checked={settings[`${name}Enabled`] !== false} onChange={e => setSettings({ ...settings, [`${name}Enabled`]: e.target.checked })} style={{ width: 16, height: 16 }} />
-                Enabled (shown on all pages)
-              </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => editPart(name)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', padding: '7px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}><Edit3 size={13} /> Edit</button>
-                <button onClick={() => deletePart(name)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', padding: '7px 11px', background: '#450a0a', color: '#fca5a5', border: '1px solid #7f1d1d', borderRadius: '7px', cursor: 'pointer', fontSize: '12px' }}><Trash2 size={13} /> Delete</button>
+            <div key={name} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 10, padding: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontWeight: 700, textTransform: 'capitalize' }}><Icon size={16} color="#38bdf8" aria-hidden="true" /> {name}</div>
+              <Checkbox label="Enabled (shown on all pages)" checked={settings[`${name}Enabled`] !== false} onChange={e => set({ [`${name}Enabled`]: e.target.checked })} />
+              <div className="ui-row" style={{ marginTop: 12 }}>
+                <Button variant="primary" size="sm" icon={Edit3} onClick={() => editPart(name)} style={{ flex: 1 }}>Edit {name}</Button>
+                <Button variant="danger" size="sm" icon={Trash2} onClick={() => deletePart(name)}>Delete</Button>
               </div>
             </div>
           ))}
         </div>
+      </Card>
 
-        {/* SEO AND SITE */}
-        <div style={{ background: '#1e293b', borderRadius: '12px', border: '1px solid #334155', padding: '30px' }}>
-          <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><Globe size={18} color="#10b981"/> SEO & Identity</h3>
-          <label style={labelStyle}>Site Title Suffix (e.g. " | My Site")</label>
-          <input type="text" value={settings.siteSuffix !== undefined ? settings.siteSuffix : ' | My Site'} onChange={e => setSettings({...settings, siteSuffix: e.target.value})} style={inputStyle} placeholder="Leave empty for none" />
-          <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#64748b' }}>This will be automatically appended to every page title in the browser tab.</p>
+      <Card title="Form emails" icon={Mail} description="Where messages sent through the site's forms are delivered.">
+        <Field label="Default receiving email (To)" hint="Used by forms that don't have their own receiving email.">
+          <Input type="email" value={settings.adminEmail || ''} onChange={e => set({ adminEmail: e.target.value })} placeholder="admin@yoursite.com" />
+        </Field>
+        <div className="ui-grid">
+          <Field label="Sender email (From)"><Input type="email" value={settings.emailFrom || ''} onChange={e => set({ emailFrom: e.target.value })} placeholder="noreply@yoursite.com" /></Field>
+          <Field label="Default subject"><Input value={settings.emailSubject || ''} onChange={e => set({ emailSubject: e.target.value })} placeholder="New submission from your website" /></Field>
         </div>
+      </Card>
 
-        {/* EMAIL BACKEND */}
-        <div style={{ background: '#1e293b', borderRadius: '12px', border: '1px solid #334155', padding: '30px' }}>
-          <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><Mail size={18} color="#a78bfa"/> Form Mailer Configuration</h3>
-
-          <div style={{ marginBottom: '15px' }}>
-            <label style={labelStyle}>Default Receiving Email (To)</label>
-            <input type="email" value={settings.adminEmail || ''} onChange={e => setSettings({...settings, adminEmail: e.target.value})} style={inputStyle} placeholder="admin@yoursite.com" />
-            <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#64748b' }}>If a specific form doesn't have an email set, messages will be sent here.</p>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            <div>
-              <label style={labelStyle}>Sender Email (From)</label>
-              <input type="email" value={settings.emailFrom || ''} onChange={e => setSettings({...settings, emailFrom: e.target.value})} style={inputStyle} placeholder="noreply@yoursite.com" />
-            </div>
-            <div>
-              <label style={labelStyle}>Default Subject</label>
-              <input type="text" value={settings.emailSubject || ''} onChange={e => setSettings({...settings, emailSubject: e.target.value})} style={inputStyle} placeholder="New submission from your website" />
-            </div>
-          </div>
-        </div>
-      </div>
-
+      <Card title="Security" icon={ShieldCheck}>
+        <Field label="Session timeout (minutes of inactivity)" hint="Between 5 and 720 (12 h). Working in the editor counts as activity. When it expires you are asked to sign in again and your unsaved work is kept.">
+          <Input type="number" min="5" max="720" value={settings.sessionTimeoutMinutes ?? 30} onChange={e => set({ sessionTimeoutMinutes: e.target.value === '' ? '' : parseInt(e.target.value, 10) })} style={{ maxWidth: 160 }} />
+        </Field>
+      </Card>
     </div>
   );
 }

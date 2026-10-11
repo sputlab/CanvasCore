@@ -5,9 +5,11 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  ChevronLeft, Save, Trash2, ListTree, Palette, Smartphone, LayoutPanelTop, Monitor, SwatchBook, Undo2, Check,
+  Save, Trash2, ListTree, Palette, Smartphone, LayoutPanelTop, Monitor, SwatchBook, Undo2, Check,
   ArrowUp, ArrowDown, IndentIncrease, IndentDecrease, Plus, GripVertical, Image as ImageIcon, Sparkles, Upload, Type
 } from 'lucide-react';
+import { Button, PageHeader } from '../ui/kit';
+import { notify } from '../ui/notify';
 import { DEFAULT_SETTINGS, BURGER_ICONS, EFFECT_GROUPS, THEMES, applyTheme, matchingTheme, normalizeSettings, toggleEffect, cleanEffects } from '../menu/menuThemes';
 
 // ---- tree utilities (immutable) ----
@@ -35,7 +37,7 @@ function flatToTree(list) {
 }
 
 export default function MenuBuilder() {
-  const { setView, pages, publishSiteAsync } = useStore();
+  const { pages, publishSiteAsync } = useStore();
   const [items, setItems] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
@@ -71,8 +73,8 @@ export default function MenuBuilder() {
       const res = await fetch('api.php?action=upload_media', { method: 'POST', body: fd });
       const data = await res.json();
       if (data.success && data.url) setSettings(s => ({ ...s, logoUrl: data.url }));
-      else alert(data.message || 'Upload failed.');
-    } catch { alert('Upload error.'); }
+      else notify(data.message || 'Upload failed.', 'error');
+    } catch { notify('Upload error.', 'error'); }
   };
 
   // Item border presets
@@ -108,15 +110,16 @@ export default function MenuBuilder() {
       const r = await fetch('api.php?action=save_menu', { method: 'POST', body: JSON.stringify({ items, settings }) });
       const saved = await r.json();
       if (!saved || !saved.success) {
-        alert('Menu NOT saved: ' + ((saved && saved.message) || 'unexpected response') + '\nYour changes are still here and backed up on this device.');
+        notify('Menu NOT saved: ' + ((saved && saved.message) || 'unexpected response') + '\nYour changes are still here and backed up on this device.', 'error');
         setIsSaving(false);
         return;
       }
       draft.saved({ items, settings });
       setRestoredAt(null);
       const res = await publishSiteAsync();
-      alert(res && res.success ? '✅ Menu saved and site updated!' : 'Menu saved, but auto-publish had an issue.');
-    } catch { alert('Error saving menu. Your changes are still here and backed up on this device.'); }
+      if (res && res.success) notify('Menu saved and site updated.');
+      else notify('Menu saved, but auto-publish had an issue.', 'error');
+    } catch { notify('Error saving menu. Your changes are still here and backed up on this device.', 'error'); }
     setIsSaving(false);
   };
 
@@ -167,14 +170,9 @@ export default function MenuBuilder() {
   };
 
   return (
-    <div style={{ padding: '16px 22px', maxWidth: '900px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif', color: '#f8fafc', paddingBottom: '100px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <div>
-          <button onClick={() => setView('manager')} style={backBtn}><ChevronLeft size={16} /> Back to Dashboard</button>
-          <h2 style={{ fontSize: '24px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}><ListTree size={24} color="#38bdf8" /> Menu Builder</h2>
-        </div>
-        <button onClick={saveMenu} disabled={isSaving} style={primaryBtn}><Save size={18} /> {isSaving ? 'Saving...' : 'Save & Publish'}</button>
-      </div>
+    <div style={{ maxWidth: '960px', color: '#f8fafc', paddingBottom: '60px' }}>
+      <PageHeader icon={ListTree} title="Menu Builder" description="The site's navigation bar: links, look and mobile behavior. Saving also republishes the site."
+        actions={<Button variant="primary" icon={Save} onClick={saveMenu} disabled={isSaving}>{isSaving ? 'Saving…' : 'Save & Publish'}</Button>} />
 
       {restoredAt && (
         <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', background: '#0c4a6e', border: '1px solid #0369a1', borderRadius: '10px', padding: '9px 13px', marginBottom: '14px', fontSize: '13px', color: '#e0f2fe' }}>
@@ -574,8 +572,6 @@ const ColorInput = ({ value, onChange, allowTransparent }) => (
 const card = { background: '#1e293b', borderRadius: '0 0 12px 12px', border: '1px solid #334155', borderTop: 'none', padding: '22px', marginBottom: '20px' };
 const input = { padding: '7px 9px', border: '1px solid #334155', borderRadius: '6px', fontSize: '13px', width: '100%', background: '#0f172a', color: '#fff', boxSizing: 'border-box' };
 const miniBtn = { background: '#334155', border: 'none', color: '#fff', borderRadius: '4px', padding: '4px', cursor: 'pointer', display: 'flex' };
-const backBtn = { background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', padding: 0, marginBottom: '10px' };
-const primaryBtn = { display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' };
 const ghostBtn = { display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'transparent', color: '#bae6fd', border: '1px solid #0369a1', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12px' };
 const addBtn = { width: '100%', padding: '15px', background: 'transparent', color: '#38bdf8', border: '2px dashed #334155', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' };
 const checkRow = { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#f8fafc', fontWeight: 'bold', height: '38px', cursor: 'pointer' };

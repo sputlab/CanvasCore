@@ -1,56 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, createContext, useContext } from 'react';
 import { useStore } from '../store/useStore';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { ChevronRight, ChevronDown, Trash2, Box, Columns, Type, Image, SquareChartGantt, Layers, GripVertical } from 'lucide-react';
+import { DndContext, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core';
+import { ChevronRight, ChevronDown, Trash2, GripVertical } from 'lucide-react';
+import { blockInfo } from '../editor/blockCatalog';
+import { dropPosition, containsId, findBlock } from '../editor/layerDrop';
 
-const getIconForType = (type) => {
-  switch (type) {
-    case 'SECTION': return <Box size={12} color="#38bdf8" />;
-    case 'CONTAINER': return <Box size={12} color="#f472b6" />;
-    case 'FLEX_ROW': return <Columns size={12} color="#a78bfa" />;
-    case 'CSS_GRID': return <Columns size={12} color="#38bdf8" />;
-    case 'TEXT': return <Type size={12} color="#94a3b8" />;
-    case 'IMAGE': return <Image size={12} color="#94a3b8" />;
-    case 'BUTTON': return <SquareChartGantt size={12} color="#94a3b8" />;
-    default: return <Layers size={12} color="#94a3b8" />;
-  }
-};
+// Drag state shared by every row: the dragged id and where it would land ({ id, pos }).
+const DragState = createContext({ activeId: null, drop: null });
 
-// All ids in visit order (for the flat SortableContext)
-const flattenIds = (blocks) => {
-  const out = [];
-  const walk = (list) => list.forEach(b => { out.push(b.id); if (b.children) walk(b.children); });
-  walk(blocks);
-  return out;
-};
-
+// The rows never move or resize while dragging (no sortable transforms): a line shows
+// where the block will land (before/after a row) or a highlight when it goes inside a container.
 const LayerNode = ({ block, depth = 0 }) => {
   const { selectedBlockId, setSelectedBlockId, removeBlock } = useStore();
+  const { activeId, drop } = useContext(DragState);
   const isSelected = selectedBlockId === block.id;
   const isContainer = block.children !== undefined;
   const [isOpen, setIsOpen] = useState(true);
 
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: block.id });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: block.id });
+  const { setNodeRef: setDropRef } = useDroppable({ id: block.id, data: { isContainer } });
+  const target = drop && drop.id === block.id ? drop.pos : null;
+  const info = blockInfo(block.type);
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div style={{ opacity: isDragging ? 0.45 : 1 }} data-drop={target || undefined}>
       <div
+        ref={(el) => { setDragRef(el); setDropRef(el); }}
+        role="treeitem" tabIndex={0} aria-selected={isSelected} aria-expanded={isContainer ? isOpen : undefined}
         onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedBlockId(block.id); } }}
         style={{
-          display: 'flex', alignItems: 'center', padding: '6px 10px',
+          position: 'relative', display: 'flex', alignItems: 'center', minHeight: '30px', boxSizing: 'border-box', padding: '0 10px',
           paddingLeft: `${depth * 15 + 6}px`,
-          background: isSelected ? '#1e293b' : (isOver ? '#13233b' : 'transparent'),
+          background: target === 'inside' ? 'rgba(56,189,248,.16)' : (isSelected ? '#1e293b' : 'transparent'),
+          outline: target === 'inside' ? '1px dashed #38bdf8' : 'none', outlineOffset: '-1px',
           borderLeft: isSelected ? '3px solid #38bdf8' : '3px solid transparent',
-          borderTop: isOver && isContainer ? '1px dashed #38bdf8' : '1px solid transparent',
           cursor: 'pointer', color: isSelected ? '#f8fafc' : '#cbd5e1',
           fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.02)'
         }}
       >
-        <span {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} title="Drag to move"
-          style={{ cursor: 'grab', color: '#475569', display: 'flex', marginRight: '2px' }}>
+        {(target === 'before' || target === 'after') && (
+          <span aria-hidden="true" style={{ position: 'absolute', left: `${depth * 15 + 6}px`, right: 4, [target === 'before' ? 'top' : 'bottom']: -1, height: 2, background: '#38bdf8', borderRadius: 2, pointerEvents: 'none' }}>
+            <span style={{ position: 'absolute', left: -3, top: -2, width: 6, height: 6, borderRadius: '50%', background: '#38bdf8' }} />
+          </span>
+        )}
+        <span {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} title="Drag to move" aria-label={`Move ${info.label}`}
+          style={{ cursor: activeId ? 'grabbing' : 'grab', color: '#475569', display: 'flex', marginRight: '2px', touchAction: 'none' }}>
           <GripVertical size={12} />
         </span>
 
@@ -59,14 +54,15 @@ const LayerNode = ({ block, depth = 0 }) => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-          {getIconForType(block.type)}
+          {React.createElement(info.icon, { size: 13, color: info.color, 'aria-hidden': true })}
           <span style={{ fontWeight: isContainer ? 'bold' : 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {block.content?.customId ? `#${block.content.customId}` : block.type}
+            {info.label}{block.content?.customId ? <span style={{ color: '#64748b', fontWeight: 400 }}> #{block.content.customId}</span> : null}
           </span>
         </div>
 
         {isSelected && (
-          <button onClick={(e) => { e.stopPropagation(); removeBlock(block.id); }} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
+          <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete this ${info.label} block${isContainer ? ' and everything inside it' : ''}?`)) removeBlock(block.id); }}
+            title="Delete block" aria-label="Delete block" style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
             <Trash2 size={12} />
           </button>
         )}
@@ -82,27 +78,52 @@ const LayerNode = ({ block, depth = 0 }) => {
 };
 
 export default function LayerNavigator() {
-  const { blocks, selectedBlockId, addBlock, moveBlock } = useStore();
+  const { blocks, selectedBlockId, addBlock, moveBlockTo } = useStore();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const [activeId, setActiveId] = useState(null);
+  const [drop, setDrop] = useState(null);
 
-  const onDragEnd = ({ active, over }) => {
-    if (over && active.id !== over.id) moveBlock(active.id, over.id);
+  // Pointer height over the hovered row -> before / inside / after (never into the dragged block itself)
+  const onDragMove = ({ active, over, activatorEvent, delta }) => {
+    if (!over || over.id === active.id || containsId(findBlock(blocks, active.id), over.id)) { setDrop(null); return; }
+    const y = (activatorEvent?.clientY ?? 0) + delta.y;
+    const rect = over.rect;
+    const ratio = rect.height ? (y - rect.top) / rect.height : 0.5;
+    const pos = dropPosition(Math.max(0, Math.min(1, ratio)), !!over.data.current?.isContainer);
+    setDrop((d) => (d && d.id === over.id && d.pos === pos ? d : { id: over.id, pos }));
   };
+  const reset = () => { setActiveId(null); setDrop(null); };
+  const onDragEnd = ({ active }) => {
+    if (drop) moveBlockTo(active.id, drop.id, drop.pos);
+    reset();
+  };
+  const dragged = activeId ? findBlock(blocks, activeId) : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f172a' }}>
       <div style={{ padding: '11px 12px', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', color: '#a78bfa', fontWeight: '800', letterSpacing: '1px' }}>DOM NAVIGATOR</span>
+        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '800', letterSpacing: '1px' }}>PAGE STRUCTURE</span>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
         {blocks.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>Tree is empty. Add a section.</div>
+          <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>The page is empty. Add a block from the Add tab.</div>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={flattenIds(blocks)}>
+          <DndContext sensors={sensors} collisionDetection={pointerWithin}
+            onDragStart={({ active }) => setActiveId(active.id)} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={reset}>
+            <DragState.Provider value={{ activeId, drop }}>
+              <div role="tree" aria-label="Page structure">
               {blocks.map(block => <LayerNode key={block.id} block={block} depth={0} />)}
-            </SortableContext>
+              </div>
+            </DragState.Provider>
+            <DragOverlay dropAnimation={null}>
+              {dragged ? (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#1e293b', border: '1px solid #38bdf8', borderRadius: 6, color: '#f8fafc', fontSize: 12, fontWeight: 600, boxShadow: '0 8px 20px rgba(0,0,0,.4)', whiteSpace: 'nowrap', cursor: 'grabbing' }}>
+                  {React.createElement(blockInfo(dragged.type).icon, { size: 13, color: blockInfo(dragged.type).color, 'aria-hidden': true })}
+                  {blockInfo(dragged.type).label}
+                </div>
+              ) : null}
+            </DragOverlay>
           </DndContext>
         )}
       </div>
@@ -111,7 +132,7 @@ export default function LayerNavigator() {
         <p style={{ margin: '0 0 6px 0', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>
           {selectedBlockId ? 'Add inside selected:' : 'Add to root:'}
         </p>
-        <p style={{ margin: '0 0 10px 0', fontSize: '10px', color: '#64748b' }}>Tip: drag <GripVertical size={10} style={{ verticalAlign: 'middle' }} /> to reorder or move between containers.</p>
+        <p style={{ margin: '0 0 10px 0', fontSize: '10px', color: '#64748b' }}>Tip: drag <GripVertical size={10} style={{ verticalAlign: 'middle' }} /> to move a block. Drop on the middle of a Section or Container to put it inside.</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <button onClick={() => addBlock('SECTION', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>+ Section</button>
           <button onClick={() => addBlock('CONTAINER', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#f472b6', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>+ Container</button>

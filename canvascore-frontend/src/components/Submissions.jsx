@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
-import { ChevronLeft, Inbox, Download, Trash2, RefreshCw } from 'lucide-react';
+import { Inbox, Download, Trash2, RefreshCw } from 'lucide-react';
+import { Button, IconButton, PageHeader, EmptyState, Badge, SearchInput } from '../ui/kit';
+import { notify } from '../ui/notify';
 
 export default function Submissions() {
-  const { setView } = useStore();
   const [rows, setRows] = useState([]);
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   const fetchRows = () => fetch('api.php?action=get_submissions')
@@ -25,10 +26,11 @@ export default function Submissions() {
       a.download = `form-submissions-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(a.href);
-    } catch { alert('Export failed.'); }
+    } catch { notify('Export failed.', 'error'); }
   };
 
   const deleteOne = async (id) => {
+    if (!window.confirm('Delete this submission?')) return;
     await fetch('api.php?action=delete_submission', { method: 'POST', body: JSON.stringify({ id }) });
     setRows(rows.filter(r => r.id !== id));
   };
@@ -39,54 +41,46 @@ export default function Submissions() {
     setRows([]);
   };
 
+  const shown = rows.filter((r) => !query || JSON.stringify([r.form_id, r.page, r.data]).toLowerCase().includes(query.toLowerCase()));
+
   return (
-    <div style={{ padding: '16px 22px', maxWidth: '1000px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif', color: '#f8fafc' }}>
-      <button onClick={() => setView('manager')} style={{ background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', padding: 0, marginBottom: '20px' }}>
-        <ChevronLeft size={16} /> Back to Dashboard
-      </button>
+    <>
+      <PageHeader icon={Inbox} title="Form Submissions" description="Messages visitors sent through the site's forms."
+        actions={<>
+          <Button icon={RefreshCw} onClick={load}>Refresh</Button>
+          <Button variant="primary" icon={Download} onClick={exportCsv} disabled={!rows.length}>Export CSV</Button>
+          <Button variant="danger" icon={Trash2} onClick={clearAll} disabled={!rows.length}>Clear all</Button>
+        </>} />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Inbox size={24} color="#38bdf8" /> Form Submissions <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 400 }}>({rows.length})</span>
-        </h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={load} style={btn('#334155')}><RefreshCw size={15} /> Refresh</button>
-          <button onClick={exportCsv} disabled={!rows.length} style={btn('#3b82f6')}><Download size={15} /> Export CSV</button>
-          <button onClick={clearAll} disabled={!rows.length} style={btn('#450a0a', '#fca5a5', '#7f1d1d')}><Trash2 size={15} /> Clear</button>
+      {rows.length > 0 && (
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 260px', maxWidth: 360 }}><SearchInput value={query} onChange={setQuery} placeholder="Search messages…" label="Search submissions" /></div>
+          <span className="ui-hint">{shown.length} of {rows.length}</span>
         </div>
-      </div>
+      )}
 
-      {loading ? <p style={{ color: '#64748b' }}>Loading…</p> : rows.length === 0 ? (
-        <div style={{ background: '#1e293b', border: '2px dashed #334155', borderRadius: '12px', padding: '60px', textAlign: 'center', color: '#64748b' }}>
-          <Inbox size={40} style={{ marginBottom: '12px' }} />
-          <p>No submissions yet. They will appear here when visitors send a form.</p>
-        </div>
+      {loading ? <p className="ui-hint">Loading…</p> : rows.length === 0 ? (
+        <EmptyState icon={Inbox} title="No submissions yet">They will appear here when visitors send a form.</EmptyState>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {rows.map(r => (
-            <div key={r.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '16px 18px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '12px', color: '#94a3b8' }}>{r.created_at} · <span style={{ color: '#38bdf8' }}>{r.form_id || 'form'}</span></span>
-                <button onClick={() => deleteOne(r.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}><Trash2 size={14} /></button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {shown.map(r => (
+            <article key={r.id} className="ui-card" style={{ margin: 0, padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span className="ui-row" style={{ gap: 8 }}><Badge tone="accent">{r.form_id || 'form'}</Badge><span className="ui-hint">{r.created_at}{r.page ? ` · from ${r.page}` : ''}</span></span>
+                <IconButton icon={Trash2} label="Delete submission" size="sm" onClick={() => deleteOne(r.id)} style={{ color: '#f87171' }} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
+              <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, margin: 0 }}>
                 {Object.entries(r.data || {}).map(([k, v]) => (
-                  <div key={k} style={{ background: '#0f172a', borderRadius: '8px', padding: '8px 12px' }}>
-                    <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>{k}</div>
-                    <div style={{ fontSize: '13px', color: '#f8fafc', wordBreak: 'break-word' }}>{String(v)}</div>
+                  <div key={k} style={{ background: '#0f172a', borderRadius: 8, padding: '8px 12px' }}>
+                    <dt style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>{k}</dt>
+                    <dd style={{ margin: 0, fontSize: 13, color: '#f8fafc', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{String(v)}</dd>
                   </div>
                 ))}
-              </div>
-              {r.page && <div style={{ marginTop: '8px', fontSize: '11px', color: '#475569' }}>from: {r.page}</div>}
-            </div>
+              </dl>
+            </article>
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
-
-const btn = (bg, color = '#f8fafc', border) => ({
-  display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', background: bg, color,
-  border: border ? `1px solid ${border}` : '1px solid #475569', borderRadius: '8px', cursor: 'pointer', fontSize: '13px',
-});

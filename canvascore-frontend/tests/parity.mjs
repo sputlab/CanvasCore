@@ -39,6 +39,15 @@ const fixtures = [
   { id: 'f17', type: 'HTML', styles: { width: '100%' }, content: { code: '<p>raw</p>' } },
   { id: 'f18', type: 'FAQ', styles: { width: '100%' }, content: { items: [{ q: 'Q1?', a: 'A1' }, { q: 'Q2?', a: 'riga1\nriga2' }] } },
   { id: 'f19', type: 'FORM', styles: { padding: '40px', width: '100%' }, content: { title: '<h3>Contatti</h3>', btnText: 'Invia', successMsg: 'Grazie', email: 'a@b.it', customId: 'myform', fields: [{ label: 'Nome', type: 'text', required: true }, { label: 'Msg', type: 'textarea' }] } },
+  // ---- effects and button hovers ----
+  { id: 'e1', type: 'BUTTON', styles: { backgroundColor: 'transparent', color: '#111', borderWidth: '2px', borderStyle: 'solid', borderColor: '#111', animation: 'bounce-in' }, content: { text: 'Hover', url: '#', useGlobal: false, btnHoverBg: '#111', btnHoverColor: '#fff', btnHoverBorder: '#222', btnEffect: 'shine', animDuration: 'slow', animDelay: '300' } },
+  { id: 'e2', type: 'HERO', styles: { textAlign: 'left' }, content: { title: '<h1>T</h1>', subtitle: '', buttons: [
+      { text: 'Solid', url: '#', bgColor: '#3b82f6', textColor: '#fff', borderRadius: '8px', hoverBg: '#1d4ed8', effect: 'lift' },
+      { text: 'Outline', url: '#', bgColor: 'transparent', textColor: '#fff', borderRadius: '8px', borderColor: '#ffffff', hoverBg: '#ffffff', hoverColor: '#0f172a' },
+  ] } },
+  { id: 'e3', type: 'TEXT', styles: { animation: 'fade-left' }, content: { text: '<p>x</p>', animDelay: 1000, hoverEffect: 'lift', loopEffect: 'float' } },
+  { id: 'e4', type: 'SECTION', styles: { animation: 'nope' }, content: { hoverEffect: 'bad', loopEffect: 'pulse', animDuration: 'fast' }, children: [] },
+  { id: 'e5', type: 'BUTTON', styles: {}, content: { text: 'B', url: '#', btnEffect: 'evil" onmouseover="x', btnHoverBg: '"><script>' } },
   // ---- cross tests: containers with blocks inside ----
   { id: 'fx1', type: 'FLEX_ROW', styles: { display: 'flex', gap: '20px', flexWrap: 'wrap', width: '100%' }, children: [
       { id: 'fx1a', type: 'IMAGE', styles: { width: '50%' }, content: { src: 'a.jpg', aspectRatio: '1 / 1' } },
