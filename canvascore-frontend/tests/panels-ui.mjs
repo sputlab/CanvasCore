@@ -46,7 +46,6 @@ const vite = await createServer({
   root: PROJECT, configFile: false, logLevel: 'error', appType: 'custom', clearScreen: false,
   server: { middlewareMode: true, hmr: false, watch: null },
   plugins: [react()],
-  resolve: { alias: { 'jodit-react': path.join(PROJECT, 'tests/stubs/jodit-react.jsx') } },
   define: { __APP_VERSION__: '"test"', __APP_BUILD__: '0', __BLOCK_DEFS__: JSON.stringify(blockDefs) },
   optimizeDeps: { noDiscovery: true, include: [] },
 });
