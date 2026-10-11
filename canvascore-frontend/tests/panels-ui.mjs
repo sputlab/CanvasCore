@@ -224,7 +224,7 @@ try {
   console.error('  ✗ ECCEZIONE: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));
 }
 
-try { root && root.unmount(); } catch { /* noop */ }
+try { root?.unmount(); } catch { /* noop */ }
 await vite.close();
 console.log(`\n${fails === 0 ? 'PANNELLI UI OK' : fails + ' controlli falliti'} (${total} controlli)${failedRun ? ' — interrotto da un\'eccezione' : ''}`);
 process.exit(fails === 0 ? 0 : 1);

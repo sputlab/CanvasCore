@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { History, RotateCcw, Trash2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { listDrafts, clearDraft, describeDraft } from '../session/drafts';
@@ -18,16 +18,15 @@ export default function DraftRestorePrompt() {
   const isAuthenticated = useStore((s) => s.isAuthenticated);
   const username = useStore((s) => s.username);
   const sessionExpired = useStore((s) => s.sessionExpired);
-  const [items, setItems] = useState(null);
-  const checkedFor = useRef(null);
-
-  useEffect(() => {
-    if (!isAuthenticated || !username) { checkedFor.current = null; setItems(null); return; }
-    if (checkedFor.current === username) return;           // un solo controllo per accesso
-    checkedFor.current = username;
-    const found = listDrafts(username);
-    setItems(found.length ? found : null);
-  }, [isAuthenticated, username]);
+  const user = isAuthenticated && username ? username : null;
+  // Un solo controllo per accesso: si rilegge il backup solo quando cambia l'utente connesso.
+  const [check, setCheck] = useState({ user: null, items: null });
+  if (check.user !== user) {
+    const found = user ? listDrafts(user) : [];
+    setCheck({ user, items: found.length ? found : null });
+  }
+  const items = check.user === user ? check.items : null;
+  const setItems = (v) => setCheck((c) => ({ ...c, items: v }));
 
   if (!items || sessionExpired) return null;
 

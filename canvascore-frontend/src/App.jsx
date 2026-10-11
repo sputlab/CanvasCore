@@ -29,7 +29,7 @@ export default function App() {
 
     fetchVersion();
     checkAuth().then(() => setLoading(false));
-  }, [checkAuth]);
+  }, [checkAuth, fetchVersion]);
 
   // Il gestore di sessione lavora finche' si e' autenticati (anche a login-overlay mostrato).
   useEffect(() => {

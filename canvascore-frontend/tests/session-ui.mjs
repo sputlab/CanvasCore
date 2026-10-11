@@ -21,7 +21,7 @@ const check = (name, cond, extra = '') => {
 };
 const section = (t) => console.log('\n' + t);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function waitFor(fn, { timeout = 4000, label = '' } = {}) {
+async function waitFor(fn, { timeout = 4000 } = {}) {
   const t0 = Date.now();
   for (;;) {
     let v; try { v = fn(); } catch { v = null; }
@@ -149,8 +149,8 @@ async function boot(backend, storageSnapshot = null) {
   root.render(React.createElement(React.StrictMode, null, React.createElement(App)));   // StrictMode: effetti eseguiti due volte
 }
 async function shutdown() {
-  try { globalThis.__CC_SESSION && globalThis.__CC_SESSION.stop(); } catch { /* noop */ }
-  try { root && root.unmount(); } catch { /* noop */ }
+  try { globalThis.__CC_SESSION?.stop(); } catch { /* noop */ }
+  try { root?.unmount(); } catch { /* noop */ }
   root = null;
   await sleep(30);
 }

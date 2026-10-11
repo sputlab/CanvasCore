@@ -24,7 +24,7 @@ export default function GlobalSettings() {
         if (pending) setRestoredAt(pending.savedAt);
       })
       .catch(console.error);
-  }, []);
+  }, [draft]);
 
   const saveSettings = async () => {
     setIsSaving(true);

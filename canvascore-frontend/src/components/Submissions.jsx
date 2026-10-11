@@ -7,14 +7,12 @@ export default function Submissions() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
-    setLoading(true);
-    fetch('api.php?action=get_submissions')
-      .then(res => res.json())
-      .then(data => { if (Array.isArray(data)) setRows(data); setLoading(false); })
-      .catch(() => setLoading(false));
-  };
-  useEffect(() => { load(); }, []);
+  const fetchRows = () => fetch('api.php?action=get_submissions')
+    .then(res => res.json())
+    .then(data => { if (Array.isArray(data)) setRows(data); setLoading(false); })
+    .catch(() => setLoading(false));
+  const load = () => { setLoading(true); fetchRows(); };
+  useEffect(() => { fetchRows(); }, []);
 
   const exportCsv = async () => {
     try {

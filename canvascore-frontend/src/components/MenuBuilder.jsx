@@ -31,6 +31,17 @@ function locate(list, id, parent = null) {
   return null;
 }
 
+// retrocompat: converte eventuale formato piatto (parentId) in albero
+function flatToTree(list) {
+  if (!list.length) return [];
+  const nested = list.some(it => Object.prototype.hasOwnProperty.call(it, 'children'));
+  if (nested) return list.map(it => ({ ...it, url: it.url === '#' ? '' : (it.url || ''), children: flatToTree(it.children || []) }));
+  const map = {}; list.forEach(it => map[it.id] = { ...it, url: it.url === '#' ? '' : (it.url || ''), children: [] });
+  const roots = [];
+  list.forEach(it => { const n = map[it.id]; if (it.parentId && map[it.parentId]) map[it.parentId].children.push(n); else roots.push(n); });
+  return roots;
+}
+
 export default function MenuBuilder() {
   const { setView, pages, publishSiteAsync } = useStore();
   const [items, setItems] = useState([]);
@@ -91,18 +102,7 @@ export default function MenuBuilder() {
         if (pending) setRestoredAt(pending.savedAt);
       })
       .catch(console.error);
-  }, []);
-
-  // retrocompat: converte eventuale formato piatto (parentId) in albero
-  function flatToTree(list) {
-    if (!list.length) return [];
-    const nested = list.some(it => Object.prototype.hasOwnProperty.call(it, 'children'));
-    if (nested) return list.map(it => ({ ...it, url: it.url === '#' ? '' : (it.url || ''), children: flatToTree(it.children || []) }));
-    const map = {}; list.forEach(it => map[it.id] = { ...it, url: it.url === '#' ? '' : (it.url || ''), children: [] });
-    const roots = [];
-    list.forEach(it => { const n = map[it.id]; if (it.parentId && map[it.parentId]) map[it.parentId].children.push(n); else roots.push(n); });
-    return roots;
-  }
+  }, [draft]);
 
   const saveMenu = async () => {
     setIsSaving(true);

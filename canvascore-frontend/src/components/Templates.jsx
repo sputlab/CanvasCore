@@ -4,6 +4,7 @@ import { ChevronLeft, LayoutTemplate, Plus, FileText } from 'lucide-react';
 
 // Rigenera gli id dell'albero di blocchi per evitare collisioni
 let _seq = 0;
+const newPageId = () => 'page-' + Date.now();
 const regenIds = (node) => {
   const n = { ...node, id: 'block-' + Date.now() + '-' + (_seq++) };
   if (node.children) n.children = node.children.map(regenIds);
@@ -24,7 +25,7 @@ export default function Templates() {
 
   const applyStarter = async (starter) => {
     setBusy(true);
-    const id = 'page-' + Date.now();
+    const id = newPageId();
     const blocks = (starter.blocks || []).map(regenIds);
     const newPage = {
       id, title: starter.name === 'Blank' ? 'New Page' : starter.name, slug: 'new-page', clean_slug: 'new-page',

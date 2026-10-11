@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
 import { FileText, Plus, Trash2, Edit, ListTree, LogOut, Globe, Image as ImageIcon, Palette, Users, Clock, User, CheckCircle, Edit3, AlertCircle, LayoutTemplate, Download, Upload, ExternalLink, Inbox, Library } from 'lucide-react';
 
@@ -6,16 +6,16 @@ export default function PageManager() {
   const { setView, setActivePage, setBlocks, pages, setPages, logout, userRole, username, publishSiteAsync, setSelectedBlockId, appVersion, appBuild, serverVersion } = useStore();
   const [loading, setLoading] = useState(true);
 
-  const loadPages = () => {
+  const loadPages = useCallback(() => {
     fetch('api.php?action=get_pages')
       .then(res => { if (!res.ok) throw new Error("Unauthorized"); return res.json(); })
       .then(data => { if (Array.isArray(data)) setPages(data); setLoading(false); })
       .catch(e => { console.error(e); setLoading(false); });
-  };
+  }, [setPages]);
 
   useEffect(() => {
     loadPages();
-  }, [setPages]);
+  }, [loadPages]);
 
   const createPage = async () => {
     const id = 'page-' + Date.now();

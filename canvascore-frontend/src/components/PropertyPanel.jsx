@@ -4,14 +4,14 @@ import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, MoveUp, Globe, F
 import JoditEditor from 'jodit-react';
 
 // Converte un titolo in slug: minuscole, trattini al posto degli spazi/caratteri.
-export const slugify = (str) => (str || '')
+const slugify = (str) => (str || '')
   .toString()
   .toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // rimuove accenti
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '');
 
-export const handleNumericKey = (e, val, onChange) => {
+const handleNumericKey = (e, val, onChange) => {
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     e.preventDefault();
     const strVal = String(val || '0px');

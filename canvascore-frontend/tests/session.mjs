@@ -326,10 +326,9 @@ function world({ timeout = 1800, user = 'ann', config = {} } = {}) {
     return json({ success: true });
   };
   const log = { flushed: 0, notices: [], reloads: 0, csrf: [], reauth: 0 };
-  let tickFn = null;
   const mgr = createSessionManager({
     store, fetchFn: srv.fetch, now: () => clock.t,
-    setIntervalFn: (f) => { tickFn = f; return 1; }, clearIntervalFn: () => { tickFn = null; },
+    setIntervalFn: () => 1, clearIntervalFn: () => {},
     onFlush: () => { log.flushed++; }, onExpired: (i) => { log.notices.push(i); }, onReauthenticated: () => { log.reauth++; },
     reload: () => { log.reloads++; }, setCsrf: (t) => { log.csrf.push(t); }, config,
   });
@@ -663,7 +662,7 @@ section('INTEGRAZIONE: salvataggio interrotto dalla scadenza');
   const w = world(); w.mgr.start(); await settle();
   let token = 'STALE';
   const guarded = createGuardedFetch({ originalFetch: w.srv.fetch, session: w.mgr, getToken: () => token });
-  w.mgr = w.mgr; const origSet = w.log.csrf;
+  const origSet = w.log.csrf;
   const m2 = createSessionManager({
     store: w.store, fetchFn: w.srv.fetch, now: () => w.clock.t, setIntervalFn: () => 1, clearIntervalFn: () => {},
     setCsrf: (t) => { token = t; origSet.push(t); },

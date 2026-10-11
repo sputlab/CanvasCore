@@ -7,7 +7,7 @@ import { getSession } from '../session/runtime';
 // qualunque movimento/tasto estende la sessione e lo chiude.
 export default function SessionWarning() {
   const expiresAt = useStore((s) => s.sessionExpiresAt);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
   const remaining = Math.max(0, Math.ceil(((expiresAt || now) - now) / 1000));
   const mm = Math.floor(remaining / 60); const ss = String(remaining % 60).padStart(2, '0');
