@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { ChevronLeft, Image as ImageIcon, LayoutGrid, Trash2, Upload } from 'lucide-react';
+import { ChevronLeft, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
 
 export default function MediaManager() {
   const { setView } = useStore();
@@ -27,7 +27,7 @@ export default function MediaManager() {
       const data = await res.json();
       if (!data.success) alert(data.message || "Upload Error");
       fetchMedia();
-    } catch(err) { alert("Network Error"); }
+    } catch { alert("Network Error"); }
     setUploading(false);
   };
 
@@ -36,7 +36,7 @@ export default function MediaManager() {
     try {
       await fetch('api.php?action=delete_media', { method: 'POST', body: JSON.stringify({ name: filename }) });
       fetchMedia();
-    } catch (e) { alert("Error deleting image."); }
+    } catch { alert("Error deleting image."); }
   };
 
   return (

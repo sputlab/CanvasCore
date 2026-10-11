@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 // Unica fonte di verità: canvascore-admin/version.json e blocks.json (lato PHP).
 function readJson(rel, fallback) {
   try { return JSON.parse(readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf-8')) }
-  catch (e) { return fallback }
+  catch { return fallback }
 }
 const version = readJson('../canvascore-admin/version.json', { app: '0.0.0', build: 0 })
 const blockDefs = readJson('../canvascore-admin/blocks.json', { _baseStyles: {}, types: {} })

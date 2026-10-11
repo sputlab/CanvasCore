@@ -111,7 +111,7 @@ export const useStore = create((set, get) => ({
       const res = await fetch('api.php?action=version');
       const data = await res.json();
       set({ serverVersion: data });
-    } catch (e) { /* noop */ }
+    } catch { /* noop */ }
   },
 
   checkAuth: async () => {
@@ -125,7 +125,7 @@ export const useStore = create((set, get) => ({
         sessionExpiresAt: data.authenticated && data.expires_in != null ? Date.now() + data.expires_in * 1000 : null,
         sessionTimeout: data.timeout ?? null,
       });
-    } catch (e) { /* offline: resta non autenticato */ }
+    } catch { /* offline: resta non autenticato */ }
   },
   login: async (username, password) => {
     try {
@@ -140,7 +140,7 @@ export const useStore = create((set, get) => ({
         });
       }
       return data;
-    } catch (e) { return { success: false, message: 'Server error' }; }
+    } catch { return { success: false, message: 'Server error' }; }
   },
   // Login dalla schermata "sessione scaduta". NON adotta l'identita' di un utente diverso: questa scheda contiene
   // il lavoro non salvato di un altro utente e non deve ne' ereditarlo ne' scrivere i suoi backup nell'altro account.
@@ -158,11 +158,11 @@ export const useStore = create((set, get) => ({
         sessionExpiresAt: data.expires_in != null ? Date.now() + data.expires_in * 1000 : null, sessionTimeout: data.timeout ?? null,
       });
       return data;
-    } catch (e) { return { success: false, message: 'Server error' }; }
+    } catch { return { success: false, message: 'Server error' }; }
   },
   logout: async () => {
     flushDrafts();                                   // backup del lavoro non salvato PRIMA di azzerare lo stato
-    try { await fetch('api.php?action=logout'); } catch (e) { /* senza rete si esce comunque dall'interfaccia */ }
+    try { await fetch('api.php?action=logout'); } catch { /* senza rete si esce comunque dall'interfaccia */ }
     window.__CC_CSRF = null;
     setDraftUser(null);
     set({
@@ -181,7 +181,7 @@ export const useStore = create((set, get) => ({
       const data = await res.json();
       if (data.success) set({ mustChangePw: false });
       return data;
-    } catch (e) { return { success: false, message: 'Server error' }; }
+    } catch { return { success: false, message: 'Server error' }; }
   },
 
   publishSiteAsync: async () => {
@@ -190,7 +190,7 @@ export const useStore = create((set, get) => ({
       const res = await fetch('rebuild_all.php');
       const text = await res.text();
       return JSON.parse(text);
-    } catch (e) { return { success: false, message: 'Connection error.' }; }
+    } catch { return { success: false, message: 'Connection error.' }; }
   },
 
   currentView: 'manager', setView: (view) => set({ currentView: view }),
@@ -216,7 +216,7 @@ export const useStore = create((set, get) => ({
       const res = await fetch('api.php?action=get_templates');
       const data = await res.json();
       set({ templates: Array.isArray(data) ? data : [] });
-    } catch (e) { /* noop */ }
+    } catch { /* noop */ }
   },
   addSavedBlock: (blockStr, parentId = null) => set((state) => {
     try {
@@ -229,7 +229,7 @@ export const useStore = create((set, get) => ({
       const newBlock = regenerateIds(blockData);
       if (parentId) return pushHistory(state, insertNode(state.blocks, parentId, newBlock));
       return pushHistory(state, [...state.blocks, newBlock]);
-    } catch (e) { return state; }
+    } catch { return state; }
   }),
   deleteTemplate: async (id) => {
     if (!window.confirm("Delete permanently?")) return;
@@ -247,7 +247,7 @@ export const useStore = create((set, get) => ({
       const res = await fetch('api.php?action=get_masters');
       const data = await res.json();
       set({ masters: Array.isArray(data) ? data : [] });
-    } catch (e) { /* noop */ }
+    } catch { /* noop */ }
   },
 
   saveAsMaster: async (blockId, name) => {
@@ -283,7 +283,7 @@ export const useStore = create((set, get) => ({
       };
       set(s => pushHistory(s, replaceWithPointer(s.blocks, blockId)));
       alert(`Master Component '${name}' saved and linked!`);
-    } catch (e) { alert("Error saving Master."); }
+    } catch { alert("Error saving Master."); }
   },
 
   enterMasterEditMode: (masterId) => {
@@ -291,7 +291,7 @@ export const useStore = create((set, get) => ({
     const master = state.masters.find(m => m.id === masterId);
     if (!master) return;
     let content;
-    try { content = JSON.parse(master.content_json); } catch (e) { return; }
+    try { content = JSON.parse(master.content_json); } catch { return; }
     set({
       editingMaster: { id: master.id, name: master.name, pageBackup: state.blocks, activePageBackup: state.activePage },
       isEditingMaster: true,
@@ -318,7 +318,7 @@ export const useStore = create((set, get) => ({
           return;                                      // resta in modifica: nessuna perdita
         }
         await get().fetchMasters();
-      } catch (e) {
+      } catch {
         alert('Master NOT saved (connection problem). Your changes are still here: try again.');
         return;
       }

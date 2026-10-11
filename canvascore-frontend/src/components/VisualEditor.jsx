@@ -65,7 +65,7 @@ export default function VisualEditor() {
       try {
         const res = await fetch('api.php?action=save_part', { method: 'POST', body: JSON.stringify({ name: activePage.__part, blocks }) });
         return await res.json();
-      } catch (e) { alert('Error saving part.'); return null; }
+      } catch { alert('Error saving part.'); return null; }
     }
     // Voce di collezione: salvataggio su collection_items
     if (activePage.__item) {
@@ -80,7 +80,7 @@ export default function VisualEditor() {
         const data = await res.json();
         if (data.success && publish) updateActivePage({ status: 'published' });
         return data;
-      } catch (e) { alert('Error saving item.'); return null; }
+      } catch { alert('Error saving item.'); return null; }
     }
     const payload = {
       id: activePage.id, title: activePage.title, slug: activePage.slug,
@@ -101,7 +101,7 @@ export default function VisualEditor() {
          updateActivePage({ id: data.new_id, is_draft_copy: 0, status: 'published' });
       }
       return data;
-    } catch (e) { alert("Error saving page."); return null; }
+    } catch { alert("Error saving page."); return null; }
   };
 
   // Dopo OGNI salvataggio riuscito lo stato corrente diventa quello "salvato": il backup locale non serve piu'.
@@ -128,7 +128,7 @@ export default function VisualEditor() {
 
       // Aggiorna lo stato globale per riflettere le modifiche nella dashboard
       fetch('api.php?action=get_pages').then(r => r.json()).then(d => setPages(d));
-    } catch(e) {
+    } catch {
       alert("Error publishing.");
     }
 
@@ -142,7 +142,7 @@ export default function VisualEditor() {
       fetch('api.php?action=get_pages').then(r => r.json()).then(d => setPages(d));
       draft.discard();
       setView('manager');
-    } catch(e) { alert("Error discarding changes."); }
+    } catch { alert("Error discarding changes."); }
   };
 
   const getValidParentId = () => {

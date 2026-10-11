@@ -21,7 +21,7 @@ export default function Login() {
       const res = await login(username, password);
       if (!res.success) setError(res.message || 'Authentication error');
       else clearExpiredNotice();
-    } catch (err) {
+    } catch {
       setError('Server connection error');
     }
 

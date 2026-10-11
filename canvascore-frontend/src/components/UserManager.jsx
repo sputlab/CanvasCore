@@ -29,7 +29,7 @@ export default function UserManager() {
         setNewUsername(''); setNewPassword(''); setNewRole('editor');
         fetchUsers();
       }
-    } catch (err) { alert("Error adding user"); }
+    } catch { alert("Error adding user"); }
   };
 
   const handleForcePassword = async (id, username) => {
@@ -39,7 +39,7 @@ export default function UserManager() {
       const res = await fetch('api.php?action=force_password', { method: 'POST', body: JSON.stringify({ id, password: newPwd }) });
       const data = await res.json();
       alert(data.message);
-    } catch (err) { alert("Network Error"); }
+    } catch { alert("Network Error"); }
   };
 
   const handleDeleteUser = async (id, username) => {
@@ -49,7 +49,7 @@ export default function UserManager() {
       const data = await res.json();
       alert(data.message);
       if (data.success) fetchUsers();
-    } catch (err) { alert("Network Error"); }
+    } catch { alert("Network Error"); }
   };
 
   const inputStyle = { width: '100%', padding: '7px 9px', background: '#0f172a', color: '#fff', border: '1px solid #334155', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' };

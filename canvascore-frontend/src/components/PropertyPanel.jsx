@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
-import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, MoveUp, Globe, FileEdit, ChevronLeft, Sliders, Palette, Shield, Save, Image as ImageIcon, X, Upload, Trash2, Eraser, MapPin, Images, HelpCircle, Columns3, Mail, SquareChartGantt, Type, Code, MonitorPlay, LayoutGrid, Star, MessageSquareQuote, Crown, Library, Rows3, PanelTop, CreditCard, GalleryHorizontal, ArrowUp, ArrowDown, SeparatorHorizontal, Info, ListOrdered, Hash, BarChart3, Table2, Timer, History, Building2, Users, GitCompare, Store, Clock } from 'lucide-react';
+import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, MoveUp, Globe, FileEdit, ChevronLeft, Sliders, Palette, Shield, Save, Image as ImageIcon, X, Upload, Trash2, Eraser, MapPin, Images, HelpCircle, Columns3, Mail, SquareChartGantt, Type, Code, MonitorPlay, Star, MessageSquareQuote, Crown, Library, Rows3, PanelTop, CreditCard, GalleryHorizontal, ArrowUp, ArrowDown, SeparatorHorizontal, Info, ListOrdered, Hash, BarChart3, Table2, Timer, History, Building2, Users, GitCompare, Store, Clock } from 'lucide-react';
 import JoditEditor from 'jodit-react';
 
 // Converte un titolo in slug: minuscole, trattini al posto degli spazi/caratteri.
@@ -157,7 +157,7 @@ const MediaPickerModal = ({ onClose, onSelect }) => {
       const data = await res.json();
       if (!data.success) alert(data.message || "Upload error");
       fetchMedia();
-    } catch(err) { alert("Network error"); }
+    } catch { alert("Network error"); }
     setUploading(false);
   };
 
@@ -218,7 +218,7 @@ export default function PropertyPanel() {
     try {
       await fetch('api.php?action=save_template', { method: 'POST', body: JSON.stringify({ name, content_json: JSON.stringify(selectedBlock) }) });
       fetchTemplates(); alert(`Template saved!`);
-    } catch (e) { alert("Error"); }
+    } catch { alert("Error"); }
   };
 
   const handleCreateMaster = async () => {
@@ -599,7 +599,7 @@ export default function PropertyPanel() {
                 <input ref={coverInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
                   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
                   const fd = new FormData(); fd.append('file', f);
-                  try { const r = await fetch('api.php?action=upload_media', { method: 'POST', body: fd }); const d = await r.json(); if (d.success && d.url) updateActivePage({ cover_image: d.url }); } catch (err) { /* noop */ }
+                  try { const r = await fetch('api.php?action=upload_media', { method: 'POST', body: fd }); const d = await r.json(); if (d.success && d.url) updateActivePage({ cover_image: d.url }); } catch { /* noop */ }
                 }} />
               </div>
               {activePage.cover_image && <img src={activePage.cover_image} alt="" style={{ marginTop: '8px', width: '100%', borderRadius: '8px', display: 'block' }} />}

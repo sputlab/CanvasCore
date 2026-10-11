@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { FileText, Plus, Trash2, Edit, ListTree, LogOut, Globe, Image as ImageIcon, Palette, Users, LayoutGrid, Clock, User, CheckCircle, Edit3, AlertCircle, LayoutTemplate, Download, Upload, ExternalLink, Inbox, Library } from 'lucide-react';
+import { FileText, Plus, Trash2, Edit, ListTree, LogOut, Globe, Image as ImageIcon, Palette, Users, Clock, User, CheckCircle, Edit3, AlertCircle, LayoutTemplate, Download, Upload, ExternalLink, Inbox, Library } from 'lucide-react';
 
 export default function PageManager() {
   const { setView, setActivePage, setBlocks, pages, setPages, logout, userRole, username, publishSiteAsync, setSelectedBlockId, appVersion, appBuild, serverVersion } = useStore();
@@ -29,7 +29,7 @@ export default function PageManager() {
     // si comporta esattamente come quando la si riapre dalla dashboard.
     try {
       await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, blocks: [], publish: false }) });
-    } catch (e) { /* in caso di errore sara' il primo Save Draft a crearla */ }
+    } catch { /* in caso di errore sara' il primo Save Draft a crearla */ }
     setPages([newPage, ...pages]);
     setActivePage(newPage);
     setBlocks([]);
@@ -48,7 +48,7 @@ export default function PageManager() {
       a.download = `canvascore-site-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(a.href);
-    } catch (e) { alert('Export failed.'); }
+    } catch { alert('Export failed.'); }
   };
 
   const importSite = async (file) => {
@@ -60,7 +60,7 @@ export default function PageManager() {
       const data = await res.json();
       alert(data.message || (data.success ? 'Imported.' : 'Import failed.'));
       if (data.success) { loadPages(); await publishSiteAsync(); }
-    } catch (e) { alert('Import failed: invalid file.'); }
+    } catch { alert('Import failed: invalid file.'); }
   };
 
   const pageUrl = (page) => {
@@ -76,7 +76,7 @@ export default function PageManager() {
       targetPage = page.draft_copy;
     }
     setActivePage(targetPage);
-    try { setBlocks(JSON.parse(targetPage.content_json || '[]')); } catch(e) { setBlocks([]); }
+    try { setBlocks(JSON.parse(targetPage.content_json || '[]')); } catch { setBlocks([]); }
     setSelectedBlockId(null);
     setView('editor');
   };
@@ -86,7 +86,7 @@ export default function PageManager() {
     try {
       await fetch('api.php?action=delete_page', { method: 'POST', body: JSON.stringify({ id }) });
       setPages(pages.filter(p => p.id !== id));
-    } catch(e) { alert("Error deleting page"); }
+    } catch { alert("Error deleting page"); }
   };
 
   const formatDate = (dateStr) => {

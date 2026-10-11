@@ -67,7 +67,7 @@ export default function Collections() {
       }) });
       loadItems(active.id);
       setNeedsPublish(true);
-    } catch (e) { /* noop */ }
+    } catch { /* noop */ }
   };
 
   const publishNow = async () => {
@@ -75,7 +75,7 @@ export default function Collections() {
     try {
       const res = await publishSiteAsync();
       if (res && res.success) setNeedsPublish(false); else alert((res && res.message) || 'Publish error');
-    } catch (e) { alert('Publish error'); }
+    } catch { alert('Publish error'); }
     setPublishing(false);
   };
 

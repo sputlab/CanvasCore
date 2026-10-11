@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDraftSync } from '../session/hooks';
 import { useStore } from '../store/useStore';
 import { PanelTop, PanelBottom, Edit3, Trash2 } from 'lucide-react';
-import { ChevronLeft, Save, Palette, Mail, LayoutGrid, Globe } from 'lucide-react';
+import { ChevronLeft, Save, Palette, Mail, Globe } from 'lucide-react';
 
 const DEFAULT_SETTINGS = { brandColor: '#3b82f6', fontFamily: 'Inter', adminEmail: '', emailFrom: '', emailSubject: '', siteSuffix: ' | My Site' };
 
@@ -40,7 +40,7 @@ export default function GlobalSettings() {
       setRestoredAt(null);
       const pub = await publishSiteAsync();
       alert(pub && pub.success ? "✅ Global options saved and site updated successfully!" : 'Global options saved, but publishing the site had an issue.');
-    } catch(e) { alert("Error saving settings. Your changes are still here and backed up on this device."); }
+    } catch { alert("Error saving settings. Your changes are still here and backed up on this device."); }
     setIsSaving(false);
   };
 
@@ -52,7 +52,7 @@ export default function GlobalSettings() {
       setBlocks(Array.isArray(parts[name]) ? parts[name] : []);
       setSelectedBlockId(null);
       setView('editor');
-    } catch (e) { alert('Could not open ' + name); }
+    } catch { alert('Could not open ' + name); }
   };
   const deletePart = async (name) => {
     if (!window.confirm(`Delete the global ${name}? This removes all its blocks.`)) return;
@@ -60,7 +60,7 @@ export default function GlobalSettings() {
       await fetch('api.php?action=delete_part', { method: 'POST', body: JSON.stringify({ name }) });
       await publishSiteAsync();
       alert(`${name.charAt(0).toUpperCase() + name.slice(1)} deleted.`);
-    } catch (e) { alert('Delete failed.'); }
+    } catch { alert('Delete failed.'); }
   };
 
   const inputStyle = { width: '100%', padding: '7px 9px', background: '#0f172a', color: '#fff', border: '1px solid #334155', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' };

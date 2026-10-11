@@ -131,7 +131,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     if (block.type === 'MASTER') {
       const masterInfo = masters.find(m => m.id === block.content.masterId);
       let masterRealContent = null;
-      if (masterInfo) { try { masterRealContent = JSON.parse(masterInfo.content_json); } catch (e) { /* noop */ } }
+      if (masterInfo) { try { masterRealContent = JSON.parse(masterInfo.content_json); } catch { /* noop */ } }
       return (
         <div id={innerId} className={`cc-master-wrapper ${innerClass}`} style={{ outline: isSelected ? '2px solid #fcd34d' : '1px solid transparent', position: 'relative', width: '100%' }}>
           {isSelected && (

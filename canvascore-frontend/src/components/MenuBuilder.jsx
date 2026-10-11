@@ -63,7 +63,7 @@ export default function MenuBuilder() {
       const data = await res.json();
       if (data.success && data.url) setSettings(s => ({ ...s, logoUrl: data.url }));
       else alert(data.message || 'Upload failed.');
-    } catch (e) { alert('Upload error.'); }
+    } catch { alert('Upload error.'); }
   };
 
   // Preset dei bordi voce
@@ -118,7 +118,7 @@ export default function MenuBuilder() {
       setRestoredAt(null);
       const res = await publishSiteAsync();
       alert(res && res.success ? '✅ Menu saved and site updated!' : 'Menu saved, but auto-publish had an issue.');
-    } catch (e) { alert('Error saving menu. Your changes are still here and backed up on this device.'); }
+    } catch { alert('Error saving menu. Your changes are still here and backed up on this device.'); }
     setIsSaving(false);
   };
 
@@ -335,7 +335,7 @@ function LivePreview({ items, settings }) {
         const res = await fetch('api.php?action=preview_menu', { method: 'POST', body: JSON.stringify({ items, settings }) });
         const data = await res.json();
         if (data && data.success) setHtml(data.html || '');
-      } catch (e) { /* noop */ }
+      } catch { /* noop */ }
       setLoading(false);
     }, 400);
     return () => clearTimeout(t);

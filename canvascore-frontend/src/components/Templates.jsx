@@ -34,7 +34,7 @@ export default function Templates() {
     };
     try {
       await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, blocks, publish: false }) });
-    } catch (e) { /* noop */ }
+    } catch { /* noop */ }
     setPages([newPage, ...pages]);
     setActivePage(newPage);
     setBlocks(blocks);

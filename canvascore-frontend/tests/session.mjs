@@ -69,13 +69,13 @@ section('BACKUP LOCALE (drafts)');
   st.m.set('cc_draft:v1:ann:rotta', '{non json');
   st.m.set('cc_draft:v1:ann:vuota', JSON.stringify({ v: 1, scope: 'x' }));
   let threw = false; let n = 0;
-  try { n = listDrafts().length; } catch (e) { threw = true; }
+  try { n = listDrafts().length; } catch { threw = true; }
   check('voci corrotte o incomplete vengono ignorate senza errori', !threw && n === 1, `n=${n}`);
 
   // quota piena
   const st2 = freshStorage(); st2.quota = 50;
   let r; threw = false;
-  try { r = saveDraft('menu', { items: new Array(50).fill('x'.repeat(20)) }); } catch (e) { threw = true; }
+  try { r = saveDraft('menu', { items: new Array(50).fill('x'.repeat(20)) }); } catch { threw = true; }
   check('quota piena: nessuna eccezione', !threw);
   check('quota piena: ok=false con motivo "quota" (la UI deve avvisare)', r && r.ok === false && r.reason === 'quota');
   check('quota piena: resta comunque leggibile dalla memoria (login sovrapposto)', readDraft('menu') !== null);

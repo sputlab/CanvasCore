@@ -27,7 +27,7 @@ export default function Submissions() {
       a.download = `form-submissions-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(a.href);
-    } catch (e) { alert('Export failed.'); }
+    } catch { alert('Export failed.'); }
   };
 
   const deleteOne = async (id) => {
