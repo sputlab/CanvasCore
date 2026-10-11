@@ -179,3 +179,41 @@
   .ui-content { padding: 18px 16px 40px; }
 }
 @media (prefers-reduced-motion: reduce) { .ui-sidebar, .ui-toast, .ui-btn, .ui-section__head svg.ui-chev { transition: none; animation: none; } }
+
+/* editor: add-block tiles */
+.cc-add-tile { transition: background .12s, border-color .12s, color .12s; }
+.cc-add-tile:hover { background: #243149 !important; border-color: #38bdf8 !important; color: #f8fafc !important; }
+.cc-add-tile:focus-visible { outline: none; box-shadow: var(--ui-focus); }
+
+/* ---- page editor shell (VisualEditor) */
+.cc-editor { display: grid; grid-template-rows: 52px 1fr; height: 100vh; width: 100vw; overflow: hidden; background: var(--ui-bg); font-family: var(--ui-font); color: var(--ui-text); }
+.cc-ed-top { display: flex; align-items: center; gap: 10px; padding: 0 10px; background: var(--ui-panel); border-bottom: 1px solid var(--ui-border-soft); min-width: 0; z-index: 30; }
+.cc-ed-top__group { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cc-ed-top--master { justify-content: space-between; background: #fbbf24; color: #78350f; padding: 0 14px; font-size: 13px; }
+.cc-ed-master-btn { height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid #78350f; background: transparent; color: #78350f; font: 700 12px/1 var(--ui-font); cursor: pointer; white-space: nowrap; }
+.cc-ed-master-btn--solid { background: #78350f; color: #fff; }
+.cc-ed-sep { width: 1px; height: 22px; background: var(--ui-border); flex-shrink: 0; }
+.cc-ed-title { font: 700 13.5px/1.2 var(--ui-font); color: var(--ui-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cc-ed-body { position: relative; display: flex; min-height: 0; }
+.cc-ed-left, .cc-ed-right { background: var(--ui-panel); display: flex; flex-direction: column; min-height: 0; overflow: hidden; transition: width .22s ease, margin .22s ease; flex-shrink: 0; }
+.cc-ed-left { width: 264px; border-right: 1px solid var(--ui-border-soft); }
+.cc-ed-right { width: 320px; border-left: 1px solid var(--ui-border-soft); overflow-y: auto; }
+.cc-ed-left[data-open="false"], .cc-ed-right[data-open="false"] { width: 0; border: none; }
+.cc-ed-canvas { flex: 1; min-width: 0; overflow: auto; background: #e2e8f0; position: relative; }
+.cc-ed-toggle { position: relative; z-index: 5; align-self: flex-start; margin-top: 10px; width: 22px; height: 34px; display: flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--ui-border); background: var(--ui-panel); color: var(--ui-muted); cursor: pointer; flex-shrink: 0; }
+.cc-ed-toggle:hover { color: var(--ui-strong); background: var(--ui-surface); }
+.cc-ed-toggle:focus-visible { outline: none; box-shadow: var(--ui-focus); }
+.cc-ed-toggle--left { border-left: none; border-radius: 0 8px 8px 0; margin-right: -22px; }
+.cc-ed-toggle--right { border-right: none; border-radius: 8px 0 0 8px; margin-left: -22px; }
+.cc-ed-restored { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 60; background: #0c4a6e; color: #e0f2fe; border: 1px solid #0369a1; border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; gap: 14px; font-size: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); max-width: calc(100vw - 24px); }
+@media (max-width: 1180px) { .cc-ed-hide-md { display: none !important; } }
+@media (max-width: 860px) {
+  .cc-ed-hide-sm { display: none !important; }
+  .cc-ed-left, .cc-ed-right { position: absolute; top: 0; bottom: 0; z-index: 20; box-shadow: 0 0 30px rgba(0, 0, 0, .45); }
+  .cc-ed-left { left: 0; } .cc-ed-right { right: 0; }
+}
+
+/* editor right panel (PropertyPanel) */
+.cc-pp { color: var(--ui-strong); padding-bottom: 40px; }
+.cc-pp-head { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--ui-panel); border-bottom: 1px solid var(--ui-border-soft); }
+.cc-pp-title { font: 800 12.5px/1.2 var(--ui-font); text-transform: uppercase; letter-spacing: .5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

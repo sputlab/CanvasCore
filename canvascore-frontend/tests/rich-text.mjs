@@ -221,7 +221,7 @@ try {
   console.log('\nPROPERTY PANEL — same editor');
   mount(React.createElement(PropertyPanel));
   const accordion = await waitFor(() => $$('button').find((b) => b.textContent.includes('Background & Titles')));
-  if (accordion) click(accordion);
+  if (accordion && accordion.getAttribute('aria-expanded') !== 'true') click(accordion); // the first section starts open
   const boxes = await waitFor(() => { const b = $$('[role="textbox"][contenteditable]'); return b.length >= 2 ? b : null; });
   check('HERO panel: title and subtitle use the rich text field', !!boxes && boxes[0].getAttribute('aria-label') === 'Main title' && boxes[1].getAttribute('aria-label') === 'Subtitle');
   check('…showing the current content', !!boxes && boxes[0].innerHTML === '<h1>Hero</h1>');

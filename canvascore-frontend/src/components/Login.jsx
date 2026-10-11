@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { Lock, LogIn, Clock } from 'lucide-react';
+import { Layers, LogIn, Clock } from 'lucide-react';
+import { Button, Field, Input } from '../ui/kit';
 import { readExpiredNotice, clearExpiredNotice } from '../session/drafts';
 
 export default function Login() {
@@ -28,45 +29,31 @@ export default function Login() {
     setLoading(false);
   };
 
-  const inputStyle = { width: '100%', padding: '12px 15px', background: '#0f172a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '8px', fontSize: '15px', outline: 'none', boxSizing: 'border-box' };
-
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, system-ui, sans-serif' }}>
-      <div style={{ background: '#1e293b', padding: '40px', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', width: '100%', maxWidth: '400px', border: '1px solid #334155' }}>
-
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <div style={{ background: '#3b82f6', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 15px auto', boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.5)' }}>
-            <Lock size={32} color="#fff" />
-          </div>
-          <h2 style={{ color: '#f8fafc', margin: '0 0 8px 0', fontSize: '24px' }}>CanvasCore</h2>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: '14px' }}>Enter your credentials to manage the site</p>
+    <div style={{ minHeight: '100vh', background: 'radial-gradient(1200px 600px at 50% -10%, #1e3a5f 0%, #0b1220 60%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, boxSizing: 'border-box', fontFamily: 'var(--ui-font)' }}>
+      <main className="ui-card" style={{ padding: 32, width: '100%', maxWidth: 400, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+        <div style={{ textAlign: 'center', marginBottom: 26 }}>
+          <div className="ui-brand__logo" style={{ width: 52, height: 52, borderRadius: 14, margin: '0 auto 14px' }}><Layers size={26} aria-hidden="true" /></div>
+          <h1 style={{ color: '#f8fafc', margin: '0 0 6px', fontSize: 22 }}>CanvasCore</h1>
+          <p style={{ color: '#94a3b8', margin: 0, fontSize: 14 }}>Enter your credentials to manage the site</p>
         </div>
 
         {notice && (
-          <div role="status" style={{ display: 'flex', gap: '10px', background: '#451a03', border: '1px solid #92400e', borderRadius: '10px', padding: '11px 13px', marginBottom: '22px', fontSize: '13px', color: '#fde68a', lineHeight: 1.5 }}>
-            <Clock size={17} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div role="status" style={{ display: 'flex', gap: 10, background: '#451a03', border: '1px solid #92400e', borderRadius: 10, padding: '11px 13px', marginBottom: 20, fontSize: 13, color: '#fde68a', lineHeight: 1.5 }}>
+            <Clock size={17} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
             <span><strong>Your session expired.</strong> Unsaved changes{notice.user ? <> of <strong>{notice.user}</strong></> : ''} are backed up on this device and will be offered after you sign in.</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>USERNAME</label>
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g. admin" required style={inputStyle} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>PASSWORD</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required style={inputStyle} />
-          </div>
-
-          {error && <div style={{ color: '#ef4444', fontSize: '13px', textAlign: 'center', background: '#450a0a', padding: '10px', borderRadius: '6px', border: '1px solid #7f1d1d' }}>{error}</div>}
-
-          <button type="submit" disabled={loading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: loading ? 'wait' : 'pointer', transition: 'background 0.2s' }}>
-            {loading ? 'Please wait...' : 'Login'} {!loading && <LogIn size={18} />}
-          </button>
+        <form onSubmit={handleSubmit}>
+          <Field label="Username"><Input value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g. admin" required autoComplete="username" autoFocus style={{ minHeight: 40 }} /></Field>
+          <Field label="Password"><Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required autoComplete="current-password" style={{ minHeight: 40 }} /></Field>
+          {error && <p role="alert" style={{ color: '#fca5a5', fontSize: 13, textAlign: 'center', background: '#450a0a', padding: 10, borderRadius: 6, border: '1px solid #7f1d1d', margin: '4px 0 12px' }}>{error}</p>}
+          <Button type="submit" variant="primary" size="lg" block disabled={loading} style={{ marginTop: 6 }}>
+            {loading ? 'Please wait…' : <>Login <LogIn size={18} aria-hidden="true" /></>}
+          </Button>
         </form>
-
-      </div>
+      </main>
     </div>
   );
 }

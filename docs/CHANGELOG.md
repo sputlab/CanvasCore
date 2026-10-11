@@ -11,6 +11,30 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Reorganized admin UI**:
+  - **Sidebar navigation** for every section (Pages, Collections, Templates, Media, Menu, Global Options and,
+    for admins, Submissions, Accounts, Backup), with Publish Site, the signed-in user, logout and the version;
+    on small screens it collapses behind a menu button. No more "Back to Dashboard" round trips.
+  - **Pages**: search by title or URL, status filters with counts, sorting, a Home badge, **duplicate page**,
+    click a title to edit.
+  - **Page editor**: a top bar with the page name and status, save state, preview sizes, undo/redo, Save Draft
+    and Publish; side panels beside the canvas instead of over it, each collapsible (remembered per browser).
+    Shortcuts: **Ctrl/Cmd+S** saves the draft, **Esc** deselects the block.
+  - **Add panel**: blocks grouped by category (Layout, Basic, Sections, Interactive, Lists & data, Business &
+    dynamic) with **search** by name or keyword, and it says where the block will go; your templates and
+    global masters in the same panel.
+  - **Property panel**: the block's name and icon in the header, Content / Style / Advanced tabs that behave
+    the same for every block, the first section of each panel open, **Spacing moved to Style**.
+  - **Media**: drag & drop and multiple uploads, search, copy an image's address.
+  - **Global Options** grouped into cards (Brand & typography, Site identity & SEO, Header & footer, Form
+    emails, Security); **Submissions** search; **Accounts** as a table (you can't delete yourself);
+    **Backup** page for export/import (moved out of the Pages header).
+  - **Notifications** ("Draft saved", "Published", errors) instead of blocking alert dialogs.
+  - A shared **UI kit** (`src/ui/kit.jsx`, `kit.css`) so buttons, fields, cards, tabs and tables look and
+    behave the same everywhere, with visible keyboard focus.
+- The property panel is split into one file per block (`src/components/panel/blocks/`), plus shared Style,
+  Advanced and Page Settings panels; block names and icons come from one catalog (`src/editor/blockCatalog.js`).
+- `tests/ui-shell.mjs` (`npm run test:ui`, part of `npm test`).
 - **New rich text editor** (`src/editor/`), replacing Jodit everywhere with one consistent editor:
   - **Edits the text in place on the canvas**: the block's own HTML becomes editable, so a selected text keeps
     exactly the size, spacing and margins it has on the published page (nothing moves when you click into it);

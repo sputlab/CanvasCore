@@ -3,20 +3,8 @@ import { useStore } from '../store/useStore';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronRight, ChevronDown, Trash2, Box, Columns, Type, Image, SquareChartGantt, Layers, GripVertical } from 'lucide-react';
-
-const getIconForType = (type) => {
-  switch (type) {
-    case 'SECTION': return <Box size={12} color="#38bdf8" />;
-    case 'CONTAINER': return <Box size={12} color="#f472b6" />;
-    case 'FLEX_ROW': return <Columns size={12} color="#a78bfa" />;
-    case 'CSS_GRID': return <Columns size={12} color="#38bdf8" />;
-    case 'TEXT': return <Type size={12} color="#94a3b8" />;
-    case 'IMAGE': return <Image size={12} color="#94a3b8" />;
-    case 'BUTTON': return <SquareChartGantt size={12} color="#94a3b8" />;
-    default: return <Layers size={12} color="#94a3b8" />;
-  }
-};
+import { ChevronRight, ChevronDown, Trash2, GripVertical } from 'lucide-react';
+import { blockInfo } from '../editor/blockCatalog';
 
 // All ids in visit order (for the flat SortableContext)
 const flattenIds = (blocks) => {
@@ -38,7 +26,9 @@ const LayerNode = ({ block, depth = 0 }) => {
   return (
     <div ref={setNodeRef} style={style}>
       <div
+        role="treeitem" tabIndex={0} aria-selected={isSelected} aria-expanded={isContainer ? isOpen : undefined}
         onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedBlockId(block.id); } }}
         style={{
           display: 'flex', alignItems: 'center', padding: '6px 10px',
           paddingLeft: `${depth * 15 + 6}px`,
@@ -59,14 +49,15 @@ const LayerNode = ({ block, depth = 0 }) => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-          {getIconForType(block.type)}
+          {React.createElement(blockInfo(block.type).icon, { size: 13, color: blockInfo(block.type).color, 'aria-hidden': true })}
           <span style={{ fontWeight: isContainer ? 'bold' : 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {block.content?.customId ? `#${block.content.customId}` : block.type}
+            {blockInfo(block.type).label}{block.content?.customId ? <span style={{ color: '#64748b', fontWeight: 400 }}> #{block.content.customId}</span> : null}
           </span>
         </div>
 
         {isSelected && (
-          <button onClick={(e) => { e.stopPropagation(); removeBlock(block.id); }} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
+          <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete this ${blockInfo(block.type).label} block${isContainer ? ' and everything inside it' : ''}?`)) removeBlock(block.id); }}
+            title="Delete block" aria-label="Delete block" style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
             <Trash2 size={12} />
           </button>
         )}
@@ -92,16 +83,18 @@ export default function LayerNavigator() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f172a' }}>
       <div style={{ padding: '11px 12px', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', color: '#a78bfa', fontWeight: '800', letterSpacing: '1px' }}>DOM NAVIGATOR</span>
+        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '800', letterSpacing: '1px' }}>PAGE STRUCTURE</span>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
         {blocks.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>Tree is empty. Add a section.</div>
+          <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>The page is empty. Add a block from the Add tab.</div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={flattenIds(blocks)}>
+              <div role="tree" aria-label="Page structure">
               {blocks.map(block => <LayerNode key={block.id} block={block} depth={0} />)}
+              </div>
             </SortableContext>
           </DndContext>
         )}

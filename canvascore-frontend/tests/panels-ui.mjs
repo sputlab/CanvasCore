@@ -283,7 +283,9 @@ try {
     const openPageInfo = async (activePage) => {
       useStore.setState({ blocks: [], selectedBlockId: null, pages, activePage, userRole: 'admin' });
       mount(React.createElement(PropertyPanel));
-      click(await waitFor(() => buttonByText('Page Info'))); await tick();
+      const pageInfo = await waitFor(() => buttonByText('Page Info'));
+      if (pageInfo.getAttribute('aria-expanded') !== 'true') click(pageInfo); // open by default now
+      await tick();
     };
     const warning = () => $$('[role="alert"]').map((e) => e.textContent).join(' ');
     // the slug input is the one right after its label (field() would return the title input above it)

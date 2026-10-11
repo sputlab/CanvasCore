@@ -393,8 +393,9 @@ export function RichTextField({ value, onChange, variant = 'full', label, minHei
   const handlers = useRegionHandlers(variant);
   const last = useRef(value || '');
 
-  // External changes (canvas edits, undo of the page) refresh the box when it is not being edited
-  useEffect(() => {
+  // External changes (canvas edits, undo of the page) refresh the box when it is not being edited.
+  // Layout effect: the content is in place before the first paint (no empty flash).
+  useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
     if (document.activeElement !== node && node.innerHTML !== (value || '')) node.innerHTML = value || '';
