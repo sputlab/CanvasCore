@@ -7,6 +7,7 @@ e un backend PHP + SQLite che compila le pagine in file `.html` pronti da servir
 
 ```
 .
+├── docs/                  Changelog, note di rilascio (LEGGIMI-x.y.z) e di fase
 ├── canvascore-admin/      Backend PHP (gira sul server, nella cartella admin del sito)
 │   ├── api.php            API JSON dell'editor (auth, pagine, media, menu, utenti…)
 │   ├── compiler.php       Renderer PHP dei blocchi → HTML
@@ -60,4 +61,4 @@ aggiungi una regola di deny).
 ## Versionamento
 
 Versionamento semantico; la versione vive in `canvascore-admin/version.json` ed è letta
-sia dal PHP sia da Vite. Changelog e note di rilascio sono in `../docs/`.
+sia dal PHP sia da Vite. Changelog e note di rilascio sono in [`docs/`](docs/CHANGELOG.md).

@@ -19,8 +19,11 @@
 !/.gitattributes
 !/.editorconfig
 !/README.md
+!/docs/
 !/canvascore-admin/
 !/canvascore-frontend/
+# Una pagina o collezione con slug "docs" verrebbe pubblicata qui dentro
+/docs/**/index.html
 
 # ---------------------------------------------------------------------
 #  Backend PHP: dati locali e artefatti di deploy
