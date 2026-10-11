@@ -9,8 +9,30 @@ export const DEFAULT_SETTINGS = {
   barPadding: '0 24px', isSticky: false, shadow: 'none', effects: [],
   fontSize: '15px', fontWeight: '600', textTransform: 'none', letterSpacing: '0px', highlightCurrent: false,
   logoUrl: '', logoAlign: 'left', logoHeight: '40px', logoGap: '24px', logoLink: 'index.html',
-  mobileThreshold: '768', burgerIcon: '☰',
+  mobileThreshold: '768', burgerIcon: '☰', burgerStyle: 'lines', mobileBurgerSide: 'right', mobileShowLogo: true,
 };
+
+// Burger icons for the mobile menu. Same SVG markup as CC_MENU_BURGERS in compiler.php
+// (tests/menu.mjs compares them); 'label' adds the word "Menu", 'custom' shows the burgerIcon text.
+const svgOpen = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">';
+export const BURGER_ICONS = [
+  { id: 'lines', label: 'Classic', svg: svgOpen + '<path d="M4 6h16M4 12h16M4 18h16"/></svg>' },
+  { id: 'staggered', label: 'Staggered', svg: svgOpen + '<path d="M4 6h16M4 12h12M4 18h8"/></svg>' },
+  { id: 'two-lines', label: 'Two lines', svg: svgOpen + '<path d="M4 9h16M4 15h16"/></svg>' },
+  { id: 'thin', label: 'Thin', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' },
+  { id: 'bold', label: 'Bold', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>' },
+  { id: 'dots', label: 'Dots', svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>' },
+  { id: 'grid', label: 'Grid', svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg>' },
+  { id: 'boxed', label: 'Boxed', svg: svgOpen + '<rect x="2.5" y="2.5" width="19" height="19" rx="5"/><path d="M7.5 8.5h9M7.5 12h9M7.5 15.5h9"/></svg>' },
+];
+export const BURGER_STYLES = [...BURGER_ICONS.map((b) => b.id), 'label', 'custom'];
+
+// Menus saved before the picker existed: a custom character stays, the default ☰ becomes 'lines'.
+export function burgerStyleOf(s) {
+  if (s && BURGER_STYLES.includes(s.burgerStyle)) return s.burgerStyle;
+  const icon = String((s && s.burgerIcon) || '').trim();
+  return icon && icon !== '☰' ? 'custom' : 'lines';
+}
 
 // Effects, grouped. In a "single" group only one effect can be on at a time (they animate the
 // same property); "multi" groups stack freely. Effects from different groups always combine.
@@ -104,6 +126,7 @@ export function normalizeSettings(s) {
   const out = { ...DEFAULT_SETTINGS, ...(s || {}) };
   const legacy = s && s.effect && s.effect !== 'none' ? [s.effect] : [];
   out.effects = cleanEffects(Array.isArray(s && s.effects) ? s.effects : legacy);
+  out.burgerStyle = burgerStyleOf(s);
   delete out.effect;
   return out;
 }

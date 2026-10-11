@@ -24,6 +24,10 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   the old `effect` keep working. Animations are turned off for visitors who prefer reduced motion.
 - Menu typography (font size, weight, letter case, letter spacing), a button text color for the pill/box
   styles (it was always white), and an optional highlight of the current page (`aria-current` is always set).
+- **Mobile menu options** (Mobile tab): 8 burger icons (classic, staggered, two lines, thin, bold, dots,
+  grid, boxed) plus "icon + Menu" and a custom character; the burger turns into ✕ while the menu is open
+  (`aria-expanded` is kept in sync). The burger can sit on the left, with the logo moving to the right,
+  and the logo can be hidden on mobile only.
 - `tests/menu.mjs` (`npm run test:menu`, part of `npm test`): keeps the effect catalog in sync between the
   editor and the compiler and renders every theme and effect through the PHP compiler.
 - **Setup wizard** (`canvascore-admin/install.php`): checks the server requirements (PHP,
@@ -47,6 +51,9 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- Mobile menu with **center or right** button alignment: the burger no longer ends up in the middle and the
+  centered logo no longer floats over the open menu; on mobile the bar always puts logo and burger at the edges.
+- Menu accent line drawn over the open submenus.
 - **Templates**: a page created from a template kept the slug `new-page` instead of following its
   title like a new blank page; it now starts as e.g. `coming-soon`.
 - **Editor canvas**: padded full-width blocks (forms, icon boxes, testimonials…) overflowed their box in

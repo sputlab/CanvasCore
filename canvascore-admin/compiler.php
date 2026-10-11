@@ -292,6 +292,9 @@ function render_menu_html($menu_json_str, $opts = []) {
     $logoLink       = cc_menu_url($settings['logoLink'] ?? 'index.html');
     $mobileThreshold= (int)($settings['mobileThreshold'] ?? 768);
     $burgerIcon     = htmlspecialchars($settings['burgerIcon'] ?? '☰');
+    $burgerStyle    = cc_menu_burger_style($settings);
+    $burgerLeft     = ($settings['mobileBurgerSide'] ?? 'right') === 'left';
+    $mobileLogo     = !array_key_exists('mobileShowLogo', $settings) || !empty($settings['mobileShowLogo']);
 
     $hasLogo = ($logoUrl !== '');
     $logoSrc = htmlspecialchars($logoUrl);
@@ -344,7 +347,11 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "  $glareHtml\n";
     $html .= "  <div class=\"cc-nav-inner\" style=\"display:flex; align-items:center; min-height:$barHeight; padding:$barPadding; box-sizing:border-box; justify-content:$justify; position:relative; z-index:1; $innerExtra\">\n";
     $html .= "    $logoHtml\n";
-    $html .= "    <button type=\"button\" class=\"cc-mobile-toggle\" aria-label=\"Menu\" style=\"display:none; background:none; border:none; cursor:pointer; font-size:28px; color:$textColor; order:3;\">$burgerIcon</button>\n";
+    if ($burgerStyle === 'custom') $burgerHtml = "<span class=\"cc-burger-glyph\">$burgerIcon</span>";
+    elseif ($burgerStyle === 'label') $burgerHtml = CC_MENU_BURGERS['lines'] . "<span class=\"cc-burger-label\">Menu</span>";
+    else $burgerHtml = CC_MENU_BURGERS[$burgerStyle];
+    $html .= "    <button type=\"button\" class=\"cc-mobile-toggle\" aria-label=\"Menu\" aria-expanded=\"false\" style=\"display:none; background:none; border:none; cursor:pointer; color:$textColor; order:3;\">"
+        . "<span class=\"cc-burger-icon\">$burgerHtml</span><span class=\"cc-burger-close\">" . CC_MENU_BURGER_CLOSE . "</span></button>\n";
     $html .= "    <ul class=\"cc-main-menu\" style=\"display:flex; align-items:center; gap:$itemGap; list-style:none; margin:0; padding:0; flex-wrap:wrap; $menuWrapStyle\">\n";
     $html .= cc_render_menu_items($items);
     $html .= "    </ul>\n";
@@ -385,10 +392,21 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "    .cc-navigation .cc-dropdown .cc-menu-link:hover { color:$hoverColorVal !important; background:" . ($hoverBg !== 'transparent' ? "$hoverBg" : "rgba(0,0,0,0.05)") . " !important; }\n";
     $html .= "    .cc-navigation .cc-dropdown .cc-dropdown { top:0; left:100%; }\n"; // sub-submenu to the side
     $html .= "    $effectCss\n";
+    $html .= "    .cc-navigation .cc-mobile-toggle { align-items:center; gap:8px; padding:6px; line-height:1; font-family:inherit; }\n";
+    $html .= "    .cc-navigation .cc-burger-icon, .cc-navigation .cc-burger-close { display:inline-flex; align-items:center; gap:8px; }\n";
+    $html .= "    .cc-navigation .cc-burger-close, .cc-navigation .cc-mobile-toggle[aria-expanded=\"true\"] .cc-burger-icon { display:none; }\n";
+    $html .= "    .cc-navigation .cc-mobile-toggle[aria-expanded=\"true\"] .cc-burger-close { display:inline-flex; }\n";
+    $html .= "    .cc-navigation .cc-mobile-toggle svg { width:28px; height:28px; display:block; }\n";
+    $html .= "    .cc-navigation .cc-burger-glyph { font-size:28px; }\n";
+    $html .= "    .cc-navigation .cc-burger-label { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:1px; }\n";
     $html .= "    @media (max-width: {$mobileThreshold}px) {\n";
-    $html .= "      .cc-mobile-toggle { display:block !important; margin-left:auto; order:99 !important; }\n";
-    $html .= "      .cc-nav-inner { flex-wrap:wrap; position:relative; }\n";
-    $html .= "      .cc-main-menu { display:none; order:100 !important; flex-direction:column; align-items:stretch !important; width:100%; margin:0 !important; gap:0 !important; padding:10px 0 !important; }\n";
+    // Mobile bar: [logo … burger] or, with the burger on the left, [burger … logo]; the open menu
+    // wraps below as a full-width column. Overrides the desktop alignment (inline styles), which
+    // would otherwise center the burger or float the logo over the open menu.
+    $html .= "      .cc-navigation .cc-nav-inner { flex-wrap:wrap; justify-content:space-between !important; position:relative; }\n";
+    $html .= "      .cc-navigation .cc-logo { position:static !important; transform:none !important; margin:0 !important; order:" . ($burgerLeft ? '2' : '1') . " !important;" . ($burgerLeft ? ' margin-left:auto !important;' : '') . ($mobileLogo ? '' : ' display:none !important;') . " }\n";
+    $html .= "      .cc-navigation .cc-mobile-toggle { display:inline-flex !important; order:" . ($burgerLeft ? '1' : '2') . " !important; margin:0 !important; " . ($burgerLeft ? 'margin-right:auto !important;' : 'margin-left:auto !important;') . " }\n";
+    $html .= "      .cc-main-menu { display:none; order:3 !important; flex-direction:column; align-items:stretch !important; width:100%; margin:0 !important; gap:0 !important; padding:10px 0 !important; }\n";
     $html .= "      .cc-main-menu.active { display:flex; }\n";
     $html .= "      .cc-dropdown { position:static !important; display:none; box-shadow:none !important; padding-left:18px !important; min-width:0; background:transparent; }\n";
     $html .= "      .cc-item.cc-open > .cc-dropdown { display:block !important; }\n";
@@ -406,7 +424,7 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "    if(!nav) return;\n";
     $html .= "    var toggle = nav.querySelector('.cc-mobile-toggle');\n";
     $html .= "    var menu = nav.querySelector('.cc-main-menu');\n";
-    $html .= "    if(toggle && menu){ toggle.addEventListener('click', function(){ menu.classList.toggle('active'); }); }\n";
+    $html .= "    if(toggle && menu){ toggle.addEventListener('click', function(){ toggle.setAttribute('aria-expanded', menu.classList.toggle('active') ? 'true' : 'false'); }); }\n";
     $html .= "    nav.querySelectorAll('.cc-item.cc-has-dropdown > .cc-menu-toggle, .cc-item.cc-has-dropdown > .cc-menu-link').forEach(function(el){\n";
     $html .= "      el.addEventListener('click', function(e){\n";
     $html .= "        if(window.innerWidth <= {$mobileThreshold}){\n";
@@ -445,6 +463,29 @@ function render_menu_html($menu_json_str, $opts = []) {
     $html .= "  </script>\n";
     $html .= "</nav>\n";
     return $html;
+}
+
+// Burger icons for the mobile menu (SVG, drawn in the text color). 'label' adds the word "Menu"
+// to the lines and 'custom' shows the burgerIcon text. Mirrors BURGER_ICONS in menuThemes.js.
+const CC_MENU_SVG_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">';
+const CC_MENU_BURGERS = [
+    'lines'     => CC_MENU_SVG_OPEN . '<path d="M4 6h16M4 12h16M4 18h16"/></svg>',
+    'staggered' => CC_MENU_SVG_OPEN . '<path d="M4 6h16M4 12h12M4 18h8"/></svg>',
+    'two-lines' => CC_MENU_SVG_OPEN . '<path d="M4 9h16M4 15h16"/></svg>',
+    'thin'      => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>',
+    'bold'      => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
+    'dots'      => '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
+    'grid'      => '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg>',
+    'boxed'     => CC_MENU_SVG_OPEN . '<rect x="2.5" y="2.5" width="19" height="19" rx="5"/><path d="M7.5 8.5h9M7.5 12h9M7.5 15.5h9"/></svg>',
+];
+const CC_MENU_BURGER_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+// Burger style; menus saved before the picker existed keep a custom character, the default ☰ becomes 'lines'.
+function cc_menu_burger_style($settings) {
+    $s = $settings['burgerStyle'] ?? null;
+    if ($s === 'custom' || $s === 'label' || isset(CC_MENU_BURGERS[$s ?? ''])) return $s;
+    $icon = trim((string)($settings['burgerIcon'] ?? ''));
+    return ($icon !== '' && $icon !== '☰') ? 'custom' : 'lines';
 }
 
 // Menu effects: id => group. In a 'single' group only one effect applies (they animate the same

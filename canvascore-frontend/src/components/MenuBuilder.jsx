@@ -8,7 +8,7 @@ import {
   ChevronLeft, Save, Trash2, ListTree, Palette, Smartphone, LayoutPanelTop, Monitor, SwatchBook, Undo2, Check,
   ArrowUp, ArrowDown, IndentIncrease, IndentDecrease, Plus, GripVertical, Image as ImageIcon, Sparkles, Upload, Type
 } from 'lucide-react';
-import { DEFAULT_SETTINGS, EFFECT_GROUPS, THEMES, applyTheme, matchingTheme, normalizeSettings, toggleEffect, cleanEffects } from '../menu/menuThemes';
+import { DEFAULT_SETTINGS, BURGER_ICONS, EFFECT_GROUPS, THEMES, applyTheme, matchingTheme, normalizeSettings, toggleEffect, cleanEffects } from '../menu/menuThemes';
 
 // ---- tree utilities (immutable) ----
 const clone = (t) => JSON.parse(JSON.stringify(t));
@@ -353,12 +353,61 @@ export default function MenuBuilder() {
         {tab === 'mobile' && (
           <>
             <PanelIntro title="Mobile (hamburger)">
-              Below the breakpoint the items collapse into a hamburger button. Switch the preview to <em>Mobile</em> to check it.
+              Below the breakpoint the items collapse into a hamburger button that opens them as a list under the bar.
+              Switch the preview to <em>Mobile</em> to check it.
             </PanelIntro>
+
+            <SectionTitle icon={Smartphone} color="#10b981">Burger icon</SectionTitle>
+            <div role="group" aria-label="Burger icon" style={burgerGrid}>
+              {BURGER_ICONS.map(b => (
+                <button key={b.id} onClick={() => set({ burgerStyle: b.id })} aria-pressed={settings.burgerStyle === b.id} title={b.label}
+                  style={{ ...burgerTile, ...(settings.burgerStyle === b.id ? burgerTileOn : {}) }}>
+                  <span style={{ width: 26, height: 26, display: 'block' }} dangerouslySetInnerHTML={{ __html: b.svg }} />
+                  <span style={{ fontSize: '10px' }}>{b.label}</span>
+                </button>
+              ))}
+              <button onClick={() => set({ burgerStyle: 'label' })} aria-pressed={settings.burgerStyle === 'label'} title="Icon + Menu"
+                style={{ ...burgerTile, ...(settings.burgerStyle === 'label' ? burgerTileOn : {}) }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', height: 26 }}>
+                  <span style={{ width: 20, height: 20, display: 'block' }} dangerouslySetInnerHTML={{ __html: BURGER_ICONS[0].svg }} />
+                  <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '1px' }}>MENU</span>
+                </span>
+                <span style={{ fontSize: '10px' }}>Icon + Menu</span>
+              </button>
+              <button onClick={() => set({ burgerStyle: 'custom' })} aria-pressed={settings.burgerStyle === 'custom'} title="Custom character"
+                style={{ ...burgerTile, ...(settings.burgerStyle === 'custom' ? burgerTileOn : {}) }}>
+                <span style={{ fontSize: '20px', height: 26, lineHeight: '26px' }}>{settings.burgerIcon || '☰'}</span>
+                <span style={{ fontSize: '10px' }}>Custom</span>
+              </button>
+            </div>
+            {settings.burgerStyle === 'custom' && (
+              <div style={{ maxWidth: '220px', marginTop: '12px' }}>
+                <Field label="CUSTOM CHARACTER"><input style={input} value={settings.burgerIcon} onChange={e => set({ burgerIcon: e.target.value })} placeholder="☰" maxLength={8} /></Field>
+              </div>
+            )}
+            <p style={{ fontSize: '11px', color: '#94a3b8', margin: '10px 0 0' }}>When the menu is open the icon turns into ✕. It uses the menu text color.</p>
+
+            <SectionTitle icon={LayoutPanelTop} color="#a78bfa" border>Mobile bar</SectionTitle>
             <Grid>
+              <Field label="BURGER POSITION">
+                <div role="group" aria-label="Burger position" style={{ display: 'flex', gap: '6px' }}>
+                  {[['left', 'Left'], ['right', 'Right']].map(([v, l]) => (
+                    <button key={v} onClick={() => set({ mobileBurgerSide: v })} aria-pressed={settings.mobileBurgerSide === v}
+                      style={{ ...chip, flex: 1, justifyContent: 'center', ...(settings.mobileBurgerSide === v ? chipOn : {}) }}>{l}</button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="LOGO ON MOBILE">
+                <label style={checkRow}><input type="checkbox" checked={settings.mobileShowLogo !== false} onChange={e => set({ mobileShowLogo: e.target.checked })} style={{ width: 18, height: 18 }} /> Show the logo</label>
+              </Field>
               <Field label="MOBILE BREAKPOINT (px)"><input type="number" style={input} value={settings.mobileThreshold} onChange={e => set({ mobileThreshold: e.target.value })} /></Field>
-              <Field label="BURGER ICON"><input style={input} value={settings.burgerIcon} onChange={e => set({ burgerIcon: e.target.value })} /></Field>
             </Grid>
+            <p style={{ fontSize: '11px', color: '#94a3b8', margin: '10px 0 0' }}>
+              {settings.logoUrl
+                ? (settings.mobileShowLogo === false ? 'The logo is hidden on mobile.' : `The logo sits on the ${settings.mobileBurgerSide === 'left' ? 'right' : 'left'}, opposite the burger.`)
+                : 'No logo set: add one in Layout & Logo.'}
+              {' '}On mobile the bar always shows logo and burger at the two edges, whatever the desktop alignment.
+            </p>
           </>
         )}
       </div>
@@ -532,4 +581,7 @@ const fxGroup = { border: '1px solid #334155', borderRadius: '10px', padding: '1
 const chip = { display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px', background: '#0f172a', color: '#cbd5e1', border: '1px solid #334155', borderRadius: '20px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 };
 const chipOn = { background: '#0c4a6e', color: '#f0f9ff', border: '1px solid #38bdf8' };
 const deviceBtn = { display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: '6px', cursor: 'pointer', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.5px' };
+const burgerGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))', gap: '8px' };
+const burgerTile = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '10px 6px', background: '#f8fafc', color: '#334155', border: '2px solid transparent', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 };
+const burgerTileOn = { border: '2px solid #38bdf8', boxShadow: '0 0 0 3px rgba(56,189,248,.25)' };
 const deviceBtnOn = { background: '#334155', color: '#f8fafc' };

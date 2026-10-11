@@ -3,11 +3,12 @@
 //  - the effect catalog is the same in the editor and in compiler.php;
 //  - effect helpers: single groups keep one effect, multi groups stack, legacy `effect` is migrated;
 //  - every theme and every effect renders without PHP warnings and emits its CSS;
-//  - user values cannot break out of the CSS/HTML.
+//  - user values cannot break out of the CSS/HTML;
+//  - mobile bar: burger icons, burger side, logo visibility, desktop alignment does not leak into it.
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  DEFAULT_SETTINGS, EFFECT_GROUPS, EFFECT_IDS, THEMES, THEME_KEYS, cleanEffects, toggleEffect, normalizeSettings, applyTheme, matchingTheme,
+  DEFAULT_SETTINGS, BURGER_ICONS, BURGER_STYLES, EFFECT_GROUPS, EFFECT_IDS, THEMES, THEME_KEYS, cleanEffects, toggleEffect, normalizeSettings, applyTheme, matchingTheme,
 } from '../src/menu/menuThemes.js';
 
 const phpScript = fileURLToPath(new URL('./render_menu.php', import.meta.url));
@@ -122,6 +123,38 @@ for (const id of EFFECT_IDS) {
   const cur = render({ highlightCurrent: true, effects: ['underline'] }).out;
   check('highlight current page: styled .cc-current, indicator stays visible on it', cur.includes('.cc-menu-link.cc-current {') && cur.includes('.cc-current::after'));
   check('without it .cc-current is not styled (aria-current is always set)', !plain.includes('.cc-menu-link.cc-current {') && plain.includes("aria-current"));
+}
+
+console.log('\nMENU — mobile bar');
+{
+  const cat = JSON.parse(php(['effects']).out);
+  check('same burger icons (ids and SVG) in menuThemes.js and compiler.php',
+    JSON.stringify(Object.fromEntries(BURGER_ICONS.map((b) => [b.id, b.svg]))) === JSON.stringify(cat.burgers));
+  for (const id of BURGER_STYLES) {
+    const r = render({ burgerStyle: id, burgerIcon: '✦' });
+    const icon = (r.out.match(/<span class="cc-burger-icon">([\s\S]*?)<\/span><span class="cc-burger-close">/) || [])[1] || '';
+    const want = id === 'custom' ? icon.includes('✦') : id === 'label' ? icon.includes('cc-burger-label') && icon.includes('<svg')
+      : icon === BURGER_ICONS.find((b) => b.id === id).svg;
+    check(`burger "${id}": renders without warnings`, r.err === '' && want, r.err.slice(0, 200) || icon.slice(0, 120));
+  }
+  check('legacy menu with a custom character keeps it', render({ burgerIcon: '≡' }).out.includes('<span class="cc-burger-glyph">≡</span>'));
+  check('legacy menu with the default ☰ gets the classic SVG', render({ burgerIcon: '☰' }).out.includes(`<span class="cc-burger-icon">${BURGER_ICONS[0].svg}`));
+  check('editor migrates the same way', normalizeSettings({ burgerIcon: '≡' }).burgerStyle === 'custom' && normalizeSettings({ burgerIcon: '☰' }).burgerStyle === 'lines' && normalizeSettings({ burgerStyle: 'dots' }).burgerStyle === 'dots');
+  check('unknown burger style falls back to lines', render({ burgerStyle: 'nope' }).err === '' && render({ burgerStyle: 'nope' }).out.includes(BURGER_ICONS[0].svg));
+  const base = render({ logoUrl: '/l.png' }).out;
+  check('the toggle exposes aria-expanded and the script updates it', base.includes('aria-expanded="false"') && base.includes("toggle.setAttribute('aria-expanded'"));
+  check('open menu shows a close (✕) icon', base.includes('cc-burger-close') && base.includes('[aria-expanded="true"] .cc-burger-close { display:inline-flex; }'));
+  const mob = (out) => out.slice(out.indexOf('@media (max-width'));
+  const right = mob(base), left = mob(render({ logoUrl: '/l.png', mobileBurgerSide: 'left' }).out);
+  check('burger right (default): logo first, burger pushed right', /\.cc-logo \{[^}]*order:1 !important/.test(right) && /\.cc-mobile-toggle \{[^}]*order:2 !important;[^}]*margin-left:auto/.test(right));
+  check('burger left: burger first, logo pushed to the right', /\.cc-mobile-toggle \{[^}]*order:1 !important;[^}]*margin-right:auto/.test(left) && /\.cc-logo \{[^}]*order:2 !important;[^}]*margin-left:auto/.test(left));
+  check('logo shown on mobile by default', !/\.cc-logo \{[^}]*display:none/.test(right));
+  check('logo can be hidden on mobile only', /\.cc-logo \{[^}]*display:none !important/.test(mob(render({ logoUrl: '/l.png', mobileShowLogo: false }).out)) && !/cc-logo \{[^}]*display:none/.test(render({ logoUrl: '/l.png', mobileShowLogo: false }).out.split('@media (max-width')[0]));
+  for (const align of ['flex-start', 'center', 'flex-end']) {
+    const m = mob(render({ logoUrl: '/l.png', align }).out);
+    check(`desktop alignment "${align}" does not leak into the mobile bar (edges, static logo, menu below)`,
+      m.includes('justify-content:space-between !important') && /\.cc-logo \{[^}]*position:static !important;[^}]*transform:none !important/.test(m) && /\.cc-main-menu \{[^}]*order:3 !important;[^}]*width:100%/.test(m));
+  }
 }
 
 console.log(`\n${fails === 0 ? 'MENU OK' : fails + ' checks failed'} (${total} checks)`);

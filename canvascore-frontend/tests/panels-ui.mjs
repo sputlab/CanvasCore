@@ -355,7 +355,17 @@ try {
     check('menu: customizing a value clears the "in use" mark', $$('button[aria-pressed="true"][aria-label^="Apply the"]').length === 0);
 
     click(tab('Mobile')); await waitFor(() => field('MOBILE BREAKPOINT'));
-    check('menu: Mobile tab has breakpoint and burger icon', !!field('MOBILE BREAKPOINT') && !!field('BURGER ICON'));
+    check('menu: Mobile tab has breakpoint, burger icons, burger position and logo toggle', !!field('MOBILE BREAKPOINT') && $$('[aria-label="Burger icon"] button').length === 10 && !!$$('[aria-label="Burger position"]')[0] && !!checkbox('Show the logo'));
+    check('menu: a legacy ☰ menu starts on the Classic icon', doc.querySelector('[aria-label="Burger icon"] button[aria-pressed="true"]')?.title === 'Classic');
+    click(doc.querySelector('[aria-label="Burger icon"] button[title="Dots"]')); await sleep(30);
+    click($$('[aria-label="Burger position"] button').find((b) => b.textContent === 'Left')); await sleep(30);
+    click(checkbox('Show the logo')); await sleep(30);
+    check('menu: picking icon, side and logo visibility updates the controls', doc.querySelector('[aria-label="Burger icon"] button[aria-pressed="true"]')?.title === 'Dots'
+      && $$('[aria-label="Burger position"] button[aria-pressed="true"]')[0]?.textContent === 'Left' && checkbox('Show the logo').checked === false);
+    check('menu: no custom character field unless Custom is chosen', !field('CUSTOM CHARACTER'));
+    click(doc.querySelector('[aria-label="Burger icon"] button[title="Custom character"]')); await sleep(30);
+    setValue(field('CUSTOM CHARACTER'), '≡'); await sleep(30);
+    check('menu: Custom shows the character field', field('CUSTOM CHARACTER')?.value === '≡');
     click(doc.querySelector('button[title="Mobile"]')); await sleep(30);
     check('menu: the preview can switch to a mobile width', doc.querySelector('iframe[title="menu-preview"]').style.width === '390px');
 
@@ -363,6 +373,7 @@ try {
     await waitFor(() => saved.length);
     const s = saved[0] && saved[0].settings;
     check('menu: saves `effects` (Midnight) + the custom letter case, without the legacy `effect` key', !!s && Array.isArray(s.effects) && s.effects.includes('glass') && s.textTransform === 'uppercase' && !('effect' in s), JSON.stringify(s && s.effects));
+    check('menu: saves the mobile settings', !!s && s.burgerStyle === 'custom' && s.burgerIcon === '≡' && s.mobileBurgerSide === 'left' && s.mobileShowLogo === false, JSON.stringify(s && [s.burgerStyle, s.burgerIcon, s.mobileBurgerSide, s.mobileShowLogo]));
     globalThis.fetch = realFetch;
   }
 
