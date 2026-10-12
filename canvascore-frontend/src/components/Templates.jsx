@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
+import { notify } from '../ui/notify';
 import { uniqueSlug } from '../utils/slug';
 import { LayoutTemplate, Plus, FileText } from 'lucide-react';
 import { Button, PageHeader, EmptyState } from '../ui/kit';
@@ -40,8 +41,9 @@ export default function Templates() {
       status: 'draft', is_draft_copy: 0, parent_id: null, is_home: 0,
     };
     try {
-      await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, blocks, publish: false }) });
-    } catch { /* noop */ }
+      const data = await (await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, blocks, publish: false }) })).json();
+      if (!data || data.success === false) { notify('Could not create the page: ' + ((data && data.message) || 'unexpected answer'), 'error'); setBusy(false); return; }
+    } catch { notify('Could not create the page (connection problem).', 'error'); setBusy(false); return; }
     setPages([newPage, ...pages]);
     setActivePage(newPage);
     setBlocks(blocks);

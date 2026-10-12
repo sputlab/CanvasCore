@@ -16,13 +16,23 @@ export function escapeHtml(s) {
     .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Whole number within [min, max] (default when missing or not a number). Mirrors cc_int() in compiler.php.
+export function ccInt(v, def, min, max) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+const FORM_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date'];
+
 // Mirrors the compiler's build_inline_style(): camelCase -> kebab, skips '' and 'animation'.
+// Property names must look like CSS properties (a crafted key can't break out of the style attribute).
 export function buildInlineStyle(styles) {
   if (!styles || typeof styles !== 'object') return '';
   let str = '';
   for (const k of Object.keys(styles)) {
     const v = styles[k];
     if (v === '' || v === null || v === undefined || k === 'animation') continue;
+    if (!/^[a-zA-Z][a-zA-Z0-9-]*$/.test(k) || typeof v === 'object') continue;
     const kebab = k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
     str += `${kebab}: ${escapeHtml(v)}; `;
   }
@@ -53,7 +63,7 @@ export function blockRoot(block) {
     case 'CONTAINER': return { tag: 'div', id: innerId, className: `cc-container${animClass}${innerClass}`, style: { ...styles } };
     case 'FLEX_ROW':  return { tag: 'div', id: innerId, className: `cc-flex-row${animClass}${innerClass}`, style: { ...styles } };
     case 'CSS_GRID': {
-      const columns = content.columns ?? 2;
+      const columns = ccInt(content.columns, 2, 1, 12);
       const gap = content.gap ?? '20px';
       return { tag: 'div', id: innerId, className: `cc-css-grid${animClass}${innerClass}`, style: { ...styles, display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap, overflow: 'hidden' } };
     }
@@ -193,7 +203,7 @@ export function renderBlock(block, opts = {}) {
     }
 
     case 'GRID': {
-      const columns = content.columns ?? 2;
+      const columns = ccInt(content.columns, 2, 1, 24);
       html = `<style>@media(max-width: 768px){ #${innerId} { grid-template-columns: 1fr !important; } }</style>`;
       html += `<div id="${innerId}" class="cc-grid ${animClass}${innerClass}" style="${styleAttr} display:grid; grid-template-columns:repeat(${columns}, 1fr); gap:20px; overflow:hidden;">\n`;
       if (Array.isArray(content.items)) for (const item of content.items) html += `  <div style="min-width:0;">\n${item}\n  </div>\n`;
@@ -205,10 +215,11 @@ export function renderBlock(block, opts = {}) {
       const bg = content.bgImage ? `background-image: url('${escapeHtml(content.bgImage)}'); background-size: cover; background-position: center;` : '';
       const title = content.title ?? '';
       const subtitle = content.subtitle ?? '';
-      const minHeight = styles.minHeight ?? 'auto';
-      let buttons = content.buttons ?? [];
-      if (!buttons.length) buttons = [{ text: content.btnText ?? 'Start Now', url: content.btnUrl ?? '#', bgColor: 'var(--brand-color, #3b82f6)', textColor: '#ffffff', borderRadius: '8px' }];
-      let buttonsHtml = `<div style="display:flex; gap:15px; flex-wrap:wrap; justify-content:${styles.textAlign ?? 'center'};">`;
+      const minHeight = escapeHtml(styles.minHeight ?? 'auto');
+      // The legacy single button only for very old heroes without a list: an emptied list stays empty
+      let buttons = Array.isArray(content.buttons) ? content.buttons : [];
+      if (!Array.isArray(content.buttons)) buttons = [{ text: content.btnText ?? 'Start Now', url: content.btnUrl ?? '#', bgColor: 'var(--brand-color, #3b82f6)', textColor: '#ffffff', borderRadius: '8px' }];
+      let buttonsHtml = `<div style="display:flex; gap:15px; flex-wrap:wrap; justify-content:${escapeHtml(styles.textAlign ?? 'center')};">`;
       for (const btn of buttons) {
         const bUrl = escapeHtml(resolveInternalUrl(btn.url));
         const hv = buttonHover({ bg: btn.hoverBg, color: btn.hoverColor, border: btn.hoverBorder, effect: btn.effect });
@@ -316,7 +327,7 @@ export function renderBlock(block, opts = {}) {
       const fields = Array.isArray(content.fields) ? content.fields : [{ label: 'Name', type: 'text', required: true }, { label: 'Email', type: 'email', required: true }, { label: 'Message', type: 'textarea', required: true }];
       fields.forEach((f, i) => {
         const fLabel = escapeHtml(f.label ?? '');
-        const fType = f.type ?? 'text';
+        const fType = FORM_TYPES.includes(f.type) ? f.type : 'text';
         const req = f.required ? 'required' : '';
         const name = 'field_' + i;
         fieldsHtml += `<input type="hidden" name="_label_${name}" value="${fLabel}">\n`;
@@ -835,7 +846,7 @@ export function renderBlock(block, opts = {}) {
       return customCss + `<div id="${innerId}" class="cc-html-block${animClass}${innerClass}"${styleString}>\n${content.code ?? ''}\n</div>\n`;
 
     default:
-      return `<!-- Unknown element: ${t} -->\n`;
+      return `<!-- Unknown element: ${String(t).replace(/[^A-Za-z0-9_]/g, '')} -->\n`;
   }
 }
 

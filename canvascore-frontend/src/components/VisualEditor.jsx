@@ -6,7 +6,7 @@ import LayerNavigator from './LayerNavigator';
 import EditorDraftStatus from './EditorDraftStatus';
 import { useEditorDraft } from '../session/hooks';
 import { clearDraft } from '../session/drafts';
-import { editorScope } from '../session/draftTrackers';
+import { editorScope, editorSnapshot } from '../session/draftTrackers';
 import AddBlocksPanel from './AddBlocksPanel';
 import {
   ChevronLeft, Monitor, Tablet, Smartphone, Undo2, Redo2, Save, Globe, Layers, PlusCircle, Crown, AlertCircle,
@@ -29,6 +29,8 @@ export default function VisualEditor() {
   } = useStore();
 
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const saveInFlight = useRef(null); // one save at a time: a second click/Ctrl+S waits for the running one
   const saveDraftRef = useRef(null); // Ctrl+S handler → the current saveDraft
   // On narrow screens the panels cover the canvas, so they start closed there
   const [panels, setPanels] = useState(() => ((window.innerWidth || 1280) < 860 ? { left: false, right: false } : { left: true, right: true, ...readPanels() }));
@@ -38,6 +40,7 @@ export default function VisualEditor() {
   // Local backup of unsaved work + "modified" state (see src/session/)
   const draft = useEditorDraft();
   const editorRestored = useStore((s) => s.editorRestored);
+  const editorDraftFound = useStore((s) => s.editorDraftFound);
 
   useEffect(() => {
     fetchTemplates();
@@ -54,24 +57,30 @@ export default function VisualEditor() {
         return;
       }
       if (typing) return; // typing: the field has its own undo
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+      const k = (e.key || '').toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && k === 'z') {
         e.preventDefault();
         if (e.shiftKey) redo(); else undo();
+      } else if (e.ctrlKey && !e.metaKey && k === 'y') {
+        e.preventDefault(); redo();
       }
       if (e.key === 'Escape' && useStore.getState().selectedBlockId) setSelectedBlockId(null);
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    // Capture phase: the in-place text editor stops keydown propagation, Ctrl+S must still get here
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [undo, redo, fetchTemplates, fetchMasters, setSelectedBlockId]);
 
   const savePageRaw = async (publish = false) => {
     if (isEditingMaster) return null;
+    // Always the LATEST content (not this render's copy): edits made just before the click are included
+    const { activePage, blocks } = useStore.getState();
     // Global header/footer: saved to site_parts
     if (activePage.__part) {
       try {
         const res = await fetch('api.php?action=save_part', { method: 'POST', body: JSON.stringify({ name: activePage.__part, blocks }) });
         return await res.json();
-      } catch { alert('Error saving part.'); return null; }
+      } catch { notify('Error saving the part.', 'error'); return null; }
     }
     // Collection item: saved to collection_items
     if (activePage.__item) {
@@ -86,12 +95,13 @@ export default function VisualEditor() {
         const data = await res.json();
         if (data.success && publish) updateActivePage({ status: 'published' });
         return data;
-      } catch { alert('Error saving item.'); return null; }
+      } catch { notify('Error saving the item.', 'error'); return null; }
     }
     const payload = {
       id: activePage.id, title: activePage.title, slug: activePage.slug,
       seo_title: activePage.seo_title, seo_description: activePage.seo_description, seo_image: activePage.seo_image,
       layout: activePage.layout, boxed_width: activePage.boxed_width, bg_color: activePage.bg_color, blocks: blocks,
+      is_home: Number(activePage.is_home) ? 1 : 0,
       publish: publish
     };
     try {
@@ -107,14 +117,26 @@ export default function VisualEditor() {
          updateActivePage({ id: data.new_id, is_draft_copy: 0, status: 'published' });
       }
       return data;
-    } catch { alert("Error saving page."); return null; }
+    } catch { notify('Error saving the page.', 'error'); return null; }
   };
 
   // After EVERY successful save the current state becomes the "saved" one: the local backup is no longer needed.
+  // Only what was SENT counts as saved (edits made while the request runs stay unsaved and backed up).
   const savePage = async (publish = false) => {
-    const data = await savePageRaw(publish);
-    if (data && data.success) draft.markSaved();
-    return data;
+    if (saveInFlight.current) await saveInFlight.current.catch(() => {});
+    const run = (async () => {
+      const st = useStore.getState();
+      const sent = editorSnapshot(st).page;
+      const sentScope = editorScope(st);
+      const data = await savePageRaw(publish);
+      if (data && data.success) draft.markSaved(sent, sentScope);
+      return data;
+    })();
+    saveInFlight.current = run;
+    setIsSaving(true);
+    try { return await run; } finally {
+      if (saveInFlight.current === run) { saveInFlight.current = null; setIsSaving(false); }
+    }
   };
 
   const publishSite = async () => {
@@ -148,7 +170,7 @@ export default function VisualEditor() {
       fetch('api.php?action=get_pages').then(r => r.json()).then(d => setPages(d));
       draft.discard();
       setView('manager');
-    } catch { alert("Error discarding changes."); }
+    } catch { notify('Error discarding the changes.', 'error'); }
   };
 
   const getValidParentId = () => {
@@ -225,8 +247,8 @@ export default function VisualEditor() {
             {activePage?.is_draft_copy == 1 && (
               <Button variant="danger" size="sm" icon={AlertCircle} onClick={discardChanges} title="Throw away the draft and go back to the published version"><span className="cc-ed-hide-md">Discard draft</span></Button>
             )}
-            <Button size="sm" icon={Save} onClick={saveDraft} title="Save draft (Ctrl+S)"><span className="cc-ed-hide-sm">{activePage?.__part ? 'Save' : 'Save Draft'}</span></Button>
-            <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing} title="Save and publish online">{isPublishing ? 'Publishing…' : 'Publish'}</Button>
+            <Button size="sm" icon={Save} onClick={saveDraft} disabled={isSaving || isPublishing} title="Save draft (Ctrl+S)"><span className="cc-ed-hide-sm">{activePage?.__part ? 'Save' : 'Save Draft'}</span></Button>
+            <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing || isSaving} title="Save and publish online">{isPublishing ? 'Publishing…' : 'Publish'}</Button>
           </div>
         </header>
       )}
@@ -259,6 +281,13 @@ export default function VisualEditor() {
         </aside>
       </div>
 
+      {editorDraftFound && !editorRestored && (
+        <div role="status" className="cc-ed-restored">
+          <span><strong>Unsaved changes found</strong> for this page{editorDraftFound.savedAt ? ` (from ${new Date(editorDraftFound.savedAt).toLocaleString()})` : ''}. They were never saved to the site.</span>
+          <Button size="sm" variant="primary" onClick={() => draft.restoreFound()}>Restore</Button>
+          <Button size="sm" variant="ghost" onClick={() => draft.dismissFound()}>Discard</Button>
+        </div>
+      )}
       {editorRestored && (
         <div role="status" className="cc-ed-restored">
           <span><strong>Restored unsaved changes</strong> from your previous session. They are <strong>not saved to the site yet</strong>: use Save Draft or Publish to keep them.</span>

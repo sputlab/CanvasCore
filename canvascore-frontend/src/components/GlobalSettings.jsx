@@ -11,6 +11,8 @@ export default function GlobalSettings() {
   const { setView, publishSiteAsync, setActivePage, setBlocks, setSelectedBlockId } = useStore();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
+  // Saving before the data arrives (or after it failed) would overwrite the site's data with defaults
+  const [loadState, setLoadState] = useState('loading');
   // Local backup of unsaved work (see src/session/)
   const draft = useDraftSync('settings', settings);
   const [restoredAt, setRestoredAt] = useState(null);
@@ -23,11 +25,13 @@ export default function GlobalSettings() {
         const pending = draft.loaded(server);            // unsaved local draft (expired session, refresh...)
         setSettings(pending ? pending.value : server);
         if (pending) setRestoredAt(pending.savedAt);
+        setLoadState('ready');
       })
-      .catch(console.error);
+      .catch(() => { setLoadState('error'); notify('Could not load the options from the server. Reload the page before saving.', 'error'); });
   }, [draft]);
 
   const saveSettings = async () => {
+    if (loadState !== 'ready') return;
     setIsSaving(true);
     try {
       const r = await fetch('api.php?action=save_settings', { method: 'POST', body: JSON.stringify(settings) });
@@ -73,7 +77,7 @@ export default function GlobalSettings() {
   return (
     <div style={{ maxWidth: 860 }}>
       <PageHeader icon={Settings2} title="Global Options" description="Settings that apply to the whole site. Saving also republishes the site."
-        actions={<Button variant="primary" icon={Save} onClick={saveSettings} disabled={isSaving}>{isSaving ? 'Saving…' : 'Save & Publish'}</Button>} />
+        actions={<Button variant="primary" icon={Save} onClick={saveSettings} disabled={isSaving || loadState !== 'ready'} title={loadState === 'loading' ? 'Loading…' : loadState === 'error' ? 'Not loaded: reload the page' : undefined}>{isSaving ? 'Saving…' : loadState === 'loading' ? 'Loading…' : 'Save & Publish'}</Button>} />
 
       {restoredAt && (
         <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#0c4a6e', border: '1px solid #0369a1', borderRadius: 10, padding: '9px 13px', marginBottom: 16, fontSize: 13, color: '#e0f2fe' }}>

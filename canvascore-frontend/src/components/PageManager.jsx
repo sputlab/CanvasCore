@@ -35,8 +35,9 @@ export default function PageManager() {
     // Persist right away: this way the page is a real record and the right-hand panel
     // behaves exactly as when it is reopened from the dashboard.
     try {
-      await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, blocks: [], publish: false }) });
-    } catch { /* on error, the first Save Draft will create it */ }
+      const data = await (await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, blocks: [], publish: false }) })).json();
+      if (!data || data.success === false) { notify('Could not create the page: ' + ((data && data.message) || 'unexpected answer'), 'error'); return; }
+    } catch { notify('Could not create the page (connection problem).', 'error'); return; }
     setPages([newPage, ...pages]);
     setActivePage(newPage);
     setBlocks([]);
@@ -65,7 +66,8 @@ export default function PageManager() {
   const deletePage = async (id) => {
     if (!window.confirm('Are you sure you want to delete this page? This will also delete the published HTML.')) return;
     try {
-      await fetch('api.php?action=delete_page', { method: 'POST', body: JSON.stringify({ id }) });
+      const data = await (await fetch('api.php?action=delete_page', { method: 'POST', body: JSON.stringify({ id }) })).json();
+      if (!data || data.success === false) { notify('Could not delete the page: ' + ((data && data.message) || 'unexpected answer'), 'error'); return; }
       setPages(pages.filter(p => p.id !== id));
       notify('Page deleted.');
     } catch { notify('Error deleting page.', 'error'); }

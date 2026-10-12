@@ -1,46 +1,77 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { Library, Plus, Trash2, Edit3, FileText, Folder, Archive, ArchiveRestore, Globe } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, Badge, StatusBadge } from '../ui/kit';
 import { notify } from '../ui/notify';
 
 export default function Collections() {
-  const { setView, userRole, setActivePage, setBlocks, setSelectedBlockId, publishSiteAsync } = useStore();
+  const { setView, userRole, setActivePage, setBlocks, setSelectedBlockId, publishSiteAsync, activePage } = useStore();
   const [collections, setCollections] = useState([]);
+  const [loadState, setLoadState] = useState('loading'); // loading | ready | error (never "empty" while still loading)
   const [active, setActive] = useState(null); // selected collection
   const [items, setItems] = useState([]);
+  const [itemsState, setItemsState] = useState('idle');
+  const activeRef = useRef(null);
+  const [newName, setNewName] = useState(null); // inline "new collection" field (null = closed)
   const [needsPublish, setNeedsPublish] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
   const loadCollections = () => {
-    fetch('api.php?action=get_collections').then(r => r.json()).then(d => { if (Array.isArray(d)) setCollections(d); }).catch(console.error);
+    return fetch('api.php?action=get_collections').then(r => r.json()).then(d => {
+      if (!Array.isArray(d)) throw new Error((d && d.message) || 'Unexpected answer from the server');
+      setCollections(d); setLoadState('ready');
+      return d;
+    }).catch((e) => { setLoadState('error'); notify('Could not load the collections: ' + e.message, 'error'); return null; });
   };
   const loadItems = (cid) => {
-    fetch('api.php?action=get_items&collection=' + encodeURIComponent(cid)).then(r => r.json()).then(d => { if (Array.isArray(d)) setItems(d); }).catch(console.error);
+    setItemsState('loading');
+    return fetch('api.php?action=get_items&collection=' + encodeURIComponent(cid)).then(r => r.json()).then(d => {
+      if (activeRef.current !== cid) return;              // another collection was chosen meanwhile
+      if (!Array.isArray(d)) throw new Error((d && d.message) || 'Unexpected answer from the server');
+      setItems(d); setItemsState('ready');
+    }).catch((e) => { if (activeRef.current === cid) { setItemsState('error'); notify('Could not load the items: ' + e.message, 'error'); } });
   };
-  useEffect(() => { loadCollections(); }, []);
-  useEffect(() => { if (active) loadItems(active.id); }, [active]);
+  // Choosing a collection: the previous items go away at once, then the new ones load
+  const choose = (c) => { activeRef.current = c ? c.id : null; setItems([]); setActive(c); if (c) loadItems(c.id); };
+  // Coming back from editing an item: reopen its collection
+  useEffect(() => {
+    const backTo = activePage && activePage.__item ? activePage.collection_id : null;
+    loadCollections().then((list) => { if (list && backTo) { const c = list.find((x) => x.id === backTo); if (c) choose(c); } });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const newCollection = async () => {
-    const name = window.prompt('New collection name (e.g. Blog, Portfolio):');
+  const createCollection = async (e) => {
+    if (e) e.preventDefault();
+    const name = (newName || '').trim();
     if (!name) return;
-    const res = await fetch('api.php?action=save_collection', { method: 'POST', body: JSON.stringify({ name }) });
-    const data = await res.json();
-    if (data.success) loadCollections(); else alert(data.message || 'Error');
+    try {
+      const res = await fetch('api.php?action=save_collection', { method: 'POST', body: JSON.stringify({ name }) });
+      const data = await res.json();
+      if (data.success) { setNewName(null); notify(`Collection "${name}" created.`); loadCollections(); }
+      else notify(data.message || 'Could not create the collection.', 'error');
+    } catch { notify('Could not create the collection (connection problem).', 'error'); }
   };
   const removeCollection = async (c) => {
     if (!window.confirm(`Delete collection "${c.name}" and ALL its items?`)) return;
-    await fetch('api.php?action=delete_collection', { method: 'POST', body: JSON.stringify({ id: c.id }) });
-    if (active?.id === c.id) setActive(null);
+    try {
+      const data = await (await fetch('api.php?action=delete_collection', { method: 'POST', body: JSON.stringify({ id: c.id }) })).json();
+      if (!data || data.success === false) { notify((data && data.message) || 'Could not delete the collection.', 'error'); return; }
+      if (active?.id === c.id) choose(null);
+      notify(`Collection "${c.name}" deleted.`);
+    } catch { notify('Could not delete the collection (connection problem).', 'error'); }
     loadCollections();
   };
 
   const editItem = async (item) => {
     let full = { id: item?.id, collection_id: active.id, title: 'New Item', slug: 'new-item', excerpt: '', cover_image: '', date: new Date().toISOString().slice(0, 10), status: 'draft', archived: 0, seo_title: '', seo_description: '', blocks: [] };
     if (item) {
-      const res = await fetch('api.php?action=get_item&id=' + encodeURIComponent(item.id));
-      const data = await res.json();
-      if (data) full = { ...data, blocks: JSON.parse(data.content_json || '[]') };
+      try {
+        const res = await fetch('api.php?action=get_item&id=' + encodeURIComponent(item.id));
+        const data = await res.json();
+        if (!data || !data.id) { notify('This item no longer exists (deleted elsewhere?).', 'error'); loadItems(active.id); return; }
+        let blocks = [];
+        try { blocks = JSON.parse(data.content_json || '[]'); } catch { blocks = []; }
+        full = { ...data, blocks };
+      } catch { notify('Could not open the item (connection problem).', 'error'); return; }
     }
     // open the block editor on the item's content
     setActivePage({
@@ -58,18 +89,19 @@ export default function Collections() {
   };
   const toggleArchive = async (item) => {
     try {
-      const res = await fetch('api.php?action=get_item&id=' + encodeURIComponent(item.id));
-      const full = await res.json();
-      if (!full) return;
-      await fetch('api.php?action=save_item', { method: 'POST', body: JSON.stringify({
+      const full = await (await fetch('api.php?action=get_item&id=' + encodeURIComponent(item.id))).json();
+      if (!full || !full.id) { notify('This item no longer exists.', 'error'); loadItems(active.id); return; }
+      const res = await fetch('api.php?action=save_item', { method: 'POST', body: JSON.stringify({
         id: full.id, collection_id: full.collection_id, title: full.title, slug: full.slug,
         excerpt: full.excerpt, cover_image: full.cover_image, date: full.date, status: full.status,
         seo_title: full.seo_title, seo_description: full.seo_description,
         archived: Number(full.archived) === 1 ? 0 : 1
       }) });
+      const data = await res.json();
       loadItems(active.id);
-      setNeedsPublish(true);
-    } catch { /* noop */ }
+      if (data && data.success) setNeedsPublish(true);
+      else notify((data && data.message) || 'Could not change the archive state.', 'error');
+    } catch { notify('Could not change the archive state (connection problem).', 'error'); }
   };
 
   const publishNow = async () => {
@@ -83,14 +115,27 @@ export default function Collections() {
 
   const removeItem = async (item) => {
     if (!window.confirm(`Delete "${item.title}"?`)) return;
-    await fetch('api.php?action=delete_item', { method: 'POST', body: JSON.stringify({ id: item.id }) });
+    try {
+      const data = await (await fetch('api.php?action=delete_item', { method: 'POST', body: JSON.stringify({ id: item.id }) })).json();
+      if (!data || data.success === false) notify((data && data.message) || 'Could not delete the item.', 'error');
+    } catch { notify('Could not delete the item (connection problem).', 'error'); }
     loadItems(active.id);
   };
 
   return (
     <>
       <PageHeader icon={Library} title="Collections" description="Groups of similar pages, such as a blog, news or a portfolio. Show them on any page with the Collection List block."
-        actions={userRole === 'admin' && <Button variant="primary" icon={Plus} onClick={newCollection}>New collection</Button>} />
+        actions={userRole === 'admin' && <Button variant="primary" icon={Plus} onClick={() => setNewName('')}>New collection</Button>} />
+
+      {newName !== null && (
+        <form className="ui-card" onSubmit={createCollection} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 14px', marginBottom: 14, flexWrap: 'wrap' }}>
+          <label htmlFor="cc-new-col" className="ui-label" style={{ margin: 0 }}>Name</label>
+          <input id="cc-new-col" className="ui-input" autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Blog, News, Portfolio" style={{ flex: '1 1 200px' }}
+            onKeyDown={(e) => { if (e.key === 'Escape') setNewName(null); }} />
+          <Button type="submit" variant="primary" size="sm" disabled={!newName.trim()}>Create</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setNewName(null)}>Cancel</Button>
+        </form>
+      )}
 
       {needsPublish && (
         <div role="status" className="ui-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 14px', marginBottom: 14, borderColor: '#38bdf8', fontSize: 13 }}>
@@ -102,11 +147,15 @@ export default function Collections() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 250px) 1fr', gap: 16, alignItems: 'start' }} className="cc-collections-grid">
         <style>{'@media (max-width: 760px) { .cc-collections-grid { grid-template-columns: 1fr !important; } }'}</style>
         <nav className="ui-card" style={{ padding: 10, margin: 0 }} aria-label="Collections">
-          {collections.length === 0 ? (
+          {loadState === 'loading' ? (
+            <p className="ui-hint" style={{ padding: 6 }} aria-live="polite">Loading collections…</p>
+          ) : loadState === 'error' ? (
+            <div style={{ padding: 6 }}><p className="ui-error" style={{ marginBottom: 8 }}>The collections could not be loaded.</p><Button size="sm" onClick={() => { setLoadState('loading'); loadCollections(); }}>Retry</Button></div>
+          ) : collections.length === 0 ? (
             <p className="ui-hint" style={{ padding: 6 }}>No collections yet.</p>
           ) : collections.map(c => (
             <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-              <button type="button" className="ui-nav__item" aria-current={active?.id === c.id ? 'page' : undefined} onClick={() => setActive(c)} style={{ flex: 1, margin: 0 }}>
+              <button type="button" className="ui-nav__item" aria-current={active?.id === c.id ? 'page' : undefined} onClick={() => choose(c)} style={{ flex: 1, margin: 0 }}>
                 <Folder size={15} aria-hidden="true" />
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
                 <Badge>{c.item_count}</Badge>
@@ -125,7 +174,11 @@ export default function Collections() {
                 <h2 className="ui-card__title" style={{ margin: 0 }}>{active.name} <span style={{ color: '#64748b', fontSize: 12, fontWeight: 400 }}>/{active.slug}/</span></h2>
                 <Button variant="primary" size="sm" icon={Plus} onClick={() => editItem(null)}>New Item</Button>
               </div>
-              {items.length === 0 ? (
+              {itemsState === 'loading' && items.length === 0 ? (
+                <p className="ui-hint" aria-live="polite">Loading items…</p>
+              ) : itemsState === 'error' ? (
+                <div><p className="ui-error" style={{ marginBottom: 8 }}>The items could not be loaded.</p><Button size="sm" onClick={() => loadItems(active.id)}>Retry</Button></div>
+              ) : items.length === 0 ? (
                 <EmptyState icon={FileText} title="No items yet" action={<Button variant="primary" icon={Plus} onClick={() => editItem(null)}>Create the first item</Button>} />
               ) : (
                 <div className="ui-table-wrap">

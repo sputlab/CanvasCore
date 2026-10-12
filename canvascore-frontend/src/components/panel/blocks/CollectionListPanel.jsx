@@ -5,13 +5,13 @@ import { labelStyle, inputStyle } from '../helpers';
 
 // Content panel: COLLECTION_LIST
 export default function CollectionListPanel({ ctx }) {
-  const { selectedBlock, handleContentChange, updateBlock, collections } = ctx;
+  const { selectedBlock, handleContentChange, patchContent, collections } = ctx;
   return (
     <PanelAccordion title="Collection List" icon={Library} defaultOpen={true}>
       <label style={labelStyle}>Collection</label>
       <select style={inputStyle} value={selectedBlock.content.collectionId || ''} onChange={e => {
         const c = collections.find(x => x.id === e.target.value);
-        updateBlock(selectedBlock.id, { content: { ...selectedBlock.content, collectionId: e.target.value, collectionSlug: c ? c.slug : '', collectionName: c ? c.name : '' } });
+        patchContent({ collectionId: e.target.value, collectionSlug: c ? c.slug : '', collectionName: c ? c.name : '' });
       }}>
         <option value="">— choose a collection —</option>
         {collections.map(c => <option key={c.id} value={c.id}>{c.name} ({c.item_count})</option>)}
@@ -37,7 +37,7 @@ export default function CollectionListPanel({ ctx }) {
 
       {!selectedBlock.content.showAll && <>
         <label style={{ ...labelStyle, marginTop: '12px' }}>Items to show</label>
-        <input type="number" min="1" style={inputStyle} value={selectedBlock.content.limit || 6} onChange={e => handleContentChange('limit', parseInt(e.target.value) || 1)} />
+        <input type="number" min="1" style={inputStyle} placeholder="6" value={selectedBlock.content.limit ?? ''} onChange={e => handleContentChange('limit', e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value, 10) || 1))} />
       </>}
 
       {(selectedBlock.content.layout || 'grid') === 'grid' && <>

@@ -103,6 +103,42 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- **Collections looked empty on the first visit**: the list showed "No collections yet" while it was still
+  loading, and the request could wait behind a slower one (PHP keeps one request per session at a time).
+  Read-only requests and publishing now release the session right away; the screen shows "Loading…",
+  errors with a Retry button, and coming back from an item reopens its collection.
+- **Global masters were never published** (the publisher read the database from the old location): they now
+  appear on the site; a master that contains itself is skipped instead of crashing the build.
+- **The homepage flag was cleared on every save** from the editor: it is now sent, and a save that doesn't
+  mention it keeps the current home.
+- **Lost work**: edits made while a save was running were marked as saved; reopening a page silently
+  deleted its local backup (now offered with Restore / Discard); the "restored" banner followed to other pages;
+  two saves could run at once; Ctrl/Cmd+S while typing opened the browser's Save dialog; Ctrl+Shift+Z / Ctrl+Y
+  redo didn't work on Windows/Linux.
+- **Undo**: editing FAQ items, slider images or form fields couldn't be undone (the history was changed in place);
+  typing now makes one undo step instead of one per key.
+- **Editor**: blocks could be added "inside" a Text block (and vanish); dropping onto an empty sibling container
+  swapped them instead of moving inside; templates could create duplicate block ids; Save as Master replaced the
+  block even when the save failed; moving from the Hero title to the subtitle lost the caret.
+- **Panels**: the last Hero button couldn't be removed; ↑/↓ broke decimal values (line height 1.5 → 1px);
+  CSS Grid columns could become invalid; Button text, grid gap, slider delay and collection limit couldn't be
+  cleared; older forms showed no fields; quick successive style edits overwrote each other.
+- **Menu / Global Options**: saving before the data loaded overwrote everything with the defaults.
+- **Deleting a draft could delete a live page's file** with the same address; deleting the home page left it online.
+- **Publishing** now removes pages that are no longer published (deleted, unpublished, renamed, deleted items),
+  reports files it couldn't write instead of "Build successful", and requires a POST with the security token.
+
+### Security
+- SVG uploads with scripts or event handlers are refused, and SVGs in uploads/ can't run scripts when opened.
+- Values that reach published pages are validated or escaped: brand color, font, site suffix, menu settings,
+  form field types, grid columns, style property names, Hero sizes; `javascript:` links hidden behind control
+  characters are removed by the sanitizer.
+- Editors can no longer change the form email recipients or the session timeout (admin settings).
+- Login: 5 wrong passwords in 15 minutes for an account from one address → 15 minutes wait.
+- Public forms: unknown forms refused, at most 8 submissions per 10 minutes per address, no crash on crafted fields;
+  CSV export protects against spreadsheet formulas.
+- API answers never contain PHP warnings; the uploads `.htaccess` no longer breaks images on mod_php hosts;
+  password resets require 8+ characters (inline form instead of a browser prompt).
 - **Editor text was pale**: the canvas inherited the dark editor's light text color; it now starts from the
   same base as the published page (dark text, the site font and brand color from Global Options).
 - **Layers drag & drop**: rows no longer stretch or shrink while dragging; a line shows where the block will

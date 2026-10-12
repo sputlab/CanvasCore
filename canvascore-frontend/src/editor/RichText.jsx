@@ -449,15 +449,30 @@ export function InlineRegions({ html, variants, onCommit, initialPoint, style })
     if (activeRef.current && activeRef.current.el === el) return;
     if (activeRef.current) finish();
     start.current = tidyHtml(el.innerHTML);
+    moving.current = false;
     activeRef.current = { el, field: el.getAttribute('data-cc-field') };
     setActive(activeRef.current);
   };
+  const moving = useRef(false);                      // focus is moving to another field of this block
   const onBlur = (e) => {
     const el = e.target.closest && e.target.closest('[data-cc-field]');
     if (!el || !activeRef.current || activeRef.current.el !== el) return;
     if (isInToolbar(e.relatedTarget)) return;            // moving into the toolbar or one of its dialogs
+    const next = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('[data-cc-field]');
+    moving.current = !!(next && ref.current && ref.current.contains(next));
     finish();
   };
+
+  // The HTML is put in by hand, not with dangerouslySetInnerHTML: committing one field (e.g. the Hero title)
+  // while the caret already moved to another (the subtitle) must not rebuild the DOM under the caret.
+  // The DOM already shows a committed edit; it is refreshed once nothing is being edited.
+  const shown = useRef(null);
+  useLayoutEffect(() => {
+    if (!ref.current || html === shown.current) return;
+    if (shown.current !== null && (activeRef.current || moving.current)) return;   // refreshed when editing stops
+    ref.current.innerHTML = html;
+    shown.current = html;
+  }, [html, active]);
 
   // Caret at the point of the click that selected the block
   useLayoutEffect(() => {
@@ -480,8 +495,7 @@ export function InlineRegions({ html, variants, onCommit, initialPoint, style })
   return (
     <>
       <div ref={ref} className="cc-rte-host" style={style} onFocus={onFocus} onBlur={onBlur} {...handlers}
-        onClick={(e) => { if (e.target.closest && e.target.closest('a')) e.preventDefault(); }}
-        dangerouslySetInnerHTML={{ __html: html }} />
+        onClick={(e) => { if (e.target.closest && e.target.closest('a')) e.preventDefault(); }} />
       {active && <RichToolbar floating region={active.el} variant={variants[active.field] || 'full'} onCommit={finish} onDone={finish} />}
     </>
   );

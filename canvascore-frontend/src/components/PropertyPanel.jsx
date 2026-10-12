@@ -57,9 +57,15 @@ export default function PropertyPanel() {
     return (cur || selectedBlock || {}).content || {};
   };
   const handleContentChange = (property, value) => updateBlock(selectedBlock.id, { content: { ...liveContent(), [property]: value } });
-  const handleStyleChange = (property, value) => updateBlock(selectedBlock.id, { styles: { ...selectedBlock.styles, [property]: value } });
-  // Several style properties in one update (separate handleStyleChange calls would overwrite each other)
-  const patchStyles = (patch) => updateBlock(selectedBlock.id, { styles: { ...selectedBlock.styles, ...patch } });
+  const patchContent = (patch) => updateBlock(selectedBlock.id, { content: { ...liveContent(), ...patch } });
+  // Styles likewise come from the store, so quick successive edits (or two in one handler) all stick.
+  const liveStyles = () => {
+    const cur = selectedBlock ? findLiveBlock(useStore.getState().blocks, selectedBlock.id) : null;
+    return (cur || selectedBlock || {}).styles || {};
+  };
+  const handleStyleChange = (property, value) => updateBlock(selectedBlock.id, { styles: { ...liveStyles(), [property]: value } });
+  // Several style properties in one update
+  const patchStyles = (patch) => updateBlock(selectedBlock.id, { styles: { ...liveStyles(), ...patch } });
 
   // Helpers for list blocks: immutable updates (no mutation of the store state)
   const lstOf = (key) => { const v = liveContent()[key]; return Array.isArray(v) ? v : []; };
@@ -79,13 +85,9 @@ export default function PropertyPanel() {
       if (typeof mediaPickerTarget === 'string') {
         handleContentChange(mediaPickerTarget, url);
       } else if (mediaPickerTarget.type === 'grid_item') {
-        const newItems = [...selectedBlock.content.items];
-        newItems[mediaPickerTarget.index] += `<img src="${url}" style="max-width:100%; border-radius:8px; display:block; margin: 10px 0;" />`;
-        updateBlock(selectedBlock.id, { content: { ...selectedBlock.content, items: newItems } });
+        handleContentChange('items', lstOf('items').map((it, i) => (i === mediaPickerTarget.index ? it + `<img src="${url}" style="max-width:100%; border-radius:8px; display:block; margin: 10px 0;" />` : it)));
       } else if (mediaPickerTarget.type === 'slider_img') {
-        const newImgs = [...selectedBlock.content.images];
-        newImgs[mediaPickerTarget.index].src = url;
-        updateBlock(selectedBlock.id, { content: { ...selectedBlock.content, images: newImgs } });
+        lstPatch('images', mediaPickerTarget.index, { src: url });
       } else if (mediaPickerTarget.type === 'gallery_img') {
         handleContentChange('images', (selectedBlock.content.images || []).map((im, i) => (i === mediaPickerTarget.index ? { ...im, src: url } : im)));
       } else if (mediaPickerTarget.type === 'gallery_add') {
@@ -142,7 +144,7 @@ export default function PropertyPanel() {
   const tab = tabs.some(([id]) => id === activeTab) ? activeTab : tabs[0][0];
   const c = selectedBlock.content || {};
   const ctx = {
-    selectedBlock, c, set: handleContentChange, handleContentChange, handleStyleChange, patchStyles, updateBlock, setMediaPickerTarget,
+    selectedBlock, c, set: handleContentChange, handleContentChange, patchContent, handleStyleChange, patchStyles, updateBlock, setMediaPickerTarget,
     pick: (type, index) => () => setMediaPickerTarget(index === undefined ? { type } : { type, index }),
     ARS: [['16 / 9', '16:9'], ['4 / 3', '4:3'], ['3 / 2', '3:2'], ['1 / 1', '1:1'], ['21 / 9', '21:9']],
     pages, collections, lstOf, lstPatch, lstRemove, lstAdd, lstMove, userRole,

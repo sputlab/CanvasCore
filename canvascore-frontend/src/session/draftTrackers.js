@@ -59,6 +59,7 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
   let timer = null;
   let lastMasterId = null;
   let started = false;
+  let found = null;                         // backup found when opening the page: { scope, entry }, kept until a decision
 
   const masterId = (s) => ((s.isEditingMaster && s.editingMaster) ? s.editingMaster.id : null);
   const sigPage = (s) => canon(editorSnapshot(s).page);
@@ -79,9 +80,12 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
     const scope = editorScope(s);
     if (dirtyState(s)) {
       const r = saveDraft(scope, editorPayload(s));
+      // Editing the server version replaces the older backup that was offered: the offer goes away
+      if (found && found.scope === scope) { found = null; setState({ editorDraftFound: null }); }
       setState({ editorDirty: true, draftBackupFailed: !r.ok });
     } else {
-      clearDraft(scope);                    // back to the saved state (save or undo): nothing to protect
+      // back to the saved state (save or undo): nothing to protect, except a backup still on offer
+      if (!(found && found.scope === scope)) clearDraft(scope);
       setState({ editorDirty: false, draftBackupFailed: false });
     }
   }
@@ -93,7 +97,30 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
     lastMasterId = masterId(s);
     base.master = lastMasterId ? (restored ? null : sigMaster(s)) : undefined;
     started = true;
-    setState({ editorDirty: restored });
+    // Unsaved work left from an earlier visit to this page (not restored at sign-in): offer it, never delete it silently
+    found = null;
+    if (!restored && s.activePage) {
+      const scope = editorScope(s);
+      const d = readDraft(scope);
+      if (d && d.payload && d.payload.page && canon(d.payload.page) !== base.page) found = { scope, entry: { scope, payload: d.payload, savedAt: d.savedAt } };
+    }
+    setState({ editorDirty: restored, editorDraftFound: found ? { savedAt: found.entry.savedAt } : null });
+  }
+
+  // "Restore" on the offer: loads the backup into the editor (then treated as unsaved, like a restore at sign-in)
+  function restoreFound() {
+    if (!found) return false;
+    const entry = found.entry;
+    found = null;
+    applyDraftToStore(entry, setState);
+    start();
+    return true;
+  }
+  // "Discard" on the offer: deletes that backup
+  function dismissFound() {
+    if (found) clearDraft(found.scope);
+    found = null;
+    setState({ editorDraftFound: null });
   }
 
   // Call on every store change (subscribe). The heavy work is debounced.
@@ -110,10 +137,18 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
     timer = setTimeoutFn(evaluate, debounceMs);
   }
 
-  // After a successful page save: the current state becomes the new baseline.
-  function markSaved() {
+  // After a successful page save. `sent` = editorSnapshot(state when the request was sent).page and
+  // `sentScope` its backup scope: only what was SENT becomes the baseline, so edits made while the request
+  // was in flight stay unsaved (and backed up). Id and status come from the server's answer.
+  function markSaved(sent, sentScope) {
     const s = getState();
-    base.page = sigPage(s);
+    if (sent) {
+      const cur = editorSnapshot(s).page.page;
+      base.page = canon({ page: { ...sent.page, id: cur.id, status: cur.status }, blocks: sent.blocks });
+    } else {
+      base.page = sigPage(s);
+    }
+    if (sentScope && sentScope !== editorScope(s)) clearDraft(sentScope);   // the page id changed (draft copy)
     if (s.editorRestored) setState({ editorRestored: false });
     evaluate();
   }
@@ -128,7 +163,15 @@ export function createEditorDraftTracker({ getState, setState, debounceMs = 600,
     evaluate();
   }
 
-  return { start, onChange, evaluate, markSaved, discard, dispose: evaluate, _base: () => ({ ...base }) };
+  // Leaving the editor: last backup, then the per-page flags are reset (they must not follow to another page)
+  function dispose() {
+    evaluate();
+    started = false; found = null;
+    const s = getState();
+    if (s.editorRestored || s.editorDraftFound) setState({ editorRestored: false, editorDraftFound: null });
+  }
+
+  return { start, onChange, evaluate, markSaved, discard, restoreFound, dismissFound, dispose, _base: () => ({ ...base }) };
 }
 
 // ---------------------------------------------------------------------------

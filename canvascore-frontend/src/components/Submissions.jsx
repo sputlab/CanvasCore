@@ -31,14 +31,20 @@ export default function Submissions() {
 
   const deleteOne = async (id) => {
     if (!window.confirm('Delete this submission?')) return;
-    await fetch('api.php?action=delete_submission', { method: 'POST', body: JSON.stringify({ id }) });
-    setRows(rows.filter(r => r.id !== id));
+    try {
+      const data = await (await fetch('api.php?action=delete_submission', { method: 'POST', body: JSON.stringify({ id }) })).json();
+      if (!data || data.success === false) { notify((data && data.message) || 'Could not delete the submission.', 'error'); return; }
+      setRows((rs) => rs.filter(r => r.id !== id));
+    } catch { notify('Could not delete the submission (connection problem).', 'error'); }
   };
 
   const clearAll = async () => {
     if (!window.confirm('Delete ALL submissions? This cannot be undone.')) return;
-    await fetch('api.php?action=clear_submissions', { method: 'POST', body: '{}' });
-    setRows([]);
+    try {
+      const data = await (await fetch('api.php?action=clear_submissions', { method: 'POST', body: '{}' })).json();
+      if (!data || data.success === false) { notify((data && data.message) || 'Could not delete the submissions.', 'error'); return; }
+      setRows([]);
+    } catch { notify('Could not delete the submissions (connection problem).', 'error'); }
   };
 
   const shown = rows.filter((r) => !query || JSON.stringify([r.form_id, r.page, r.data]).toLowerCase().includes(query.toLowerCase()));

@@ -1,11 +1,11 @@
 import React from 'react';
 import { Sliders, Image as ImageIcon, Trash2, Images } from 'lucide-react';
 import { PanelAccordion } from '../fields';
-import { handleNumericKey, labelStyle, inputStyle } from '../helpers';
+import { labelStyle, inputStyle } from '../helpers';
 
 // Content panel: SLIDER
 export default function SliderPanel({ ctx }) {
-  const { selectedBlock, handleContentChange, setMediaPickerTarget } = ctx;
+  const { selectedBlock, handleContentChange, setMediaPickerTarget, lstPatch } = ctx;
   return (
     <>
       <PanelAccordion title="Slider Settings" icon={Sliders} defaultOpen={true}>
@@ -20,7 +20,7 @@ export default function SliderPanel({ ctx }) {
         {selectedBlock.content.autoplay !== false && (
           <>
             <label style={labelStyle}>Delay (ms)</label>
-            <input type="number" style={inputStyle} value={selectedBlock.content.delay || 3000} onChange={e => handleContentChange('delay', parseInt(e.target.value))} onKeyDown={e => handleNumericKey(e, selectedBlock.content.delay, val => handleContentChange('delay', parseInt(val)))} />
+            <input type="number" style={inputStyle} min="500" step="100" placeholder="3000" value={selectedBlock.content.delay ?? ''} onChange={e => handleContentChange('delay', e.target.value === '' ? undefined : Math.max(500, parseInt(e.target.value, 10) || 3000))} />
           </>
         )}
 
@@ -61,14 +61,10 @@ export default function SliderPanel({ ctx }) {
               }} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={14}/></button>
             </div>
             <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
-              <input type="text" style={{...inputStyle, flex: 1, marginBottom: 0}} value={img.src} onChange={e => {
-                const newImgs = [...selectedBlock.content.images]; newImgs[idx].src = e.target.value; handleContentChange('images', newImgs);
-              }} placeholder="Image URL" />
+              <input type="text" style={{...inputStyle, flex: 1, marginBottom: 0}} value={img.src ?? ''} onChange={e => lstPatch('images', idx, { src: e.target.value })} placeholder="Image URL" />
               <button onClick={() => setMediaPickerTarget({ type: 'slider_img', index: idx })} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 12px', cursor: 'pointer' }}><ImageIcon size={16}/></button>
             </div>
-            <input type="text" style={inputStyle} value={img.alt || ''} onChange={e => {
-              const newImgs = [...selectedBlock.content.images]; newImgs[idx].alt = e.target.value; handleContentChange('images', newImgs);
-            }} placeholder="Alt Text (SEO)" />
+            <input type="text" style={inputStyle} value={img.alt || ''} onChange={e => lstPatch('images', idx, { alt: e.target.value })} placeholder="Alt Text (SEO)" />
           </div>
         ))}
         <button onClick={() => {

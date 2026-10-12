@@ -5,6 +5,9 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
+// PHP notices/warnings must never be printed into a JSON answer (the client could not read it): log them
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 
 $data_dir = cc_data_dir();
 $db_file = $data_dir . '/canvascore.sqlite';
@@ -24,7 +27,7 @@ $action = $_GET['action'] ?? '';
 
 // A POST without a valid session is "unauthenticated" (401), NOT "bad CSRF" (403): this way the client
 // can always tell an expired session from a token that needs refreshing.
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action !== 'login' && !cc_session_is_logged_in()) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action !== 'login' && $action !== 'logout' && !cc_session_is_logged_in()) {
     cc_unauthorized();
 }
 
@@ -71,13 +74,20 @@ if ($action === 'check_auth') {
 
 if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $username = trim($data['username'] ?? 'admin');
-    $password = $data['password'] ?? '';
+    $username = trim((string)($data['username'] ?? 'admin'));
+    $password = (string)($data['password'] ?? '');
+    // Brute force protection: too many wrong passwords from this address for this account -> wait
+    $wait = cc_login_wait($username);
+    if ($wait > 0) {
+        http_response_code(429);
+        echo json_encode(['success' => false, 'message' => 'Too many failed attempts. Try again in ' . max(1, (int)ceil($wait / 60)) . ' minute(s).']); exit;
+    }
     $stmt = $pdo->prepare("SELECT password_hash, role, must_change_pw FROM admin WHERE username = ?");
     $stmt->execute([$username]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($user && password_verify($password, $user['password_hash'])) {
+        cc_login_result($username, true);
         session_regenerate_id(true); // session fixation mitigation
         $_SESSION['logged_in'] = true;
         $_SESSION['username'] = $username;
@@ -87,12 +97,13 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         cc_issue_csrf(); // align the double-submit cookie with the new session token
         echo json_encode(['success' => true, 'role' => $user['role'], 'username' => $username, 'csrf' => $_SESSION['csrf'], 'must_change_pw' => (int)($user['must_change_pw'] ?? 0), 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]);
     } else {
+        cc_login_result($username, false);
         echo json_encode(['success' => false, 'message' => 'Invalid credentials.']);
     }
     exit;
 }
 
-if ($action === 'logout') {
+if ($action === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!headers_sent()) {
         @setcookie('cc_csrf', '', ['expires' => time() - 3600, 'path' => '/', 'samesite' => 'Lax', 'secure' => cc_is_https(), 'httponly' => false]);
     }
@@ -112,6 +123,10 @@ cc_session_touch();
 // Account management (admin only)
 // ---------------------------------------------------------------------------
 $is_admin = ($_SESSION['role'] ?? '') === 'admin';
+
+// Read-only requests release the session lock right away: PHP keeps one request per session at a time,
+// so a slow request (publish, big page list) would otherwise hold every other screen's data back.
+if ($_SERVER['REQUEST_METHOD'] === 'GET') session_write_close();
 
 // Keepalive: the client calls it (rate-limited) while the user is active in the interface.
 // The touch already happened in the gate.
@@ -147,9 +162,10 @@ if ($action === 'delete_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($action === 'force_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $pwd = $data['password'] ?? '';
-    if (strlen($pwd) < 4) { echo json_encode(['success' => false, 'message' => 'Password too short.']); exit; }
-    $pdo->prepare("UPDATE admin SET password_hash = ?, must_change_pw = 1 WHERE id = ?")
-        ->execute([password_hash($pwd, PASSWORD_DEFAULT), $data['id']]);
+    if (strlen($pwd) < 8) { echo json_encode(['success' => false, 'message' => 'Password too short (at least 8 characters).']); exit; }
+    $st = $pdo->prepare("UPDATE admin SET password_hash = ?, must_change_pw = 1 WHERE id = ?");
+    $st->execute([password_hash($pwd, PASSWORD_DEFAULT), $data['id'] ?? 0]);
+    if ($st->rowCount() === 0) { echo json_encode(['success' => false, 'message' => 'Account not found.']); exit; }
     echo json_encode(['success' => true, 'message' => 'Password updated.']); exit;
 }
 
@@ -179,6 +195,9 @@ if ($action === 'upload_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $allowed = ['jpg','jpeg','png','gif','webp','avif','svg','ico','bmp'];
         if (!in_array($ext, $allowed, true)) {
             echo json_encode(['success' => false, 'message' => 'File type not allowed. Only images are accepted.']); exit;
+        }
+        if ($ext === 'svg' && !cc_svg_is_safe($_FILES['file']['tmp_name'])) {
+            echo json_encode(['success' => false, 'message' => 'This SVG contains scripts or other active content and was not accepted. Export it again as a plain SVG (or as PNG).']); exit;
         }
         // For raster formats, check that it really is an image
         if (!in_array($ext, ['svg','ico'], true)) {
@@ -224,7 +243,19 @@ if ($action === 'get_settings') {
 if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $raw = file_get_contents('php://input');
     $decoded = json_decode($raw, true);
-    if ($decoded === null) { echo json_encode(['success' => false, 'message' => 'Invalid settings payload.']); exit; }
+    if (!is_array($decoded)) { echo json_encode(['success' => false, 'message' => 'Invalid settings payload.']); exit; }
+    // Where form submissions are mailed and how long sessions last are admin decisions: an editor's save
+    // keeps the current values of those fields.
+    if (!$is_admin) {
+        $current = @json_decode(@file_get_contents($data_dir . '/settings.json'), true);
+        if (!is_array($current)) $current = [];
+        foreach (['adminEmail', 'emailFrom', 'emailSubject', 'sessionTimeoutMinutes'] as $k) {
+            if (array_key_exists($k, $current)) $decoded[$k] = $current[$k]; else unset($decoded[$k]);
+        }
+    }
+    if (isset($decoded['brandColor']) && !preg_match('/^#[0-9a-fA-F]{3,8}$/', (string)$decoded['brandColor'])) {
+        echo json_encode(['success' => false, 'message' => 'The brand color must be a hex color such as #3b82f6.']); exit;
+    }
     if (isset($decoded['sessionTimeoutMinutes'])) {
         $decoded['sessionTimeoutMinutes'] = max(5, min(720, (int)$decoded['sessionTimeoutMinutes']));
     }
@@ -312,6 +343,8 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $content     = isset($data['blocks']) ? json_encode($data['blocks']) : '[]';
     $publish     = !empty($data['publish']);
     $is_home     = !empty($data['is_home']) ? 1 : 0;
+    // Only touch the homepage flag when the client sends it (a save without it keeps the current home)
+    $has_home    = is_array($data) && array_key_exists('is_home', $data);
     $author      = $_SESSION['username'] ?? 'admin';
     $now         = date('Y-m-d H:i:s');
 
@@ -343,13 +376,13 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $writeRow($parentId, 'published', 0, null);
             if ($old) relink_slug_change($pdo, $data_dir, $old['clean_slug'] ?? null, $clean);
             $pdo->prepare("DELETE FROM pages WHERE id = ?")->execute([$id]); // remove the copy
-            apply_home($pdo, $parentId, $is_home);
+            if ($has_home) apply_home($pdo, $parentId, $is_home);
             echo json_encode(['success' => true, 'message' => 'Page published!', 'new_id' => $parentId]); exit;
         } else {
             $oldClean = $existing['clean_slug'] ?? null;
             $writeRow($id, 'published', 0, null);
             relink_slug_change($pdo, $data_dir, $oldClean, $clean);
-            apply_home($pdo, $id, $is_home);
+            if ($has_home) apply_home($pdo, $id, $is_home);
             echo json_encode(['success' => true, 'message' => 'Page published!', 'new_id' => $id]); exit;
         }
     }
@@ -358,13 +391,13 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$existing) {
         // New page: stays a draft with its own id
         $writeRow($id, 'draft', 0, null);
-        apply_home($pdo, $id, $is_home);
+        if ($has_home) apply_home($pdo, $id, $is_home);
         echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $id]); exit;
     }
     if ((int)($existing['is_draft_copy'] ?? 0) === 1) {
         // Already editing a draft copy: update in place
         $writeRow($id, 'draft', 1, $existing['parent_id']);
-        apply_home($pdo, $existing['parent_id'], $is_home);
+        if ($has_home) apply_home($pdo, $existing['parent_id'], $is_home);
         echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $id]); exit;
     }
     if (($existing['status'] ?? '') === 'published') {
@@ -372,12 +405,12 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $copyId = 'draft-' . uniqid();
         $writeRow($copyId, 'draft', 1, $id);
         $pdo->prepare("UPDATE pages SET status='modified', updated_at=? WHERE id=?")->execute([$now, $id]);
-        apply_home($pdo, $id, $is_home);
+        if ($has_home) apply_home($pdo, $id, $is_home);
         echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $copyId]); exit;
     }
     // Primary draft / draft_new: update in place
     $writeRow($id, 'draft', 0, null);
-    apply_home($pdo, $id, $is_home);
+    if ($has_home) apply_home($pdo, $id, $is_home);
     echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $id]); exit;
 }
 
@@ -393,16 +426,20 @@ if ($action === 'discard_draft' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($action === 'delete_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = json_decode(file_get_contents('php://input'), true)['id'] ?? null;
     if ($id) {
-        $row = $pdo->prepare("SELECT clean_slug, is_draft_copy FROM pages WHERE id = ?"); $row->execute([$id]);
+        $row = $pdo->prepare("SELECT clean_slug, is_draft_copy, status, is_home FROM pages WHERE id = ?"); $row->execute([$id]);
         $p = $row->fetch(PDO::FETCH_ASSOC);
         if ($p && (int)$p['is_draft_copy'] === 0) {
-            // Remove the generated HTML from disk
-            $slug = sanitize_slug($p['clean_slug'] ?? 'index');
-            if ($slug === 'index' || $slug === 'home') {
-                @unlink(__DIR__ . '/../index.html');
-            } else {
-                @unlink(__DIR__ . '/../' . $slug . '/index.html');
-                @rmdir(__DIR__ . '/../' . $slug);
+            // Remove the generated HTML from disk, only if this page is the one online
+            // (a draft never published may share a slug with a live page and must not delete its file)
+            if (in_array($p['status'] ?? '', ['published', 'modified'], true)) {
+                $slug = sanitize_slug($p['clean_slug'] ?? 'index');
+                if ((int)($p['is_home'] ?? 0) === 1 || $slug === 'index' || $slug === 'home') {
+                    @unlink(__DIR__ . '/../index.html');
+                }
+                if ($slug !== 'index' && $slug !== 'home') {
+                    @unlink(__DIR__ . '/../' . $slug . '/index.html');
+                    @rmdir(__DIR__ . '/../' . $slug);
+                }
             }
             $pdo->prepare("DELETE FROM pages WHERE parent_id = ?")->execute([$id]); // delete the copies
         }
@@ -457,7 +494,9 @@ if ($action === 'export_submissions') {
     foreach ($rows as $r) {
         $d = json_decode($r['data_json'], true) ?: [];
         $line = [$r['created_at'], $r['form_id'], $r['page']];
-        foreach ($labels as $l) $line[] = $d[$l] ?? '';
+        foreach ($labels as $l) $line[] = is_array($d[$l] ?? '') ? implode(', ', $d[$l]) : (string)($d[$l] ?? '');
+        // A value starting with = + - @ would run as a formula in Excel/Sheets: prefix it with '
+        $line = array_map(function ($v) { $v = (string)$v; return ($v !== '' && strpbrk($v[0], "=+-@\t\r") !== false) ? "'" . $v : $v; }, $line);
         fputcsv($out, $line);
     }
     rewind($out); $csv = stream_get_contents($out); fclose($out);

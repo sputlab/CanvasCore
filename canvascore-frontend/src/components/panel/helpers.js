@@ -1,20 +1,18 @@
 // Shared helpers and styles for the property panel and its block panels.
 
-// ↑/↓ in a size field (12px → 13px), keeping the unit
+// ↑/↓ in a size field: 12px → 13px, 1.5 → 1.6, 0.5rem → 0.6rem (keeps the unit, or no unit).
+// Shift steps by 10 (whole numbers) or 1 (decimals). Values it can't read (e.g. "10px 20px") are left alone.
 export const handleNumericKey = (e, val, onChange) => {
-  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-    e.preventDefault();
-    const strVal = String(val || '0px');
-    const match = strVal.match(/^(-?\d+)(\D*)$/);
-    if (match) {
-      const num = parseInt(match[1]);
-      const unit = match[2] || 'px';
-      const newVal = e.key === 'ArrowUp' ? num + 1 : num - 1;
-      onChange(newVal + unit);
-    } else {
-      onChange(e.key === 'ArrowUp' ? '1px' : '0px');
-    }
-  }
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  e.preventDefault();
+  const strVal = String(val ?? '').trim();
+  if (strVal === '') { onChange(e.key === 'ArrowUp' ? '1px' : '0px'); return; }
+  const match = strVal.match(/^(-?\d*\.?\d+)([a-z%]*)$/i);
+  if (!match) return;
+  const decimals = (match[1].split('.')[1] || '').length;
+  const step = (decimals ? 0.1 : 1) * (e.shiftKey ? 10 : 1);
+  const next = parseFloat(match[1]) + (e.key === 'ArrowUp' ? step : -step);
+  onChange(Number(next.toFixed(Math.max(decimals, 1))).toString() + match[2]);
 };
 
 // Styles of the classic fields (kept inline: the panels compose them with local tweaks)

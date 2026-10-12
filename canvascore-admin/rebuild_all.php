@@ -7,7 +7,11 @@ ini_set('display_errors', 0);
 header('Content-Type: application/json');
 
 if (!cc_session_is_logged_in()) cc_unauthorized('Unauthorized. Please login.');
+// Publishing changes the site: POST with the CSRF token only (a link or another site can't trigger it)
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); die(json_encode(['success' => false, 'message' => 'Use POST.'])); }
+cc_verify_csrf_or_die();
 cc_session_touch();
+session_write_close(); // the rebuild can take a while: don't hold the other screens' requests
 
 require_once __DIR__ . '/compiler.php';
 
@@ -47,9 +51,11 @@ try {
     if (isset($settings['headerEnabled']) && empty($settings['headerEnabled'])) $header_html = '';
     if (isset($settings['footerEnabled']) && empty($settings['footerEnabled'])) $footer_html = '';
 
-    $brand_color = $settings['brandColor'] ?? '#3b82f6';
-    $font_family = $settings['fontFamily'] ?? 'Inter';
-    $site_suffix = isset($settings['siteSuffix']) ? $settings['siteSuffix'] : ' | My Site';
+    // These go into <style> and <title>: only safe values (a color, a font name, escaped text)
+    $brand_color = (is_string($settings['brandColor'] ?? null) && preg_match('/^#[0-9a-fA-F]{3,8}$/', $settings['brandColor'])) ? $settings['brandColor'] : '#3b82f6';
+    $font_family = preg_replace('/[^A-Za-z0-9 \-]/', '', (string)($settings['fontFamily'] ?? 'Inter'));
+    if (trim($font_family) === '') $font_family = 'Inter';
+    $site_suffix = htmlspecialchars(isset($settings['siteSuffix']) ? (string)$settings['siteSuffix'] : ' | My Site');
     $site_url     = rtrim(trim($settings['siteUrl'] ?? ''), '/');
     $site_name    = trim($settings['siteName'] ?? '');
     $favicon_url  = trim($settings['faviconUrl'] ?? '');
@@ -65,6 +71,17 @@ try {
 
     $font_url = urlencode($font_family);
     $google_fonts_link = "<link href=\"https://fonts.googleapis.com/css2?family={$font_url}:ital,wght@0,300;0,400;0,600;0,700;0,900;1,400&display=swap\" rel=\"stylesheet\">";
+
+    // Every file written by this build (relative to the site root), and the ones that could not be written
+    $site_root = realpath(__DIR__ . '/..');
+    $written = []; $failed = []; $warnings = [];
+    $write = function ($fp, $content) use (&$written, &$failed, $site_root) {
+        $d = dirname($fp);
+        if (!is_dir($d)) @mkdir($d, 0755, true);
+        if (@file_put_contents($fp, $content) === false) { $failed[] = $fp; return; }
+        $real = realpath($fp);
+        if ($real && $site_root && strpos($real, $site_root . DIRECTORY_SEPARATOR) === 0) $written[] = str_replace(DIRECTORY_SEPARATOR, '/', substr($real, strlen($site_root) + 1));
+    };
 
     $master_file = __DIR__ . '/master.html';
     if (!file_exists($master_file)) die(json_encode(['success' => false, 'message' => 'Error: master.html missing!']));
@@ -145,17 +162,9 @@ try {
 
         $targets = [];
         if ($writeRoot) $targets[] = __DIR__ . '/../index.html';
-        if (!$isRootSlug) {
-            $dir = __DIR__ . '/../' . $slug;
-            if (!is_dir($dir)) mkdir($dir, 0755, true);
-            $targets[] = $dir . '/index.html';
-        }
-        if (empty($targets)) { // slug 'index'/'home' that is not home while another page is the home
-            $dir = __DIR__ . '/../' . $slug;
-            if (!is_dir($dir)) mkdir($dir, 0755, true);
-            $targets[] = $dir . '/index.html';
-        }
-        foreach ($targets as $fp) file_put_contents($fp, $html);
+        if (!$isRootSlug) $targets[] = __DIR__ . '/../' . $slug . '/index.html';
+        if (empty($targets)) $targets[] = __DIR__ . '/../' . $slug . '/index.html'; // slug 'index'/'home' that is not home while another page is the home
+        foreach ($targets as $fp) $write($fp, $html);
         $count++;
     }
     // --- Collection items: one static page per published item ---
@@ -198,14 +207,12 @@ try {
                 $ihtml = str_replace('{{PAGE_CONTENT}}', $i_full, $ihtml);
                 $ihtml = str_replace('{{BASE_URL}}', $base_url, $ihtml);
 
-                $dir = __DIR__ . '/../' . $col_slug . '/' . $it_slug;
-                if (!is_dir($dir)) mkdir($dir, 0755, true);
-                file_put_contents($dir . '/index.html', $ihtml);
+                $write(__DIR__ . '/../' . $col_slug . '/' . $it_slug . '/index.html', $ihtml);
                 $count++;
                 $sitemap_urls[] = $i_abs !== '' ? $i_abs : ($base_url . $col_slug . '/' . $it_slug . '/');
             }
         }
-    } catch (Exception $e) {}
+    } catch (Throwable $e) { $warnings[] = 'Collections: ' . $e->getMessage(); }
 
     // Form recipient registry (per form, server-side: no email addresses in the client)
     $forms = function_exists('cc_form_registry') ? cc_form_registry() : [];
@@ -238,7 +245,33 @@ try {
     $root_ht = __DIR__ . '/../.htaccess';
     if (!file_exists($root_ht)) @file_put_contents($root_ht, "ErrorDocument 404 " . $base_url . "404.html\n");
 
-    echo json_encode(['success' => true, 'message' => "Build successful: $count pages published."]);
-} catch (Exception $e) {
+    // Pages no longer published (deleted, unpublished, renamed slug, deleted collection items) are removed:
+    // only files a previous build wrote (manifest), never anything else, and never the root index.html.
+    $manifest_file = $data_dir . '/published_files.json';
+    $previous = file_exists($manifest_file) ? json_decode((string)@file_get_contents($manifest_file), true) : [];
+    $removed = 0;
+    if (is_array($previous) && !$failed) {
+        $keep = array_flip($written);
+        foreach ($previous as $rel) {
+            if (!is_string($rel) || isset($keep[$rel]) || $rel === 'index.html') continue;
+            if (!preg_match('#^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/index\.html$#', $rel) || strpos($rel, '..') !== false) continue;
+            $fp = __DIR__ . '/../' . $rel;
+            if (is_file($fp) && @unlink($fp)) {
+                $removed++;
+                $d = dirname($fp);   // remove the emptied folders (item folder, then collection folder)
+                for ($i = 0; $i < 2 && $d !== $site_root && @rmdir($d); $i++) $d = dirname($d);
+            }
+        }
+    }
+    if (!$failed) @file_put_contents($manifest_file, json_encode(array_values(array_unique($written))));
+
+    if ($failed) {
+        echo json_encode(['success' => false, 'message' => 'Publish incomplete: ' . count($failed) . ' file(s) could not be written (check the folder permissions on the server), e.g. ' . basename(dirname($failed[0])) . '/' . basename($failed[0]) . '.']);
+    } else {
+        $msg = "Build successful: $count pages published." . ($removed ? " $removed old page(s) removed." : '');
+        if ($warnings) $msg .= ' Warning: ' . implode(' ', $warnings);
+        echo json_encode(['success' => true, 'message' => $msg]);
+    }
+} catch (Throwable $e) {
     echo json_encode(['success' => false, 'message' => 'PHP Error: ' . $e->getMessage()]);
 }

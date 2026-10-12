@@ -15,6 +15,9 @@ export default function Backup() {
       const res = await fetch('api.php?action=export_site');
       if (!res.ok) { notify('Export not allowed (admin only).', 'error'); return; }
       const text = await res.text();
+      let parsed = null;
+      try { parsed = JSON.parse(text); } catch { parsed = null; }
+      if (!parsed || parsed.canvascore !== true) { notify('Export failed: ' + ((parsed && parsed.message) || 'unexpected answer from the server'), 'error'); return; }
       const blob = new Blob([text], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

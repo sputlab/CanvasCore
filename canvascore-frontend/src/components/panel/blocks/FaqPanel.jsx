@@ -5,7 +5,7 @@ import { inputStyle, labelStyle } from '../helpers';
 
 // Content panel: FAQ
 export default function FaqPanel({ ctx }) {
-  const { selectedBlock, handleContentChange } = ctx;
+  const { selectedBlock, handleContentChange, lstPatch } = ctx;
   return (
     <PanelAccordion title="FAQ Items" icon={HelpCircle} defaultOpen={true}>
       {(selectedBlock.content.items || []).map((item, idx) => (
@@ -16,12 +16,8 @@ export default function FaqPanel({ ctx }) {
               const newItems = [...selectedBlock.content.items]; newItems.splice(idx, 1); handleContentChange('items', newItems);
             }} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={14}/></button>
           </div>
-          <input type="text" style={{...inputStyle, marginBottom:'10px'}} value={item.q} onChange={e => {
-            const newItems = [...selectedBlock.content.items]; newItems[idx].q = e.target.value; handleContentChange('items', newItems);
-          }} placeholder="Question" />
-          <textarea rows="3" style={inputStyle} value={item.a} onChange={e => {
-            const newItems = [...selectedBlock.content.items]; newItems[idx].a = e.target.value; handleContentChange('items', newItems);
-          }} placeholder="Answer" />
+          <input type="text" style={{...inputStyle, marginBottom:'10px'}} value={item.q ?? ''} onChange={e => lstPatch('items', idx, { q: e.target.value })} placeholder="Question" />
+          <textarea rows="3" style={inputStyle} value={item.a ?? ''} onChange={e => lstPatch('items', idx, { a: e.target.value })} placeholder="Answer" />
         </div>
       ))}
       <button onClick={() => {

@@ -44,11 +44,11 @@ export default function HeroPanel({ ctx }) {
             onMove={(d) => moveBtn(index, d)} onRemove={() => handleContentChange('buttons', buttons.filter((_, i) => i !== index))}>
             <TxtF label="Text" value={btn.text} onChange={v => patch(index, { text: v })} placeholder="Button text" />
             <Fld label="Link">
-              <select style={{...fldInput, marginBottom: '6px'}} value={btn.url} onChange={e => patch(index, { url: e.target.value })}>
+              <select style={{...fldInput, marginBottom: '6px'}} value={btn.url ?? '#'} onChange={e => patch(index, { url: e.target.value })}>
                 <option value="#">Select internal page...</option>
                 {pages.map(p => <option key={p.id} value={p.clean_slug ? p.clean_slug + '/index.html' : 'index.html'}>📄 {p.title}</option>)}
               </select>
-              <input type="text" style={fldInput} placeholder="Custom URL..." value={btn.url} onChange={e => patch(index, { url: e.target.value })} />
+              <input type="text" style={fldInput} placeholder="Custom URL..." value={btn.url ?? ''} onChange={e => patch(index, { url: e.target.value })} />
             </Fld>
             <Fld label="Style">
               <div className="ui-seg" role="group" aria-label="Button style" style={{ display: 'flex', gap: 4 }}>
@@ -61,7 +61,7 @@ export default function HeroPanel({ ctx }) {
             <ColorF label="Text color" value={btn.textColor} onChange={v => patch(index, { textColor: v })} allowTransparent={false} />
             <ColorF label="Border (empty = no border)" value={btn.borderColor} onChange={v => patch(index, { borderColor: v })} allowTransparent={false} placeholder="No border" />
             <Fld label="Corner radius (↑/↓)">
-              <input type="text" value={btn.borderRadius} onChange={e => patch(index, { borderRadius: e.target.value })}
+              <input type="text" value={btn.borderRadius ?? ''} onChange={e => patch(index, { borderRadius: e.target.value })}
                 onKeyDown={e => handleNumericKey(e, btn.borderRadius, val => patch(index, { borderRadius: val }))} style={fldInput} />
             </Fld>
             <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #334155' }}>
