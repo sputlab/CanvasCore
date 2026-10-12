@@ -4,7 +4,7 @@ import {
   LayoutTemplate, LayoutGrid, Grid, Columns3, Type, Image as ImageIcon, SquareChartGantt, SeparatorHorizontal,
   MonitorPlay, Code, PanelLeft, Star, MessageSquareQuote, Info, Mail, Rows3, PanelTop, HelpCircle, Images,
   GalleryHorizontal, GitCompare, Timer, ListOrdered, Hash, BarChart3, Table2, History, CreditCard, Users,
-  Building2, Store, MapPin, Library, Crown, Square,
+  Building2, Store, MapPin, Library, Crown, Square, Search,
 } from 'lucide-react';
 
 export const CATEGORIES = [
@@ -58,6 +58,7 @@ export const BLOCKS = [
   { type: 'BUSINESS', label: 'Business Info', icon: Store, category: 'business', color: '#22d3ee', keywords: 'address hours contact opening' },
   { type: 'MAPS', label: 'Map', icon: MapPin, category: 'business', color: '#22d3ee', keywords: 'google maps location' },
   { type: 'COLLECTION_LIST', label: 'Collection List', icon: Library, category: 'business', color: '#22d3ee', keywords: 'blog posts news items dynamic' },
+  { type: 'SEARCH', label: 'Site Search', icon: Search, category: 'business', color: '#22d3ee', keywords: 'search find query results' },
 ];
 
 const BY_TYPE = Object.fromEntries(BLOCKS.map((b) => [b.type, b]));

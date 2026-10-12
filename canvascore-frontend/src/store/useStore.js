@@ -127,6 +127,31 @@ export const placeInTree = (roots, activeId, targetId, position) => {
 
 const lastEdit = { sig: '', t: 0, blocks: null };
 
+// ---- block copies: duplicate, copy/paste (also between pages and tabs), move among siblings ----
+const CLIPBOARD_KEY = 'cc_block_clipboard';
+// Deep copy with new ids everywhere (a copy must never share an id with its original)
+export const cloneWithNewIds = (node) => {
+  const copy = JSON.parse(JSON.stringify(node));
+  const walk = (n) => {
+    n.id = newBlockId();
+    if (n.content && Array.isArray(n.content.buttons)) n.content.buttons = n.content.buttons.map((b) => (b && b.id ? { ...b, id: newBlockId() } : b));
+    if (Array.isArray(n.children)) n.children.forEach(walk);
+  };
+  walk(copy);
+  return copy;
+};
+// Puts `node` right after the block `afterId` (same parent); null when afterId isn't found
+const insertAfter = (roots, afterId, node) => {
+  const tree = JSON.parse(JSON.stringify(roots));
+  const f = findInTree(tree, afterId);
+  if (!f) return null;
+  f.list.splice(f.index + 1, 0, node);
+  return tree;
+};
+export const readBlockClipboard = () => {
+  try { const v = JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || 'null'); return v && v.block && v.block.type ? v : null; } catch { return null; }
+};
+
 export const useStore = create((set, get) => ({
   isAuthenticated: false,
   userRole: 'editor',
@@ -432,6 +457,53 @@ export const useStore = create((set, get) => ({
 
   // Typing in a field sends one update per key: quick successive edits of the same block and the same
   // fields merge into ONE undo step (otherwise 30 characters would fill the whole undo history).
+  duplicateBlock: (id) => {
+    const node = findNodeById(get().blocks, id);
+    if (!node) return null;
+    const copy = cloneWithNewIds(node);
+    set((state) => {
+      const tree = insertAfter(state.blocks, id, copy);
+      return tree ? { ...pushHistory(state, tree), selectedBlockId: copy.id } : state;
+    });
+    return copy.id;
+  },
+  // The copied block stays in this browser (localStorage): paste it on any page, in any tab
+  copyBlock: (id) => {
+    const node = findNodeById(get().blocks, id);
+    if (!node) return false;
+    try { localStorage.setItem(CLIPBOARD_KEY, JSON.stringify({ block: node, copiedAt: Date.now() })); } catch { return false; }
+    set({ blockClipboardAt: Date.now() });
+    return true;
+  },
+  blockClipboardAt: 0,
+  // Pastes inside the selected container, after the selected block, or at the end of the page
+  pasteBlock: () => {
+    const clip = readBlockClipboard();
+    if (!clip) return null;
+    const copy = cloneWithNewIds(clip.block);
+    set((state) => {
+      const sel = state.selectedBlockId ? findNodeById(state.blocks, state.selectedBlockId) : null;
+      let tree;
+      if (sel && isContainerNode(sel)) tree = insertNode(state.blocks, sel.id, copy);
+      else if (sel) tree = insertAfter(state.blocks, sel.id, copy);
+      if (!tree) tree = [...state.blocks, copy];
+      return { ...pushHistory(state, tree), selectedBlockId: copy.id };
+    });
+    return copy.id;
+  },
+  // One step up (-1) or down (+1) among its siblings
+  moveBlockBy: (id, dir) => set((state) => {
+    const tree = JSON.parse(JSON.stringify(state.blocks));
+    const f = findInTree(tree, id);
+    if (!f) return state;
+    const j = f.index + dir;
+    if (j < 0 || j >= f.list.length) return state;
+    [f.list[f.index], f.list[j]] = [f.list[j], f.list[f.index]];
+    return pushHistory(state, tree);
+  }),
+  // Restore an older version of the page's blocks (one undo step; saved only with Save Draft / Publish)
+  replaceBlocks: (blocks) => set((state) => ({ ...pushHistory(state, Array.isArray(blocks) ? blocks : []), selectedBlockId: null })),
+
   updateBlock: (id, updates) => set((state) => {
     const sig = id + '|' + Object.keys(updates || {}).map((k) => k + ':' + (updates[k] && typeof updates[k] === 'object' ? Object.keys(updates[k]).sort().join(',') : '')).join(';');
     const now = Date.now();

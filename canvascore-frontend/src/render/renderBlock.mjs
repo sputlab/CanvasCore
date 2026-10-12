@@ -190,7 +190,7 @@ export function renderBlock(block, opts = {}) {
 
     case 'BUTTON': {
       const url = escapeHtml(resolveInternalUrl(content.url ?? '#'));
-      const text = escapeHtml(content.text ?? 'Click here');
+      const text = escapeHtml(content.text || 'Click here');
       const align = escapeHtml(styles.textAlign ?? 'center');
       const margin = escapeHtml(styles.margin ?? '0');
       const useGlobal = content.useGlobal !== false;
@@ -233,8 +233,9 @@ export function renderBlock(block, opts = {}) {
     case 'IMAGE_TEXT': {
       const layout = (content.layout ?? 'img-left') === 'img-right' ? 'row-reverse' : 'row';
       const src = escapeHtml(content.src ?? '');
+      const alt = escapeHtml(content.alt ?? '');
       const text = content.text ?? '';
-      return customCss + `<section id="${innerId}" class="cc-img-text${animClass}${innerClass}" style="${styleAttr} display:flex; gap:40px; align-items:center; flex-direction:${layout}; flex-wrap:wrap;">\n<div style="flex:1 1 300px; width:100%;"><img src="${src}" style="width:100%; border-radius:8px; display:block;"></div>\n<div style="flex:1 1 300px; width:100%;"${field('text', 'Type your text…')}>${text}</div>\n</section>\n`;
+      return customCss + `<section id="${innerId}" class="cc-img-text${animClass}${innerClass}" style="${styleAttr} display:flex; gap:40px; align-items:center; flex-direction:${layout}; flex-wrap:wrap;">\n<div style="flex:1 1 300px; width:100%;"><img src="${src}" alt="${alt}" style="width:100%; border-radius:8px; display:block;"></div>\n<div style="flex:1 1 300px; width:100%;"${field('text', 'Type your text…')}>${text}</div>\n</section>\n`;
     }
 
     case 'CARDS': {
@@ -293,8 +294,14 @@ export function renderBlock(block, opts = {}) {
           }
         });
       }
-      html += `  </div>\n</div>\n`;
-      // note: the compiler's autoplay <style>/<script> does not affect structure/styles
+      html += `  </div>\n`;
+      // Previous / next arrows (also the only way through a fading slider without autoplay)
+      if (Array.isArray(content.images) && content.images.length > 1) {
+        html += `  <button type="button" class="cc-slider-prev" aria-label="Previous slide" style="position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border:none; border-radius:50%; background:rgba(15,23,42,0.55); color:#fff; font-size:24px; line-height:1; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; padding:0; left:10px;">&#8249;</button>\n`;
+        html += `  <button type="button" class="cc-slider-next" aria-label="Next slide" style="position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border:none; border-radius:50%; background:rgba(15,23,42,0.55); color:#fff; font-size:24px; line-height:1; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; padding:0; right:10px;">&#8250;</button>\n`;
+      }
+      html += `</div>\n`;
+      // note: the compiler's <style>/<script> (arrows, autoplay) does not affect structure/styles
       return customCss + html;
     }
 
@@ -317,8 +324,8 @@ export function renderBlock(block, opts = {}) {
     }
 
     case 'FORM': {
-      const btnText = escapeHtml(content.btnText ?? 'Send Message');
-      const successMsg = escapeHtml(content.successMsg ?? 'Sent!');
+      const btnText = escapeHtml(content.btnText || 'Send Message');
+      const successMsg = escapeHtml(content.successMsg || 'Sent!');
       const title = content.title ?? '<h3>Contact Us</h3>';
       const formId = content.customId
         ? 'f_' + String(content.customId).replace(/[^a-zA-Z0-9_-]/g, '')
@@ -844,6 +851,20 @@ export function renderBlock(block, opts = {}) {
 
     case 'HTML':
       return customCss + `<div id="${innerId}" class="cc-html-block${animClass}${innerClass}"${styleString}>\n${content.code ?? ''}\n</div>\n`;
+
+    case 'SEARCH': {
+      // Site search: the published page's script searches search-index.json (written at publish)
+      const ph = escapeHtml(content.placeholder || 'Search the site…');
+      const btn = escapeHtml(content.buttonText || 'Search');
+      const empty = escapeHtml(content.noResults || 'No results for');
+      const limit = ccInt(content.limit, 10, 1, 50);
+      html = `<div id="${innerId}" class="cc-search${animClass}${innerClass}" style="${styleAttr}" data-index="{{BASE_URL}}search-index.json" data-empty="${empty}" data-limit="${limit}">\n`;
+      html += `<form class="cc-search-form" role="search" style="display:flex; gap:8px; flex-wrap:wrap;">\n`;
+      html += `<input type="search" name="q" aria-label="${ph}" placeholder="${ph}" style="flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:inherit; box-sizing:border-box;">\n`;
+      html += `<button type="submit" style="padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;">${btn}</button>\n`;
+      html += `</form>\n<div class="cc-search-results" aria-live="polite" style="margin-top:16px;"></div>\n</div>\n`;
+      return customCss + html;
+    }
 
     default:
       return `<!-- Unknown element: ${String(t).replace(/[^A-Za-z0-9_]/g, '')} -->\n`;

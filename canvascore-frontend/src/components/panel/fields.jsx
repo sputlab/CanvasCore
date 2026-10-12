@@ -97,7 +97,7 @@ export const ImgF = ({ label, value, onChange, onPick }) => (
     <div style={{ display: 'flex', gap: '6px' }}>
       {value ? <img src={value} alt="" style={{ width: '30px', height: '30px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} /> : null}
       <input type="text" style={{ ...fldInput, flex: 1 }} value={value ?? ''} onChange={e => onChange(e.target.value)} placeholder="Image URL" />
-      <button onClick={onPick} title="Pick from media" style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 9px', cursor: 'pointer' }}><ImageIcon size={13} /></button>
+      <button onClick={onPick} title="Choose from the media library" aria-label="Choose from the media library" style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 9px', cursor: 'pointer' }}><ImageIcon size={13} /></button>
     </div>
   </Fld>
 );

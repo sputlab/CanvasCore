@@ -42,6 +42,11 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url); calls.push({ u, body: init.body });
   if (u.includes('save_page')) return new Response(JSON.stringify({ success: true }));
   if (u.includes('get_pages')) return new Response(JSON.stringify(PAGES));
+  if (u.includes('get_media')) return new Response(JSON.stringify([{ name: 'sky.jpg', url: '/uploads/sky.jpg', alt: 'Blue sky', w: 2000, h: 1000, bytes: 345000, optimized: true, variants: [480, 960, 1600] }, { name: 'old.png', url: '/uploads/old.png', alt: '', w: 0, h: 0, bytes: 1200, optimized: false, variants: [] }]));
+  if (u.includes('optimize_media')) return new Response(JSON.stringify({ success: true, done: 1, remaining: 0 }));
+  if (u.includes('save_media_meta')) return new Response(JSON.stringify({ success: true }));
+  if (u.includes('get_revisions')) return new Response(JSON.stringify([{ id: 2, title: 'P', kind: 'published', author: 'ann', created_at: '2026-10-12 10:00:00' }, { id: 1, title: 'P', kind: 'draft', author: 'bob', created_at: '2026-10-11 09:00:00' }]));
+  if (u.includes('get_revision&')) return new Response(JSON.stringify({ id: 1, content_json: JSON.stringify([{ id: 'old1', type: 'TEXT', styles: {}, content: { text: '<p>Old version text</p>' } }]) }));
   return new Response(JSON.stringify([]));
 };
 
@@ -96,7 +101,7 @@ try {
   check('the current section is marked (aria-current)', btn('Pages', nav).getAttribute('aria-current') === 'page');
   click(btn('Media', nav));
   check('clicking a section opens it', st().currentView === 'media');
-  check('user, logout and version in the sidebar', /ann/.test($('.ui-sidebar__foot').textContent) && !!btnHas('Logout') && /CanvasCore v/.test($('.ui-sidebar__foot').textContent));
+  check('user, logout and version in the sidebar', /ann/.test($('.ui-sidebar__foot').textContent) && !!$('[aria-label="Log out"]') && !!$('[aria-label="Change your password"]') && /CanvasCore v/.test($('.ui-sidebar__foot').textContent));
   useStore.setState({ userRole: 'editor' });
   await sleep(30);
   check('editors do not see the administration group', !btn('Accounts', $('nav.ui-nav')) && !btn('Backup', $('nav.ui-nav')));
@@ -273,6 +278,136 @@ try {
     click(btn('OK', $('.ui-dialog'))); await sleep(30);
     click(btn('Cancel', $('.ui-dialog'))); await sleep(30);
     check('…in order, each with its own answer', order.join(',') === '1:true,2:false', order.join(','));
+  }
+
+  console.log('\nPRODUCT FIXES');
+  {
+    const tabBtn = (t) => $$('[role="tab"]').find((b) => b.textContent.trim() === t);
+    const blk2 = (id) => (function find(list) { for (const b of list) { if (b.id === id) return b; const r = b.children && find(b.children); if (r) return r; } return null; })(st().blocks);
+    const flex = { id: 'fr1', type: 'FLEX_ROW', styles: { display: 'flex', gap: '20px', flexWrap: 'wrap' }, content: {}, children: [] };
+    const html = { id: 'hb1', type: 'HTML', styles: {}, content: { code: '<b>admin code</b>' } };
+    const video = { id: 'vd1', type: 'VIDEO', styles: {}, content: { url: 'https://example.com/clip' } };
+    const form = { id: 'fm1', type: 'FORM', styles: {}, content: { title: '<h3>T</h3>', fields: [{ label: 'A', type: 'text' }, { label: 'B', type: 'text' }] } };
+    useStore.setState({ blocks: [flex, html, video, form], selectedBlockId: 'fr1', userRole: 'editor', pastBlocks: [], futureBlocks: [] });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    check('Flex Row has a Content tab with its layout (direction, space, alignment, wrap)', !!tabBtn('Content') && !!btnHas('Row Layout') && ['Direction', 'Space between blocks', 'Horizontal alignment', 'Vertical alignment'].every((l) => $$('label').some((x) => x.textContent.trim() === l)));
+    const dir = $$('label').find((x) => x.textContent.trim() === 'Direction').parentElement.querySelector('select');
+    pick(dir, 'column'); await sleep(30);
+    check('…and it changes the row\'s styles', blk2('fr1').styles.flexDirection === 'column');
+    useStore.setState({ selectedBlockId: 'hb1' }); await sleep(40);
+    const ta = $('.cc-ed-right textarea, textarea');
+    check('Custom HTML is read-only for editors, with an explanation', !!ta && ta.readOnly && /Only admins can change custom code/.test(doc.body.textContent));
+    useStore.setState({ selectedBlockId: 'vd1' }); await sleep(40);
+    check('a link that is not YouTube/Vimeo shows a warning', /doesn't look like a YouTube or Vimeo/.test(doc.body.textContent));
+    useStore.setState({ selectedBlockId: 'fm1' }); await sleep(40);
+    check('editors don\'t see the form\'s receiving email; everyone gets "Message after sending"', !$$('label').some((x) => x.textContent.trim() === 'Receiving Email') && $$('label').some((x) => x.textContent.trim() === 'Message after sending'));
+    await openSec('Form Fields');
+    const typeSel = $$('select').find((x) => [...x.options].some((o) => o.value === 'tel'));
+    check('form fields offer phone, website and date types', !!typeSel && ['tel', 'url', 'date'].every((v) => [...typeSel.options].some((o) => o.value === v)));
+    click($$('button[title="Move down"]')[0]); await sleep(30);
+    check('form fields can be reordered', blk2('fm1').content.fields.map((f) => f.label).join('') === 'BA');
+    useStore.setState({ userRole: 'admin' });
+
+    const ChangePasswordDialog = (await vite.ssrLoadModule('/src/components/ChangePasswordDialog.jsx')).default;
+    let closed = false;
+    mount(React.createElement(ChangePasswordDialog, { onClose: () => { closed = true; } })); await sleep(40);
+    const pw = $$('.ui-dialog input[type="password"]');
+    check('change password: current + new twice, button disabled until valid', pw.length === 3 && btn('Change password').disabled);
+    typeIn(pw[0], 'oldpass1'); typeIn(pw[1], 'short'); await sleep(20);
+    check('…too short is explained', /At least 8 characters/.test($('.ui-dialog').textContent));
+    typeIn(pw[1], 'newpass123'); typeIn(pw[2], 'newpass123'); await sleep(20);
+    check('…valid → can submit', !btn('Change password').disabled && !closed);
+  }
+
+  console.log('\nEDITOR PRODUCTIVITY');
+  {
+    const key = (k, extra = {}) => w.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+    const ids = () => st().blocks.map((b) => b.id);
+    const sec = { id: 'sx1', type: 'SECTION', styles: {}, content: {}, children: [{ id: 'in1', type: 'TEXT', styles: {}, content: { text: '<p>in</p>' } }] };
+    const hero = { id: 'h9', type: 'HERO', styles: {}, content: { title: '<h1>H</h1>', buttons: [{ id: 'bb1', text: 'Go', url: '#' }] } };
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, blocks: [hero, sec, { id: 't9', type: 'TEXT', styles: {}, content: { text: '<p>t</p>' } }], selectedBlockId: 'sx1', pastBlocks: [], futureBlocks: [], isEditingMaster: false, userRole: 'admin' });
+    try { localStorage.removeItem('cc_block_clipboard'); } catch { /* */ }
+    mount(React.createElement(VisualEditor)); await waitFor(() => $('[aria-label="Version history"]')); await sleep(150);
+    key('d', { ctrlKey: true }); await sleep(30);
+    const dup = st().blocks[2];
+    check('Ctrl+D duplicates the selected block right after it, with new ids inside too', ids().length === 4 && dup.type === 'SECTION' && dup.id !== 'sx1' && dup.children[0].id !== 'in1' && st().selectedBlockId === dup.id);
+    key('ArrowUp', { altKey: true }); await sleep(30);
+    check('Alt+↑ moves it up among its siblings', st().blocks[1].id === dup.id);
+    key('Delete'); await sleep(30);
+    check('Delete removes the selected block (undoable)', !ids().includes(dup.id) && ids().length === 3);
+    key('z', { ctrlKey: true }); await sleep(30);
+    check('…Ctrl+Z brings it back', ids().includes(dup.id));
+    useStore.setState({ selectedBlockId: 'h9' }); await sleep(20);
+    key('c', { ctrlKey: true }); await sleep(30);
+    check('Ctrl+C copies the block to a clipboard that survives page changes', !!JSON.parse(localStorage.getItem('cc_block_clipboard') || 'null'));
+    useStore.setState({ activePage: { ...PAGES[1] }, blocks: [{ id: 'q1', type: 'TEXT', styles: {}, content: {} }], selectedBlockId: 'q1', pastBlocks: [] }); await sleep(40);
+    click($('.ui-tab[aria-selected]') && $$('.ui-tab').find((b) => /Add/.test(b.textContent))); await sleep(30);
+    check('the Add tab offers "Paste copied Hero"', !!btnHas('Paste copied Hero'));
+    key('v', { ctrlKey: true }); await sleep(30);
+    const pasted = st().blocks[1];
+    check('Ctrl+V pastes it after the selected block on another page, with fresh ids', !!pasted && pasted.type === 'HERO' && pasted.id !== 'h9' && pasted.content.buttons[0].id !== 'bb1');
+
+    click($('[aria-label="Version history"]'));
+    const hist = await waitFor(() => $('.cc-history'));
+    await waitFor(() => $$('.cc-history__item').length === 2);
+    check('Version history lists the saved versions (published / draft, who, when)', $$('.cc-history__item').length === 2 && /Published/.test($$('.cc-history__item')[0].textContent) && /bob/.test($$('.cc-history__item')[1].textContent));
+    click($$('.cc-history__item')[1]);
+    await waitFor(() => /Old version text/.test(($('.cc-history__frame') || {}).textContent || ''));
+    check('…picking one shows a preview', /Old version text/.test($('.cc-history__frame').textContent));
+    click(btnHas('Restore this version', hist));
+    const cd = await waitFor(() => $('[role="alertdialog"]'));
+    click(btn('Restore version', cd)); await sleep(60);
+    check('…Restore puts it in the editor as an unsaved change (one undo step)', st().blocks.length === 1 && st().blocks[0].content.text === '<p>Old version text</p>' && !$('.cc-history'));
+    st().undo();
+    check('…and Ctrl+Z undoes the restore', st().blocks.length === 2);
+  }
+
+  console.log('\nIMAGES');
+  {
+    const MediaManager = (await vite.ssrLoadModule('/src/components/MediaManager.jsx')).default;
+    mount(React.createElement(MediaManager));
+    await waitFor(() => $$('figure').length === 2);
+    const cards = $$('figure');
+    check('the library shows size, file size and "Optimized"', /2000×1000/.test(cards[0].textContent) && /337 KB/.test(cards[0].textContent) && /Optimized/.test(cards[0].textContent) && !/Optimized/.test(cards[1].textContent));
+    const altIn = cards[1].querySelector('input[aria-label^="Description"]');
+    typeIn(altIn, 'Old logo'); altIn.dispatchEvent(new w.FocusEvent('blur', { bubbles: false })); altIn.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true })); await sleep(40);
+    const saved = calls.filter((c) => c.u.includes('save_media_meta')).pop();
+    check('an image description is saved when you leave the field', !!saved && JSON.parse(saved.body).alt === 'Old logo' && JSON.parse(saved.body).name === 'old.png');
+    const opt = btnHas('Optimize 1 older image');
+    check('"Optimize older images" appears when some aren\'t optimized', !!opt);
+    click(opt); await waitFor(() => calls.some((c) => c.u.includes('optimize_media'))); await sleep(60);
+    check('…and runs the optimization on the server', calls.some((c) => c.u.includes('optimize_media')));
+
+    // picking an image fills the block's alt text when it is empty
+    useStore.setState({ blocks: [{ id: 'im1', type: 'IMAGE', styles: {}, content: { src: '', alt: '' } }], selectedBlockId: 'im1' });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    click($('[aria-label="Choose from the media library"]'));
+    const item = await waitFor(() => $('.cc-picker__item'));
+    check('the picker shows the library with sizes and a search box', !!item && /2000×1000/.test($('.cc-picker').textContent) && !!$('.cc-picker input[type="search"], .cc-picker .ui-search input'));
+    if (item) click(item);
+    await sleep(40);
+    check('…and picking an image also fills the empty alt text', st().blocks[0].content.src === '/uploads/sky.jpg' && st().blocks[0].content.alt === 'Blue sky', JSON.stringify(st().blocks[0].content));
+  }
+
+  console.log('\nSEO & SITE FEATURES');
+  {
+    const { CONTENT_PANELS: CP } = await vite.ssrLoadModule('/src/components/panel/blocks/index.js');
+    check('Site Search is in the Add catalog and has a settings panel', BLOCKS.some((b) => b.type === 'SEARCH') && !!CP.SEARCH);
+    useStore.setState({ selectedBlockId: null, activePage: { ...PAGES[1], seo_title: 'About us — the team', seo_description: '' }, userRole: 'admin' });
+    mount(React.createElement(PropertyPanel)); await sleep(50);
+    await openSec('SEO & Meta Data');
+    check('SEO: character counts and search/share previews', /19 \/ 60/.test(doc.body.textContent) && !!$('[aria-label="Search result preview"]') && !!$('[aria-label="Shared link preview"]'));
+    const hide = $$('label').find((l) => /Hide this page from search engines/.test(l.textContent)).querySelector('input');
+    click(hide); await sleep(30);
+    check('"Hide this page from search engines" is stored on the page', Number(st().activePage.noindex) === 1);
+    useStore.setState({ currentView: 'settings', pages: PAGES });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/GlobalSettings.jsx')).default)));
+    await waitFor(() => btnHas('Save & Publish') && !btnHas('Save & Publish').disabled, 3000);
+    const cookieBox = $$('label').find((l) => /Show the cookie banner/.test(l.textContent));
+    check('Global Options has a Cookie banner card', !!cookieBox);
+    if (cookieBox) { click(cookieBox.querySelector('input')); await sleep(30); }
+    check('…with text, buttons, privacy page and position once enabled', ['Accept button', 'Decline button', 'Privacy policy page', 'Position'].every((t) => $$('label').some((l) => l.textContent.trim() === t)));
+    check('admins see the Redirects card', /Redirects/.test(doc.body.textContent) && !!btnHas('Add redirect'));
   }
 
   console.log('\nSTORE & SAVING');

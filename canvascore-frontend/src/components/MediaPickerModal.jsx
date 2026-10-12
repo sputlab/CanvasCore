@@ -1,48 +1,70 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { notify } from '../ui/notify';
 import { Image as ImageIcon, X, Upload } from 'lucide-react';
+import { SearchInput } from '../ui/kit';
+import { formatBytes } from '../editor/mediaInfo';
 
-// Media library picker (modal): choose an uploaded image or upload a new one.
-// Used by the property panel and by the rich text editor.
+// Media library picker (modal): choose an uploaded image or upload new ones.
+// Used by the property panel and by the rich text editor. onSelect(url, alt): alt = the image's
+// description saved in the library (empty when none), so blocks can fill their alt field.
 const MediaPickerModal = ({ onClose, onSelect }) => {
-  const [images, setImages] = useState([]);
+  const [images, setImages] = useState(null);   // null = loading
   const [uploading, setUploading] = useState(false);
-  const fetchMedia = () => { fetch('api.php?action=get_media').then(res => res.json()).then(data => { if (Array.isArray(data)) setImages(data); }).catch(console.error); };
-  useEffect(() => { fetchMedia(); }, []);
+  const [query, setQuery] = useState('');
+  const closeRef = useRef(null);
+  const fetchMedia = () => fetch('api.php?action=get_media').then((res) => res.json())
+    .then((data) => setImages(Array.isArray(data) ? data : []))
+    .catch(() => { setImages([]); notify('Could not load the media library.', 'error'); });
+  useEffect(() => { fetchMedia(); if (closeRef.current) closeRef.current.focus(); }, []);
 
   const handleUpload = async (e) => {
-    const file = e.target.files[0]; if (!file) return; setUploading(true);
-    const formData = new FormData(); formData.append('file', file);
-    try {
-      const res = await fetch('api.php?action=upload_media', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!data.success) notify(data.message || 'Upload error', 'error');
-      fetchMedia();
-    } catch { notify('Upload failed (connection problem).', 'error'); }
+    const files = [...(e.target.files || [])];
+    e.target.value = '';
+    if (!files.length) return;
+    setUploading(true);
+    for (const file of files) {
+      const formData = new FormData(); formData.append('file', file);
+      try {
+        const data = await (await fetch('api.php?action=upload_media', { method: 'POST', body: formData })).json();
+        if (!data.success) notify(`${file.name}: ${data.message || 'upload error'}`, 'error');
+      } catch { notify(`${file.name}: upload failed (connection problem).`, 'error'); }
+    }
     setUploading(false);
+    fetchMedia();
   };
 
+  const q = query.trim().toLowerCase();
+  const shown = (images || []).filter((img) => !q || `${img.name} ${img.alt || ''}`.toLowerCase().includes(q));
+
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(15, 23, 42, 0.8)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#ffffff', width: '800px', maxWidth: '90%', height: '600px', maxHeight: '90%', borderRadius: '12px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}><ImageIcon size={20} color="#3b82f6" /> Choose Image</h2>
-          <div style={{ display: 'flex', gap: '15px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 16px', background: '#10b981', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
-              <Upload size={16}/> {uploading ? 'Uploading...' : 'Upload File'}
-              <input type="file" style={{ display: 'none' }} accept="image/*" onChange={handleUpload} disabled={uploading} />
+    <div className="ui-dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="ui-dialog cc-picker" role="dialog" aria-modal="true" aria-labelledby="cc-picker-title"
+        onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); } }}>
+        <div className="ui-dialog__head" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="ui-dialog__icon" aria-hidden="true"><ImageIcon size={18} /></span>
+            <h2 id="cc-picker-title" className="ui-dialog__title">Choose an image</h2>
+          </span>
+          <span className="ui-row" style={{ gap: 8 }}>
+            <label className="ui-btn ui-btn--success ui-btn--sm" style={{ cursor: uploading ? 'progress' : 'pointer' }}>
+              <Upload size={14} aria-hidden="true" /> {uploading ? 'Uploading…' : 'Upload'}
+              <input type="file" multiple style={{ display: 'none' }} accept="image/*" onChange={handleUpload} disabled={uploading} />
             </label>
-            <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}><X size={24}/></button>
-          </div>
+            <button ref={closeRef} type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label="Close" onClick={onClose}><X size={16} /></button>
+          </span>
         </div>
-        <div style={{ padding: '14px', flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '15px' }}>
-          {images.length === 0 ? (
-            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#64748b' }}>No images found.</div>
-          ) : (
-            images.map((img, idx) => (
-              <div key={idx} onClick={() => onSelect(img.url)} style={{ height: '150px', border: '2px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', backgroundImage: `url(${img.url})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-            ))
-          )}
+        {images && images.length > 0 && <div style={{ margin: '6px 0 10px' }}><SearchInput value={query} onChange={setQuery} placeholder="Search by name or description…" label="Search images" /></div>}
+        <div className="cc-picker__grid">
+          {images === null ? <p className="ui-hint">Loading…</p>
+            : images.length === 0 ? <p className="ui-hint">No images yet: upload one.</p>
+            : shown.length === 0 ? <p className="ui-hint">No images match your search.</p>
+            : shown.map((img) => (
+              <button key={img.name} type="button" className="cc-picker__item" onClick={() => onSelect(img.url, img.alt || '')}
+                title={img.alt ? `${img.name} — ${img.alt}` : img.name} aria-label={`Choose ${img.alt || img.name}`}>
+                <img src={img.url} alt="" loading="lazy" />
+                <span className="cc-picker__meta">{img.w ? `${img.w}×${img.h}` : ''}{img.bytes ? ` · ${formatBytes(img.bytes)}` : ''}</span>
+              </button>
+            ))}
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useStore } from '../store/useStore';
+import { useStore, readBlockClipboard } from '../store/useStore';
 import PropertyPanel from './PropertyPanel';
 import Canvas from './Canvas';
 import LayerNavigator from './LayerNavigator';
@@ -8,9 +8,10 @@ import { useEditorDraft } from '../session/hooks';
 import { clearDraft } from '../session/drafts';
 import { editorScope, editorSnapshot } from '../session/draftTrackers';
 import AddBlocksPanel from './AddBlocksPanel';
+import RevisionHistory from './RevisionHistory';
 import {
   ChevronLeft, Monitor, Tablet, Smartphone, Undo2, Redo2, Save, Globe, Layers, PlusCircle, Crown, AlertCircle,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, History,
 } from 'lucide-react';
 import { Button, IconButton, Segmented, Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
@@ -31,6 +32,7 @@ export default function VisualEditor() {
 
   const [isPublishing, setIsPublishing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const saveInFlight = useRef(null); // one save at a time: a second click/Ctrl+S waits for the running one
   const saveDraftRef = useRef(null); // Ctrl+S handler → the current saveDraft
   // On narrow screens the panels cover the canvas, so they start closed there
@@ -66,6 +68,23 @@ export default function VisualEditor() {
       } else if (e.ctrlKey && !e.metaKey && k === 'y') {
         e.preventDefault(); redo();
       }
+      // Block shortcuts (not while typing): duplicate, copy/paste blocks, delete, move
+      const st = useStore.getState();
+      const sel = st.selectedBlockId;
+      const mod = e.metaKey || e.ctrlKey;
+      const textSelected = () => { const g = window.getSelection && window.getSelection(); return !!(g && !g.isCollapsed && String(g).trim()); };
+      if (st.isEditingMaster && !sel) return;
+      if (mod && !e.shiftKey && !e.altKey && k === 'd' && sel) { e.preventDefault(); st.duplicateBlock(sel); return; }
+      if (mod && !e.shiftKey && !e.altKey && k === 'c' && sel && !textSelected()) {
+        e.preventDefault();
+        if (st.copyBlock(sel)) notify('Block copied. Paste it here or on another page with Ctrl/Cmd+V.');
+        return;
+      }
+      if (mod && !e.shiftKey && !e.altKey && k === 'v' && readBlockClipboard()) { e.preventDefault(); st.pasteBlock(); return; }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !mod && sel) {
+        e.preventDefault(); st.removeBlock(sel); notify('Block deleted. Press Ctrl/Cmd+Z to bring it back.', 'info'); return;
+      }
+      if (e.altKey && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && sel) { e.preventDefault(); st.moveBlockBy(sel, e.key === 'ArrowUp' ? -1 : 1); return; }
       if (e.key === 'Escape' && useStore.getState().selectedBlockId) setSelectedBlockId(null);
     };
     // Capture phase: the in-place text editor stops keydown propagation, Ctrl+S must still get here
@@ -104,6 +123,7 @@ export default function VisualEditor() {
       seo_title: activePage.seo_title, seo_description: activePage.seo_description, seo_image: activePage.seo_image,
       layout: activePage.layout, boxed_width: activePage.boxed_width, bg_color: activePage.bg_color, blocks: blocks,
       is_home: Number(activePage.is_home) ? 1 : 0,
+      noindex: Number(activePage.noindex) ? 1 : 0,
       publish: publish
     };
     try {
@@ -246,11 +266,14 @@ export default function VisualEditor() {
             <IconButton icon={Redo2} label="Redo (Ctrl+Shift+Z)" size="sm" onClick={redo} disabled={futureBlocks.length === 0} />
           </div>
           <div className="cc-ed-top__group" style={{ justifyContent: 'flex-end', flex: '1 1 0' }}>
+            {!activePage?.__part && (
+              <IconButton icon={History} label="Version history" size="sm" onClick={() => setHistoryOpen(true)} />
+            )}
             {activePage?.is_draft_copy == 1 && (
               <Button variant="danger" size="sm" icon={AlertCircle} onClick={discardChanges} title="Throw away the draft and go back to the published version"><span className="cc-ed-hide-md">Discard draft</span></Button>
             )}
             <Button size="sm" icon={Save} onClick={saveDraft} disabled={isSaving || isPublishing} title="Save draft (Ctrl+S)"><span className="cc-ed-hide-sm">{activePage?.__part ? 'Save' : 'Save Draft'}</span></Button>
-            <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing || isSaving} title="Save and publish online">{isPublishing ? 'Publishing…' : 'Publish'}</Button>
+            <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing || isSaving} title="Publish this page, then update the whole site (menus and lists)">{isPublishing ? 'Publishing…' : 'Publish'}</Button>
           </div>
         </header>
       )}
@@ -283,6 +306,9 @@ export default function VisualEditor() {
         </aside>
       </div>
 
+      {historyOpen && activePage && (
+        <RevisionHistory owner={activePage.__item ? 'item:' + activePage.id : activePage.id} onClose={() => setHistoryOpen(false)} />
+      )}
       {editorDraftFound && !editorRestored && (
         <div role="status" className="cc-ed-restored">
           <span><strong>Unsaved changes found</strong> for this page{editorDraftFound.savedAt ? ` (from ${new Date(editorDraftFound.savedAt).toLocaleString()})` : ''}. They were never saved to the site.</span>

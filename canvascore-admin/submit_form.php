@@ -39,7 +39,7 @@ if (!empty($_POST['_hp'])) { cc_finish($successMsg); }
 if (is_array($forms) && $forms && !array_key_exists($form_id, $forms)) { http_response_code(400); cc_finish('This form is no longer available. Reload the page and try again.'); }
 
 // At most 8 submissions every 10 minutes from the same address (stops floods of spam and database filling)
-if (!cc_rate_allow('forms', $_SERVER['REMOTE_ADDR'] ?? '', 8, 600)) { http_response_code(429); cc_finish('Too many messages sent in a short time. Please try again in a few minutes.'); }
+if (!cc_rate_allow('forms', cc_client_ip(), 8, 600)) { http_response_code(429); cc_finish('Too many messages sent in a short time. Please try again in a few minutes.'); }
 
 // Store the submission in the database (regardless of the email outcome)
 try {

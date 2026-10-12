@@ -6,6 +6,17 @@
 if (defined('CC_CONFIG_LOADED')) return;
 define('CC_CONFIG_LOADED', true);
 
+// Hosts without the mbstring extension: UTF-8 safe fallbacks for the two functions used
+if (!function_exists('mb_substr')) {
+    function mb_substr($s, $start, $length = null) {
+        preg_match_all('/./us', (string)$s, $m);
+        return implode('', array_slice($m[0], $start, $length));
+    }
+}
+if (!function_exists('mb_strlen')) {
+    function mb_strlen($s) { return (int)preg_match_all('/./us', (string)$s); }
+}
+
 // ---------------------------------------------------------------------------
 // Hardened session (HttpOnly cookie, SameSite=Lax, Secure over HTTPS)
 // ---------------------------------------------------------------------------
@@ -158,7 +169,26 @@ function cc_login_attempts_update($fn) {
     fflush($fh); flock($fh, LOCK_UN); fclose($fh);
     return $result;
 }
-function cc_login_key($username) { return sha1(($_SERVER['REMOTE_ADDR'] ?? '') . '|' . strtolower($username)); }
+// The visitor's address. Behind a reverse proxy / CDN every request comes from the proxy: when the
+// connecting address is listed in Global Options › Security › Trusted proxy addresses, the client
+// address the proxy reports (X-Forwarded-For, nearest untrusted hop) is used instead.
+function cc_client_ip($trustedOverride = null) {   // $trustedOverride: list of proxy IPs (tests)
+    $remote = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    static $trusted = null;
+    if ($trustedOverride !== null) $trusted = $trustedOverride;
+    if ($trusted === null) {
+        $s = @json_decode((string)@file_get_contents(cc_data_dir() . '/settings.json'), true);
+        $trusted = array_values(array_filter(array_map('trim', explode(',', (string)($s['trustedProxies'] ?? '')))));
+    }
+    if (!$trusted || !in_array($remote, $trusted, true)) return $remote;
+    $chain = array_map('trim', explode(',', (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')));
+    for ($i = count($chain) - 1; $i >= 0; $i--) {
+        $ip = $chain[$i];
+        if (filter_var($ip, FILTER_VALIDATE_IP) && !in_array($ip, $trusted, true)) return $ip;
+    }
+    return $remote;
+}
+function cc_login_key($username) { return sha1(cc_client_ip() . '|' . strtolower($username)); }
 // Seconds to wait before trying again (0 = allowed)
 function cc_login_wait($username) {
     $k = cc_login_key($username);
@@ -197,6 +227,97 @@ function cc_rate_allow($bucket, $key, $max, $window) {
     ftruncate($fh, 0); rewind($fh); fwrite($fh, json_encode($all));
     fflush($fh); flock($fh, LOCK_UN); fclose($fh);
     return $ok;
+}
+
+// Re-linking after a slug change (used by relink_slug_change in api.php). Works on the decoded data, so the JSON
+// formatting (escaped slashes) doesn't matter. Two link forms: "old/index.html" in link fields
+// (buttons, menu) and "{{BASE_URL}}old/" inside rich text.
+function cc_relink_node(&$node, $oldUrl, $newUrl, $oldBase, $newBase) {
+    if (!is_array($node)) return false;
+    $changed = false;
+    foreach ($node as $k => &$v) {
+        if (is_array($v)) {
+            if (cc_relink_node($v, $oldUrl, $newUrl, $oldBase, $newBase)) $changed = true;
+        } elseif (is_string($v)) {
+            if ($v === $oldUrl && in_array($k, ['url', 'btnUrl', 'buttonUrl', 'href', 'link'], true)) { $v = $newUrl; $changed = true; }
+            elseif (strpos($v, $oldBase) !== false) { $v = str_replace($oldBase, $newBase, $v); $changed = true; }
+        }
+    }
+    unset($v);
+    return $changed;
+}
+
+// Revision history: one row per save (draft or publish) whose content differs from the last one;
+// the newest CC_REVISIONS_KEEP per page/item are kept. $owner = live page id, or "item:<id>".
+const CC_REVISIONS_KEEP = 40;
+function cc_add_revision($pdo, $owner, $title, $content_json, $kind) {
+    if (!$owner) return;
+    try {
+        $last = $pdo->prepare("SELECT content_json, title FROM page_revisions WHERE owner = ? ORDER BY id DESC LIMIT 1");
+        $last->execute([$owner]);
+        $l = $last->fetch(PDO::FETCH_ASSOC);
+        if ($l && $l['content_json'] === $content_json && $l['title'] === $title) return;   // nothing changed
+        $pdo->prepare("INSERT INTO page_revisions (owner, title, content_json, kind, author, created_at) VALUES (?,?,?,?,?,?)")
+            ->execute([$owner, $title, $content_json, $kind, $_SESSION['username'] ?? '', date('Y-m-d H:i:s')]);
+        $pdo->prepare("DELETE FROM page_revisions WHERE owner = ? AND id NOT IN (SELECT id FROM page_revisions WHERE owner = ? ORDER BY id DESC LIMIT " . (int)CC_REVISIONS_KEEP . ")")
+            ->execute([$owner, $owner]);
+    } catch (Exception $e) { /* history must never block a save */ }
+}
+
+// ---------------------------------------------------------------------------
+// Redirects: old addresses of renamed pages/items (and ones added by hand) keep working.
+// Paths are site paths like "/old-page/" or "/blog/old-post/" (no domain, with the trailing slash).
+// ---------------------------------------------------------------------------
+function cc_redirect_path($p) {
+    $p = trim((string)$p);
+    if ($p === '' || $p[0] !== '/') return null;
+    $p = '/' . trim($p, '/') . '/';
+    if ($p === '//') return null;                                   // the home page can't be redirected
+    return preg_match('#^(/[a-z0-9][a-z0-9._-]*)+/$#i', $p) ? strtolower($p) : null;
+}
+// Target: a site path, or a full http(s) address
+function cc_redirect_target($t) {
+    $t = trim((string)$t);
+    if (preg_match('#^https?://[^\s"<>]+$#i', $t)) return $t;
+    if ($t === '/') return '/';
+    return cc_redirect_path($t);
+}
+function cc_add_redirect($pdo, $from, $to, $auto = 1) {
+    $from = cc_redirect_path($from); $to = cc_redirect_target($to);
+    if (!$from || !$to || $from === $to) return false;
+    $pdo->prepare("UPDATE redirects SET to_path = ? WHERE to_path = ?")->execute([$to, $from]);   // chains: A→B, B→C ⇒ A→C
+    $pdo->prepare("DELETE FROM redirects WHERE from_path = ?")->execute([$to]);                   // something lives at $to now
+    $pdo->prepare("DELETE FROM redirects WHERE from_path = to_path")->execute();
+    $pdo->prepare("INSERT INTO redirects (from_path, to_path, auto, created_at) VALUES (?,?,?,?)
+                   ON CONFLICT(from_path) DO UPDATE SET to_path = excluded.to_path, auto = excluded.auto, created_at = excluded.created_at")
+        ->execute([$from, $to, $auto ? 1 : 0, date('Y-m-d H:i:s')]);
+    return true;
+}
+// A published page now owns this address: a redirect from it would hide the page
+function cc_drop_redirect_from($pdo, $path) {
+    $path = cc_redirect_path($path);
+    if ($path) $pdo->prepare("DELETE FROM redirects WHERE from_path = ?")->execute([$path]);
+}
+// Static redirect page written at the old address (works on any host); $href = where to go
+function cc_redirect_page_html($href) {
+    $h = htmlspecialchars($href, ENT_QUOTES);
+    $j = json_encode($href, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    return "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"UTF-8\"><title>Moved</title>"
+         . "<meta name=\"robots\" content=\"noindex\"><link rel=\"canonical\" href=\"$h\">"
+         . "<meta http-equiv=\"refresh\" content=\"0; url=$h\">"
+         . "<script>location.replace($j + location.search + location.hash);</script></head>"
+         . "<body><p>This page has moved: <a href=\"$h\">$h</a></p></body></html>\n";
+}
+// Apache: the redirects as real 301s, in a marked block of the site's .htaccess (the rest is left as it is)
+function cc_htaccess_with_redirects($existing, $rules) {
+    $begin = '# BEGIN CanvasCore redirects'; $end = '# END CanvasCore redirects';
+    $existing = preg_replace('#\n?' . preg_quote($begin, '#') . '.*?' . preg_quote($end, '#') . '\n?#s', "\n", (string)$existing);
+    $existing = rtrim($existing) . "\n";
+    if (!$rules) return ltrim($existing);
+    $block = $begin . "\n<IfModule mod_alias.c>\n";
+    foreach ($rules as [$from, $to]) $block .= 'Redirect 301 ' . $from . ' ' . $to . "\n";
+    $block .= "</IfModule>\n" . $end . "\n";
+    return ltrim($existing . $block);
 }
 
 // An uploaded SVG is a document that can carry scripts: accept it only without any active content
@@ -260,6 +381,47 @@ function cc_strip_code_surfaces(&$blocks) {
         }
     }
     unset($b);
+}
+
+// Non-admin save: the code an admin put in (Custom HTML blocks, custom CSS/JS, a form's receiving email) is KEPT as it was saved,
+// matched by block id, instead of being wiped; an editor can't add or change code, only move or delete
+// those blocks. $previous = the blocks currently stored (array or JSON string).
+function cc_keep_code_surfaces(&$blocks, $previous) {
+    if (is_string($previous)) $previous = json_decode($previous, true);
+    $saved = [];
+    $collect = function ($list) use (&$collect, &$saved) {
+        if (!is_array($list)) return;
+        foreach ($list as $b) {
+            if (!is_array($b)) continue;
+            if (isset($b['id']) && is_scalar($b['id'])) {
+                $c = is_array($b['content'] ?? null) ? $b['content'] : [];
+                $saved[(string)$b['id']] = ['type' => $b['type'] ?? '', 'code' => $c['code'] ?? null, 'customCss' => $c['customCss'] ?? null, 'customJs' => $c['customJs'] ?? null, 'email' => $c['email'] ?? null];
+            }
+            if (isset($b['children'])) $collect($b['children']);
+        }
+    };
+    $collect(is_array($previous) ? $previous : []);
+    $apply = function (&$list) use (&$apply, $saved) {
+        if (!is_array($list)) return;
+        foreach ($list as &$b) {
+            if (!is_array($b)) continue;
+            if (!isset($b['content']) || !is_array($b['content'])) $b['content'] = [];
+            $old = (isset($b['id']) && is_scalar($b['id'])) ? ($saved[(string)$b['id']] ?? null) : null;
+            if (($b['type'] ?? '') === 'HTML') {
+                $b['content']['code'] = ($old && $old['type'] === 'HTML' && is_string($old['code'])) ? $old['code'] : '';
+            }
+            // A form's own receiving email is an admin setting too (where the site's messages go)
+            if (($b['type'] ?? '') === 'FORM') {
+                $b['content']['email'] = ($old && $old['type'] === 'FORM' && is_string($old['email'])) ? $old['email'] : '';
+            }
+            foreach (['customCss', 'customJs'] as $k) {
+                if ($old && is_string($old[$k]) && $old[$k] !== '') $b['content'][$k] = $old[$k]; else unset($b['content'][$k]);
+            }
+            if (isset($b['children'])) $apply($b['children']);
+        }
+        unset($b);
+    };
+    $apply($blocks);
 }
 
 // ---------------------------------------------------------------------------

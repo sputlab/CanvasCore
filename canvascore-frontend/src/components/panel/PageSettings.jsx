@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
+import MediaPickerModal from '../MediaPickerModal';
 import { Layout, Globe, FileEdit, Upload } from 'lucide-react';
-import { PanelAccordion } from './fields';
+import { PanelAccordion, ImgF, ChkF } from './fields';
 import { labelStyle, inputStyle } from './helpers';
 import { slugify, slugOwner, uniqueSlug } from '../../utils/slug';
 
 // Page settings, shown when no block is selected: page info, URL, structure, SEO (and item fields for collection items).
 export default function PageSettings({ ctx }) {
   const { activePage, updateActivePage, pages, collections, coverInputRef } = ctx;
+  const [sharePicker, setSharePicker] = useState(false);
   // Hide the draft suffix from the user in the UI to avoid confusion
   const displaySlug = activePage?.slug || '';
   // Pages and collections share the top-level URLs (collection items are checked by the server)
@@ -101,13 +103,53 @@ export default function PageSettings({ ctx }) {
         </PanelAccordion>
 
         <PanelAccordion title="SEO & Meta Data" icon={Globe} defaultOpen={false}>
-          <label style={labelStyle}>Meta Title</label>
-          <input type="text" value={activePage?.seo_title || ''} onChange={e => updateActivePage({seo_title: e.target.value})} style={inputStyle} />
-          <label style={labelStyle}>Meta Description</label>
-          <textarea value={activePage?.seo_description || ''} onChange={e => updateActivePage({seo_description: e.target.value})} style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} />
-          <label style={{...labelStyle, marginTop: '12px'}}>Social Share Image (OG)</label>
-          <input type="text" value={activePage?.seo_image || ''} onChange={e => updateActivePage({ seo_image: e.target.value })} placeholder="/uploads/share.png (optional)" style={inputStyle} />
+          <label style={labelStyle}>Meta Title <Count n={(activePage?.seo_title || '').length} max={60} /></label>
+          <input type="text" value={activePage?.seo_title || ''} onChange={e => updateActivePage({seo_title: e.target.value})} style={inputStyle} placeholder={activePage?.title || ''} />
+          <label style={labelStyle}>Meta Description <Count n={(activePage?.seo_description || '').length} max={160} /></label>
+          <textarea value={activePage?.seo_description || ''} onChange={e => updateActivePage({seo_description: e.target.value})} style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} placeholder="One or two sentences that make people want to click" />
+          {activePage?.__item ? (
+            <p style={{ fontSize: '11px', color: '#64748b', margin: '8px 0 0' }}>When this item is shared, its cover image is used as the picture.</p>
+          ) : <>
+            <ImgF label="Social share image" value={activePage?.seo_image || ''} onChange={v => updateActivePage({ seo_image: v })} onPick={() => setSharePicker(true)} />
+            <p style={{ fontSize: '11px', color: '#64748b', margin: '4px 0 0' }}>Shown when the page is shared on social networks and chats (best 1200×630). Empty = the site's default share image.</p>
+          </>}
+          <SnippetPreview page={activePage?.__item ? { ...activePage, seo_image: activePage.cover_image } : activePage} />
+          {!activePage?.__item && <>
+            <ChkF label="Hide this page from search engines" checked={!!Number(activePage?.noindex)} onChange={v => updateActivePage({ noindex: v ? 1 : 0 })} />
+            <p style={{ fontSize: '11px', color: '#64748b', margin: '4px 0 0' }}>Adds “noindex”, leaves it out of the sitemap and of the site search. Useful for thank-you pages, drafts of campaigns, legal pages.</p>
+          </>}
+          {sharePicker && <MediaPickerModal onClose={() => setSharePicker(false)} onSelect={(url) => { updateActivePage({ seo_image: url }); setSharePicker(false); }} />}
         </PanelAccordion>
+      </div>
+    </div>
+  );
+}
+
+// "52 / 60" next to a field: green within the recommended length, amber above it
+function Count({ n, max }) {
+  return <span style={{ marginLeft: 'auto', fontWeight: 600, fontSize: 10.5, color: n === 0 ? '#64748b' : n <= max ? '#34d399' : '#fbbf24' }}>{n} / {max}</span>;
+}
+
+// How the page looks in a search result and as a shared link
+function SnippetPreview({ page }) {
+  const title = (page?.seo_title || page?.title || 'Page title').slice(0, 70);
+  const desc = (page?.seo_description || 'Add a meta description: it is the text shown under the title in search results.').slice(0, 170);
+  const path = !page?.slug || page.slug === 'index' || Number(page.is_home) ? '' : page.slug + '/';
+  return (
+    <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+      <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px', fontFamily: 'arial, sans-serif' }} aria-label="Search result preview">
+        <div style={{ fontSize: 11.5, color: '#202124', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>yoursite.com › {path || 'home'}</div>
+        <div style={{ fontSize: 16, color: '#1a0dab', lineHeight: 1.3, margin: '2px 0' }}>{title}</div>
+        <div style={{ fontSize: 12.5, color: '#4d5156', lineHeight: 1.45 }}>{desc}</div>
+      </div>
+      <div style={{ background: '#fff', borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0' }} aria-label="Shared link preview">
+        {page?.seo_image
+          ? <img src={page.seo_image} alt="" style={{ display: 'block', width: '100%', aspectRatio: '1.91 / 1', objectFit: 'cover', background: '#e2e8f0' }} />
+          : <div style={{ aspectRatio: '1.91 / 1', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 12 }}>Default share image</div>}
+        <div style={{ padding: '8px 10px', fontFamily: 'system-ui, sans-serif' }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0f172a' }}>{title}</div>
+          <div style={{ fontSize: 12, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{desc}</div>
+        </div>
       </div>
     </div>
   );

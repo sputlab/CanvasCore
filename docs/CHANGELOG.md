@@ -11,6 +11,47 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Redirects**: renaming a published page or collection item makes its old address forward to the new one (a page
+  at the old address on any host, plus real `301`s in a marked block of the site's `.htaccess` on Apache). Chains
+  collapse, loops are avoided, a page published at an old address cancels its redirect. Global Options › Redirects
+  (admins) lists them and lets you add your own. DB migration 7 (`redirects`, `pages.noindex`).
+- **SEO**: canonical links on every page; "Hide this page from search engines" (noindex, left out of the sitemap and
+  the site search); character counts for meta title/description; search-result and shared-link previews; the social
+  share image can be picked from the media library.
+- **RSS feeds**: `/collection/feed.xml` for each collection with published items (newest 50), announced in every
+  page's head; needs Global Options › Site address.
+- **Site Search block**: a search box with instant results from `search-index.json`, rebuilt at each publish (titles,
+  descriptions and text of published pages and items); `?q=` opens it with results.
+- **Cookie banner** (Global Options): text, Accept/Decline labels, privacy page link, position; remembers the choice.
+  Scripts written as `<script type="text/plain" data-cc-consent>` (and `<iframe data-cc-consent-src>`) run only after
+  Accept; `data-cc-consent-open` reopens the banner.
+- **Faster images**: every uploaded photo gets smaller WebP copies (480, 960, 1600 px wide; never enlarged; phone
+  photos turned upright) in `uploads/_cc/`. Published pages give each uploaded image a `srcset` of those copies, so
+  phones download a fraction of the size; images load lazily except the first one, which loads with priority.
+  "Optimize N older images" in Media makes the copies for images uploaded before. New `canvascore-admin/media.php`.
+- **Media library**: each image shows its size in pixels and file size, an "Optimized" badge, and a description
+  (alt text) field. Picking an image for a block fills the block's empty alt text with that description.
+- **Image picker**: same look as the admin, search by name or description, sizes shown, several uploads at once,
+  Esc closes it; the "choose from the media library" buttons have accessible labels.
+- **Version history** (History button in the editor's top bar): every Save Draft or Publish that changes a page or
+  collection item keeps a version (the newest 40). Preview any version and restore it into the editor as an unsaved
+  change (Ctrl/Cmd+Z undoes it). DB migration 6 (`page_revisions`).
+- **Duplicate, copy and paste blocks**: Ctrl/Cmd+D duplicates the selected block (with everything inside);
+  Ctrl/Cmd+C copies it and Ctrl/Cmd+V pastes it on any page, even in another tab (also "Paste copied …" in the Add
+  tab); pasting goes inside the selected container, after the selected block, or at the end.
+- **Move and delete from the keyboard**: Alt+↑/↓ moves the selected block among its neighbours, Delete/Backspace
+  deletes it (Ctrl/Cmd+Z brings it back). The settings panel has a quick bar (move up/down, duplicate, copy) and the
+  Layers row a duplicate button.
+- **Change your own password** from the sidebar (key icon next to Logout): current password + the new one twice.
+  Any role. A voluntary change now requires the current password.
+- **Flex Row** has a Content tab: direction, space between blocks, horizontal/vertical alignment, wrapping.
+- **Form**: editable "Message after sending", Phone / Website address / Date field types, fields can be reordered.
+- **Image + Text**: image description (alt text). **FAQ** questions and **Slider** slides can be reordered.
+- **Slider**: previous/next arrows on the site (a fading slider without autoplay can now be browsed); autoplay
+  pauses on hover and is off for visitors who ask for less motion.
+- **Trusted proxy addresses** (Global Options › Security, admins): behind a reverse proxy or CDN, login protection
+  and form limits use each visitor's real address.
+- Server test suite (`npm run test:server`, part of `npm test`).
 - **Manuals** in `docs/manuals/`: a User Guide (editors), a Block Reference (every block and its settings),
   an Administrator Guide (installation, web server, updates, accounts, publishing, backups, forms, security,
   troubleshooting) and a Developer Guide (architecture, local setup, data model, rendering and parity, adding a
@@ -112,6 +153,22 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- Images the server can't process (GD without WebP, memory) stay "not optimized" and are retried; Media says how many
+  were skipped. Publishing leaves missing optimized copies out of the `srcset` (e.g. a site restored without
+  `uploads/_cc/`). Collection items no longer show the page-only share image / noindex options (they use the cover).
+- Manuals updated for all the new features (User Guide, Block Reference, Administrator Guide, Developer Guide).
+- **An editor's save wiped the admin's code**: Custom HTML, custom CSS and a form's receiving email set by an admin
+  are now kept as they were (editors still can't add or change code); Custom HTML is shown read-only to editors.
+- **Renaming a page didn't update links**: the re-linking never matched (escaped slashes in the stored JSON). Links in
+  buttons, menus and text are now updated in pages, collection items, header/footer and masters. Deleting a master
+  also removes it from collection items and the header/footer.
+- **New Buttons ignored the brand color** (a fixed blue default); **placeholder images were broken** (the service
+  is gone: built-in placeholders now); emptied button/form texts fall back to their defaults.
+- Editors no longer see (or receive from the server) the form email and security settings; new accounts need
+  8+ character passwords; the Pricing badge can be edited (or cleared) whether or not the plan is highlighted.
+- Friendly block names instead of internal ones in the canvas; accurate "Add inside / at the end" label in Layers;
+  a warning for video links that aren't YouTube/Vimeo; the version warning also compares build numbers.
+- Publishing reports sitemap/robots/404 write failures; hosts without mbstring no longer break forms.
 - README: the admin folder must keep the name `canvascore-admin` (published forms post to it); the dev server
   note points to the Developer Guide. `docs/VERSIONING.md` gave the wrong changelog location; the PHASE notes are
   marked as historical. `npm run lint` now enforces zero warnings.

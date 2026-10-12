@@ -1,11 +1,13 @@
 import React from 'react';
-import { Sliders, Image as ImageIcon, Trash2, Images } from 'lucide-react';
-import { PanelAccordion } from '../fields';
-import { labelStyle, inputStyle } from '../helpers';
+import { placeholderImage } from '../../../editor/placeholder';
+import { Sliders, Images } from 'lucide-react';
+import { PanelAccordion, ItemCard, ImgF, TxtF } from '../fields';
+import { labelStyle, inputStyle, lstAddBtn } from '../helpers';
 
 // Content panel: SLIDER
 export default function SliderPanel({ ctx }) {
-  const { selectedBlock, handleContentChange, setMediaPickerTarget, lstPatch } = ctx;
+  const { selectedBlock, handleContentChange, setMediaPickerTarget, lstPatch, lstMove, lstRemove, lstAdd } = ctx;
+  const images = Array.isArray(selectedBlock.content.images) ? selectedBlock.content.images : [];
   return (
     <>
       <PanelAccordion title="Slider Settings" icon={Sliders} defaultOpen={true}>
@@ -52,26 +54,13 @@ export default function SliderPanel({ ctx }) {
       </PanelAccordion>
 
       <PanelAccordion title="Images" icon={Images} defaultOpen={false}>
-        {(selectedBlock.content.images || []).map((img, idx) => (
-          <div key={idx} style={{ background: '#0f172a', padding: '15px', borderRadius: '8px', marginBottom: '10px', border: '1px solid #334155' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <label style={{...labelStyle, margin: 0}}>Slide {idx + 1}</label>
-              <button onClick={() => {
-                const newImgs = [...selectedBlock.content.images]; newImgs.splice(idx, 1); handleContentChange('images', newImgs);
-              }} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={14}/></button>
-            </div>
-            <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
-              <input type="text" style={{...inputStyle, flex: 1, marginBottom: 0}} value={img.src ?? ''} onChange={e => lstPatch('images', idx, { src: e.target.value })} placeholder="Image URL" />
-              <button onClick={() => setMediaPickerTarget({ type: 'slider_img', index: idx })} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 12px', cursor: 'pointer' }}><ImageIcon size={16}/></button>
-            </div>
-            <input type="text" style={inputStyle} value={img.alt || ''} onChange={e => lstPatch('images', idx, { alt: e.target.value })} placeholder="Alt Text (SEO)" />
-          </div>
+        {images.map((img, idx) => (
+          <ItemCard key={idx} title={`Slide ${idx + 1}`} index={idx} total={images.length} onMove={(d) => lstMove('images', idx, d)} onRemove={() => lstRemove('images', idx)}>
+            <ImgF label="Image" value={img.src} onChange={v => lstPatch('images', idx, { src: v })} onPick={() => setMediaPickerTarget({ type: 'slider_img', index: idx })} />
+            <TxtF label="Alt text (what the image shows)" value={img.alt} onChange={v => lstPatch('images', idx, { alt: v })} />
+          </ItemCard>
         ))}
-        <button onClick={() => {
-          const newImgs = selectedBlock.content.images ? [...selectedBlock.content.images] : [];
-          newImgs.push({ src: 'https://via.placeholder.com/800x400', alt: 'New Slide' });
-          handleContentChange('images', newImgs);
-        }} style={{ width: '100%', padding: '10px', background: 'transparent', color: '#38bdf8', border: '2px dashed #334155', borderRadius: '8px', cursor: 'pointer' }}>+ Add Slide</button>
+        <button onClick={() => lstAdd('images', { src: placeholderImage(800, 400), alt: 'New Slide' })} style={lstAddBtn}>+ Add Slide</button>
       </PanelAccordion>
     </>
   );

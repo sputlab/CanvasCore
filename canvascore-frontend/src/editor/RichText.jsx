@@ -217,10 +217,10 @@ export function RichToolbar({ region, variant = 'full', floating = false, onComm
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px' }}>{items}</div>
       {popover}
       {picker && (
-        <MediaPickerModal onClose={() => setPicker(false)} onSelect={(url) => {
+        <MediaPickerModal onClose={() => setPicker(false)} onSelect={(url, alt) => {
           setPicker(false);
           setOpen(null);
-          run(() => insertHtml(`<img src="${escAttr(url)}" alt="" style="max-width:100%; height:auto;">`));
+          run(() => insertHtml(`<img src="${escAttr(url)}" alt="${escAttr(alt || '')}" style="max-width:100%; height:auto;">`));
         }} />
       )}
     </div>

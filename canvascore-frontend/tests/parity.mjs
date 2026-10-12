@@ -48,6 +48,8 @@ const fixtures = [
   { id: 'e3', type: 'TEXT', styles: { animation: 'fade-left' }, content: { text: '<p>x</p>', animDelay: 1000, hoverEffect: 'lift', loopEffect: 'float' } },
   { id: 'e4', type: 'SECTION', styles: { animation: 'nope' }, content: { hoverEffect: 'bad', loopEffect: 'pulse', animDuration: 'fast' }, children: [] },
   { id: 'e5', type: 'BUTTON', styles: {}, content: { text: 'B', url: '#', btnEffect: 'evil" onmouseover="x', btnHoverBg: '"><script>' } },
+  { id: 's1', type: 'SEARCH', styles: { maxWidth: '720px', margin: '0 auto' }, content: { placeholder: 'Find', buttonText: 'Go', noResults: 'Nothing for', limit: 5 } },
+  { id: 's2', type: 'SEARCH', styles: {}, content: {} },
   // ---- cross tests: containers with blocks inside ----
   { id: 'fx1', type: 'FLEX_ROW', styles: { display: 'flex', gap: '20px', flexWrap: 'wrap', width: '100%' }, children: [
       { id: 'fx1a', type: 'IMAGE', styles: { width: '50%' }, content: { src: 'a.jpg', aspectRatio: '1 / 1' } },

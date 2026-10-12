@@ -1,8 +1,8 @@
 import React, { useState, createContext, useContext } from 'react';
 import { useStore } from '../store/useStore';
 import { DndContext, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core';
-import { ChevronRight, ChevronDown, Trash2, GripVertical } from 'lucide-react';
-import { blockInfo } from '../editor/blockCatalog';
+import { ChevronRight, ChevronDown, Trash2, GripVertical, CopyPlus } from 'lucide-react';
+import { blockInfo, CONTAINER_TYPES } from '../editor/blockCatalog';
 import { dropPosition, containsId, findBlock } from '../editor/layerDrop';
 import { confirmDialog } from '../ui/dialog';
 
@@ -12,7 +12,7 @@ const DragState = createContext({ activeId: null, drop: null });
 // The rows never move or resize while dragging (no sortable transforms): a line shows
 // where the block will land (before/after a row) or a highlight when it goes inside a container.
 const LayerNode = ({ block, depth = 0 }) => {
-  const { selectedBlockId, setSelectedBlockId, removeBlock } = useStore();
+  const { selectedBlockId, setSelectedBlockId, removeBlock, duplicateBlock } = useStore();
   const { activeId, drop } = useContext(DragState);
   const isSelected = selectedBlockId === block.id;
   const isContainer = block.children !== undefined;
@@ -62,6 +62,12 @@ const LayerNode = ({ block, depth = 0 }) => {
         </div>
 
         {isSelected && (
+          <button onClick={(e) => { e.stopPropagation(); duplicateBlock(block.id); }} title="Duplicate (Ctrl/Cmd+D)" aria-label="Duplicate block"
+            style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, marginRight: 8 }}>
+            <CopyPlus size={12} />
+          </button>
+        )}
+        {isSelected && (
           <button onClick={async (e) => { e.stopPropagation(); if (await confirmDialog({ title: `Delete this ${info.label} block?`, message: isContainer ? 'Everything inside it is deleted too. You can undo it with Ctrl+Z.' : 'You can undo it with Ctrl+Z.', confirmLabel: 'Delete block', danger: true })) removeBlock(block.id); }}
             title="Delete block" aria-label="Delete block" style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
             <Trash2 size={12} />
@@ -99,6 +105,9 @@ export default function LayerNavigator() {
     reset();
   };
   const dragged = activeId ? findBlock(blocks, activeId) : null;
+  // The quick buttons add inside the selected block only when it is a container (else at the end)
+  const selectedBlock = selectedBlockId ? findBlock(blocks, selectedBlockId) : null;
+  const selectedContainer = selectedBlock && (Array.isArray(selectedBlock.children) || CONTAINER_TYPES.includes(selectedBlock.type)) ? selectedBlock : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f172a' }}>
@@ -131,9 +140,9 @@ export default function LayerNavigator() {
 
       <div style={{ padding: '11px 12px', borderTop: '1px solid #1e293b', background: '#1e293b' }}>
         <p style={{ margin: '0 0 6px 0', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>
-          {selectedBlockId ? 'Add inside selected:' : 'Add to root:'}
+          {selectedContainer ? <>Add inside the selected <span style={{ color: '#38bdf8' }}>{blockInfo(selectedContainer.type).label}</span>:</> : 'Add at the end of the page:'}
         </p>
-        <p style={{ margin: '0 0 10px 0', fontSize: '10px', color: '#64748b' }}>Tip: drag <GripVertical size={10} style={{ verticalAlign: 'middle' }} /> to move a block. Drop on the middle of a Section or Container to put it inside.</p>
+        <p style={{ margin: '0 0 10px 0', fontSize: '10px', color: '#64748b' }}>Tip: drag <GripVertical size={10} style={{ verticalAlign: 'middle' }} /> to move a block. Drop on the middle of a Section, Container, Flex Row or CSS Grid to put it inside.</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <button onClick={() => addBlock('SECTION', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>+ Section</button>
           <button onClick={() => addBlock('CONTAINER', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#f472b6', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>+ Container</button>
