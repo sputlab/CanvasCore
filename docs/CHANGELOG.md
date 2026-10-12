@@ -11,6 +11,18 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Full site backup (ZIP)**: Backup › "Download backup (.zip)" saves everything in one file: pages and their drafts,
+  collections and items, templates, masters, global header/footer, redirects, Global Options, the menu, and every
+  uploaded image with its description and folder (plus the optimized copies). Version history and form messages are
+  optional. User accounts and passwords are never included. "Keep a copy on the server" stores it in the data folder
+  (`backups/`, outside the public site); saved copies can be downloaded, restored or deleted.
+- **Restore**: from a backup ZIP (uploaded in pieces, so the server's upload limit doesn't matter) or from a copy on
+  the server. The file is checked first (only known tables and data files, images only, no paths that leave the
+  folders, unsafe SVGs and fake images left out, backups from a newer version refused). A **safety copy** of the
+  current site is saved automatically before every restore (the newest 5 are kept). Images are swapped and the
+  content replaced in one transaction; if it fails nothing changes. Accounts and the server's trusted proxies are kept;
+  the site is republished afterwards. Old `.json` backups can still be imported. The installer now checks for the
+  PHP zip extension (needed for backups).
 - **Site branding in the admin**: the sign-in screen, the sidebar and the browser tab show the site name (set at
   installation, editable in Global Options) and the site's favicon instead of "CanvasCore" and the default icon
   (falls back to the default icon when there is no favicon or it can't be loaded). "CanvasCore" stays in the
