@@ -6,6 +6,17 @@
 if (defined('CC_CONFIG_LOADED')) return;
 define('CC_CONFIG_LOADED', true);
 
+// Hosts without the mbstring extension: UTF-8 safe fallbacks for the two functions used
+if (!function_exists('mb_substr')) {
+    function mb_substr($s, $start, $length = null) {
+        preg_match_all('/./us', (string)$s, $m);
+        return implode('', array_slice($m[0], $start, $length));
+    }
+}
+if (!function_exists('mb_strlen')) {
+    function mb_strlen($s) { return (int)preg_match_all('/./us', (string)$s); }
+}
+
 // ---------------------------------------------------------------------------
 // Hardened session (HttpOnly cookie, SameSite=Lax, Secure over HTTPS)
 // ---------------------------------------------------------------------------
@@ -158,7 +169,26 @@ function cc_login_attempts_update($fn) {
     fflush($fh); flock($fh, LOCK_UN); fclose($fh);
     return $result;
 }
-function cc_login_key($username) { return sha1(($_SERVER['REMOTE_ADDR'] ?? '') . '|' . strtolower($username)); }
+// The visitor's address. Behind a reverse proxy / CDN every request comes from the proxy: when the
+// connecting address is listed in Global Options › Security › Trusted proxy addresses, the client
+// address the proxy reports (X-Forwarded-For, nearest untrusted hop) is used instead.
+function cc_client_ip($trustedOverride = null) {   // $trustedOverride: list of proxy IPs (tests)
+    $remote = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    static $trusted = null;
+    if ($trustedOverride !== null) $trusted = $trustedOverride;
+    if ($trusted === null) {
+        $s = @json_decode((string)@file_get_contents(cc_data_dir() . '/settings.json'), true);
+        $trusted = array_values(array_filter(array_map('trim', explode(',', (string)($s['trustedProxies'] ?? '')))));
+    }
+    if (!$trusted || !in_array($remote, $trusted, true)) return $remote;
+    $chain = array_map('trim', explode(',', (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')));
+    for ($i = count($chain) - 1; $i >= 0; $i--) {
+        $ip = $chain[$i];
+        if (filter_var($ip, FILTER_VALIDATE_IP) && !in_array($ip, $trusted, true)) return $ip;
+    }
+    return $remote;
+}
+function cc_login_key($username) { return sha1(cc_client_ip() . '|' . strtolower($username)); }
 // Seconds to wait before trying again (0 = allowed)
 function cc_login_wait($username) {
     $k = cc_login_key($username);
@@ -197,6 +227,24 @@ function cc_rate_allow($bucket, $key, $max, $window) {
     ftruncate($fh, 0); rewind($fh); fwrite($fh, json_encode($all));
     fflush($fh); flock($fh, LOCK_UN); fclose($fh);
     return $ok;
+}
+
+// Re-linking after a slug change (used by relink_slug_change in api.php). Works on the decoded data, so the JSON
+// formatting (escaped slashes) doesn't matter. Two link forms: "old/index.html" in link fields
+// (buttons, menu) and "{{BASE_URL}}old/" inside rich text.
+function cc_relink_node(&$node, $oldUrl, $newUrl, $oldBase, $newBase) {
+    if (!is_array($node)) return false;
+    $changed = false;
+    foreach ($node as $k => &$v) {
+        if (is_array($v)) {
+            if (cc_relink_node($v, $oldUrl, $newUrl, $oldBase, $newBase)) $changed = true;
+        } elseif (is_string($v)) {
+            if ($v === $oldUrl && in_array($k, ['url', 'btnUrl', 'buttonUrl', 'href', 'link'], true)) { $v = $newUrl; $changed = true; }
+            elseif (strpos($v, $oldBase) !== false) { $v = str_replace($oldBase, $newBase, $v); $changed = true; }
+        }
+    }
+    unset($v);
+    return $changed;
 }
 
 // An uploaded SVG is a document that can carry scripts: accept it only without any active content
@@ -260,6 +308,47 @@ function cc_strip_code_surfaces(&$blocks) {
         }
     }
     unset($b);
+}
+
+// Non-admin save: the code an admin put in (Custom HTML blocks, custom CSS/JS, a form's receiving email) is KEPT as it was saved,
+// matched by block id, instead of being wiped; an editor can't add or change code, only move or delete
+// those blocks. $previous = the blocks currently stored (array or JSON string).
+function cc_keep_code_surfaces(&$blocks, $previous) {
+    if (is_string($previous)) $previous = json_decode($previous, true);
+    $saved = [];
+    $collect = function ($list) use (&$collect, &$saved) {
+        if (!is_array($list)) return;
+        foreach ($list as $b) {
+            if (!is_array($b)) continue;
+            if (isset($b['id']) && is_scalar($b['id'])) {
+                $c = is_array($b['content'] ?? null) ? $b['content'] : [];
+                $saved[(string)$b['id']] = ['type' => $b['type'] ?? '', 'code' => $c['code'] ?? null, 'customCss' => $c['customCss'] ?? null, 'customJs' => $c['customJs'] ?? null, 'email' => $c['email'] ?? null];
+            }
+            if (isset($b['children'])) $collect($b['children']);
+        }
+    };
+    $collect(is_array($previous) ? $previous : []);
+    $apply = function (&$list) use (&$apply, $saved) {
+        if (!is_array($list)) return;
+        foreach ($list as &$b) {
+            if (!is_array($b)) continue;
+            if (!isset($b['content']) || !is_array($b['content'])) $b['content'] = [];
+            $old = (isset($b['id']) && is_scalar($b['id'])) ? ($saved[(string)$b['id']] ?? null) : null;
+            if (($b['type'] ?? '') === 'HTML') {
+                $b['content']['code'] = ($old && $old['type'] === 'HTML' && is_string($old['code'])) ? $old['code'] : '';
+            }
+            // A form's own receiving email is an admin setting too (where the site's messages go)
+            if (($b['type'] ?? '') === 'FORM') {
+                $b['content']['email'] = ($old && $old['type'] === 'FORM' && is_string($old['email'])) ? $old['email'] : '';
+            }
+            foreach (['customCss', 'customJs'] as $k) {
+                if ($old && is_string($old[$k]) && $old[$k] !== '') $b['content'][$k] = $old[$k]; else unset($b['content'][$k]);
+            }
+            if (isset($b['children'])) $apply($b['children']);
+        }
+        unset($b);
+    };
+    $apply($blocks);
 }
 
 // ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@ import FaqPanel from './FaqPanel';
 import FormPanel from './FormPanel';
 import GalleryPanel from './GalleryPanel';
 import GridCardsPanel from './GridCardsPanel';
+import FlexRowPanel from './FlexRowPanel';
 import HeroPanel from './HeroPanel';
 import HtmlPanel from './HtmlPanel';
 import IconBoxPanel from './IconBoxPanel';
@@ -37,6 +38,7 @@ export const CONTENT_PANELS = {
   BUTTON: ButtonPanel,
   CALLOUT: CalloutPanel,
   CARDS: GridCardsPanel,
+  FLEX_ROW: FlexRowPanel,
   COLLECTION_LIST: CollectionListPanel,
   COUNTDOWN: CountdownPanel,
   COUNTERS: CountersPanel,

@@ -64,7 +64,7 @@
     },
     "IMAGE": {
       "content": {
-        "src": "https://via.placeholder.com/600x400",
+        "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27600%27 height=%27400%27 viewBox=%270 0 600 400%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2736%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3E600 %C3%97 400%3C/text%3E%3C/svg%3E",
         "alt": "Image",
         "objectFit": "cover",
         "aspectRatio": "auto",
@@ -85,7 +85,7 @@
       },
       "styles": {
         "padding": "12px 24px",
-        "backgroundColor": "#3b82f6",
+        "backgroundColor": "",
         "color": "#ffffff",
         "borderRadius": "6px",
         "textAlign": "center",
@@ -143,7 +143,7 @@
     },
     "IMAGE_TEXT": {
       "content": {
-        "src": "https://via.placeholder.com/600x400",
+        "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27600%27 height=%27400%27 viewBox=%270 0 600 400%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2736%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3E600 %C3%97 400%3C/text%3E%3C/svg%3E",
         "text": "<h2>Service</h2><p>Description.</p>",
         "layout": "img-left"
       },
@@ -250,7 +250,7 @@
         "objectPosition": "center",
         "images": [
           {
-            "src": "https://via.placeholder.com/800x400",
+            "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27800%27 height=%27400%27 viewBox=%270 0 800 400%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2736%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3E800 %C3%97 400%3C/text%3E%3C/svg%3E",
             "alt": "S1"
           }
         ]
@@ -399,17 +399,17 @@
         "showCaptions": false,
         "images": [
           {
-            "src": "https://via.placeholder.com/800x600",
+            "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27800%27 height=%27600%27 viewBox=%270 0 800 600%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2736%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3E800 %C3%97 600%3C/text%3E%3C/svg%3E",
             "alt": "Image 1",
             "caption": ""
           },
           {
-            "src": "https://via.placeholder.com/800x800",
+            "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27800%27 height=%27800%27 viewBox=%270 0 800 800%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2736%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3E800 %C3%97 800%3C/text%3E%3C/svg%3E",
             "alt": "Image 2",
             "caption": ""
           },
           {
-            "src": "https://via.placeholder.com/800x500",
+            "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27800%27 height=%27500%27 viewBox=%270 0 800 500%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2736%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3E800 %C3%97 500%3C/text%3E%3C/svg%3E",
             "alt": "Image 3",
             "caption": ""
           }
@@ -605,27 +605,27 @@
         "speed": 30,
         "logos": [
           {
-            "src": "https://via.placeholder.com/160x60?text=Logo+1",
+            "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%2760%27 viewBox=%270 0 160 60%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2712%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3ELogo 1%3C/text%3E%3C/svg%3E",
             "alt": "Logo 1",
             "href": ""
           },
           {
-            "src": "https://via.placeholder.com/160x60?text=Logo+2",
+            "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%2760%27 viewBox=%270 0 160 60%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2712%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3ELogo 2%3C/text%3E%3C/svg%3E",
             "alt": "Logo 2",
             "href": ""
           },
           {
-            "src": "https://via.placeholder.com/160x60?text=Logo+3",
+            "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%2760%27 viewBox=%270 0 160 60%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2712%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3ELogo 3%3C/text%3E%3C/svg%3E",
             "alt": "Logo 3",
             "href": ""
           },
           {
-            "src": "https://via.placeholder.com/160x60?text=Logo+4",
+            "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%2760%27 viewBox=%270 0 160 60%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2712%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3ELogo 4%3C/text%3E%3C/svg%3E",
             "alt": "Logo 4",
             "href": ""
           },
           {
-            "src": "https://via.placeholder.com/160x60?text=Logo+5",
+            "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%2760%27 viewBox=%270 0 160 60%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2712%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3ELogo 5%3C/text%3E%3C/svg%3E",
             "alt": "Logo 5",
             "href": ""
           }
@@ -685,12 +685,12 @@
         "aspectRatio": "16 / 9",
         "showLabels": true,
         "before": {
-          "src": "https://via.placeholder.com/1200x675?text=Before",
+          "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%271200%27 height=%27675%27 viewBox=%270 0 1200 675%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2736%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3EBefore%3C/text%3E%3C/svg%3E",
           "alt": "Before",
           "label": "Before"
         },
         "after": {
-          "src": "https://via.placeholder.com/1200x675?text=After",
+          "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%271200%27 height=%27675%27 viewBox=%270 0 1200 675%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2736%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3EAfter%3C/text%3E%3C/svg%3E",
           "alt": "After",
           "label": "After"
         }

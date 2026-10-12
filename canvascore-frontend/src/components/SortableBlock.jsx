@@ -5,8 +5,9 @@ import { useStore } from '../store/useStore';
 import { InlineRegions } from '../editor/RichText';
 import { Crown } from 'lucide-react';
 import { renderBlock, blockRoot } from '../render/renderBlock.mjs';
+import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
 
-const CONTAINERS = ['SECTION', 'CONTAINER', 'FLEX_ROW', 'CSS_GRID'];
+const CONTAINERS = CONTAINER_TYPES;
 // Blocks whose canonical HTML is interactive in the canvas too (native details/radio, no JS):
 // a click opens/switches the tab AND selects the block (the event bubbles up to the frame).
 const INTERACTIVE = ['ACCORDION', 'TABS', 'BEFORE_AFTER'];
@@ -125,7 +126,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
 
   const dragHandle = isSelected && (
     <div {...attributes} {...listeners} style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)', background: '#38bdf8', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold', cursor: 'grab', zIndex: 50, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-      {block.type}
+      {blockLabel(block.type)}
     </div>
   );
 
@@ -195,7 +196,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
       const childIds = kids.map(c => c.id);
       const children = kids.length > 0
         ? <SortableContext items={childIds} strategy={verticalListSortingStrategy}>{kids.map(c => <SortableBlock key={c.id} block={c} isMasterPreview={isMasterPreview} />)}</SortableContext>
-        : emptyPlaceholder(`Empty ${block.type}. Drop elements here.`);
+        : emptyPlaceholder(`Empty ${blockLabel(block.type)}. Select it and add blocks from the Add tab, or drop them here in Layers.`);
       return React.createElement(r.tag, { id: r.id, className: r.className, style }, children);
     }
 
@@ -207,7 +208,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
           onCommit={commitField} initialPoint={clickPoint} style={{ width: '100%' }} />
       );
     }
-    if (block.type === 'HTML' && isSelected && !isMasterPreview) {
+    if (block.type === 'HTML' && isSelected && !isMasterPreview && useStore.getState().userRole === 'admin') {
       return (
         <textarea rows="6" value={block.content.code || ''} onChange={(e) => handleContentChange('code', e.target.value)} onClick={(e) => e.stopPropagation()}
           style={{ width: '100%', padding: '12px', fontFamily: 'monospace', fontSize: '13px', background: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '6px', boxSizing: 'border-box' }} />

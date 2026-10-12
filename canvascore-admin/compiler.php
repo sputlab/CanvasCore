@@ -750,7 +750,7 @@ function render_block($block) {
                     $url = '{{BASE_URL}}' . ltrim($clean_url, '/');
                 }
             }
-            $text = htmlspecialchars($block['content']['text'] ?? 'Click here');
+            $text = htmlspecialchars((string)(($block['content']['text'] ?? '') !== '' ? $block['content']['text'] : 'Click here'));
             $align = htmlspecialchars($block['styles']['textAlign'] ?? 'center');
             $margin = htmlspecialchars($block['styles']['margin'] ?? '0');
             $useGlobal = $block['content']['useGlobal'] ?? true;
@@ -806,8 +806,9 @@ function render_block($block) {
         case 'IMAGE_TEXT':
             $layout = ($block['content']['layout'] ?? 'img-left') === 'img-right' ? 'row-reverse' : 'row';
             $src = htmlspecialchars($block['content']['src'] ?? '');
+            $alt = htmlspecialchars((string)($block['content']['alt'] ?? ''));
             $text = cc_sanitize_html($block['content']['text'] ?? '');
-            $html = "<section id=\"$innerId\" class=\"cc-img-text$animClass$innerClass\" style=\"$styleAttr; display:flex; gap:40px; align-items:center; flex-direction:$layout; flex-wrap:wrap;\">\n<div style=\"flex:1 1 300px; width:100%;\"><img src=\"$src\" style=\"width:100%; border-radius:8px; display:block;\"></div>\n<div style=\"flex:1 1 300px; width:100%;\">$text</div>\n</section>\n";
+            $html = "<section id=\"$innerId\" class=\"cc-img-text$animClass$innerClass\" style=\"$styleAttr; display:flex; gap:40px; align-items:center; flex-direction:$layout; flex-wrap:wrap;\">\n<div style=\"flex:1 1 300px; width:100%;\"><img src=\"$src\" alt=\"$alt\" style=\"width:100%; border-radius:8px; display:block;\"></div>\n<div style=\"flex:1 1 300px; width:100%;\">$text</div>\n</section>\n";
             return $customCss . $html;
 
         case 'CARDS':
@@ -835,8 +836,8 @@ function render_block($block) {
 
         case 'FORM':
             $raw_email = trim($block['content']['email'] ?? '');
-            $btnText = htmlspecialchars($block['content']['btnText'] ?? 'Send Message');
-            $successMsg = htmlspecialchars($block['content']['successMsg'] ?? 'Sent!');
+            $btnText = htmlspecialchars((string)(($block['content']['btnText'] ?? '') !== '' ? $block['content']['btnText'] : 'Send Message'));
+            $successMsg = htmlspecialchars((string)(($block['content']['successMsg'] ?? '') !== '' ? $block['content']['successMsg'] : 'Sent!'));
             $title = cc_sanitize_html($block['content']['title'] ?? '<h3>Contact Us</h3>');
             // Stable form ID + server-side recipient registration (no email addresses in the client)
             $form_id = !empty($block['content']['customId'])
@@ -1543,29 +1544,26 @@ function render_block($block) {
                 }
             }
             $html .= "  </div>\n";
+            $nImgs = (isset($block['content']['images']) && is_array($block['content']['images'])) ? count($block['content']['images']) : 0;
+            // Previous / next arrows (also the only way through a fading slider without autoplay)
+            if ($nImgs > 1) {
+                $html .= "  <button type=\"button\" class=\"cc-slider-prev\" aria-label=\"Previous slide\" style=\"position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border:none; border-radius:50%; background:rgba(15,23,42,0.55); color:#fff; font-size:24px; line-height:1; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; padding:0; left:10px;\">&#8249;</button>\n";
+                $html .= "  <button type=\"button\" class=\"cc-slider-next\" aria-label=\"Next slide\" style=\"position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border:none; border-radius:50%; background:rgba(15,23,42,0.55); color:#fff; font-size:24px; line-height:1; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; padding:0; right:10px;\">&#8250;</button>\n";
+            }
             if (!$isFade) $html .= "  <style>#$innerId .cc-slides::-webkit-scrollbar { display: none; }</style>\n";
 
-            if ($autoplay) {
-                $html .= "  <script>\n";
-                $html .= "    document.addEventListener('DOMContentLoaded', function() {\n";
-                $html .= "      var slider = document.getElementById('$innerId');\n";
-                $html .= "      if(slider) { \n";
-                $html .= "        var container = slider.querySelector('.cc-slides');\n";
-                $html .= "        var slides = slider.querySelectorAll('.cc-slide');\n";
-                $html .= "        var current = 0;\n";
-                $html .= "        if (slides.length > 1) {\n";
-                $html .= "          setInterval(function() {\n";
-                $html .= "            current = (current + 1) % slides.length;\n";
-                if ($isFade) {
-                    $html .= "            slides.forEach((s, i) => s.style.opacity = i === current ? 1 : 0);\n";
-                } else {
-                    $html .= "            container.scrollTo({ left: slides[current].offsetLeft, behavior: 'smooth' });\n";
-                }
-                $html .= "          }, $delay);\n";
-                $html .= "        }\n";
-                $html .= "      }\n";
-                $html .= "    });\n";
-                $html .= "  </script>\n";
+            if ($nImgs > 1) {
+                // Arrows + autoplay (paused on hover, off for visitors who ask for less motion)
+                $auto = $autoplay ? 'true' : 'false';
+                $fadeJs = $isFade ? 'true' : 'false';
+                $delayMs = max(500, $delay);
+                $html .= "  <script>document.addEventListener('DOMContentLoaded',function(){var s=document.getElementById('$innerId');if(!s)return;var c=s.querySelector('.cc-slides'),sl=s.querySelectorAll('.cc-slide'),n=sl.length,cur=0,fade=$fadeJs,t=null;if(n<2)return;"
+                       . "function go(i){cur=(i+n)%n;if(fade){for(var k=0;k<n;k++)sl[k].style.opacity=k===cur?1:0;}else{c.scrollTo({left:sl[cur].offsetLeft,behavior:'smooth'});}}"
+                       . "if(!fade)c.addEventListener('scroll',function(){cur=Math.round(c.scrollLeft/(c.clientWidth||1));},{passive:true});"
+                       . "var auto=$auto&&!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);"
+                       . "function restart(){if(!auto)return;clearInterval(t);t=setInterval(function(){go(cur+1);},$delayMs);}"
+                       . "var p=s.querySelector('.cc-slider-prev'),x=s.querySelector('.cc-slider-next');if(p)p.addEventListener('click',function(){go(cur-1);restart();});if(x)x.addEventListener('click',function(){go(cur+1);restart();});"
+                       . "s.addEventListener('mouseenter',function(){clearInterval(t);});s.addEventListener('mouseleave',restart);restart();});</script>\n";
             }
             $html .= "</div>\n";
             return $customCss . $html;

@@ -11,6 +11,16 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Change your own password** from the sidebar (key icon next to Logout): current password + the new one twice.
+  Any role. A voluntary change now requires the current password.
+- **Flex Row** has a Content tab: direction, space between blocks, horizontal/vertical alignment, wrapping.
+- **Form**: editable "Message after sending", Phone / Website address / Date field types, fields can be reordered.
+- **Image + Text**: image description (alt text). **FAQ** questions and **Slider** slides can be reordered.
+- **Slider**: previous/next arrows on the site (a fading slider without autoplay can now be browsed); autoplay
+  pauses on hover and is off for visitors who ask for less motion.
+- **Trusted proxy addresses** (Global Options › Security, admins): behind a reverse proxy or CDN, login protection
+  and form limits use each visitor's real address.
+- Server test suite (`npm run test:server`, part of `npm test`).
 - **Manuals** in `docs/manuals/`: a User Guide (editors), a Block Reference (every block and its settings),
   an Administrator Guide (installation, web server, updates, accounts, publishing, backups, forms, security,
   troubleshooting) and a Developer Guide (architecture, local setup, data model, rendering and parity, adding a
@@ -112,6 +122,18 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- **An editor's save wiped the admin's code**: Custom HTML, custom CSS and a form's receiving email set by an admin
+  are now kept as they were (editors still can't add or change code); Custom HTML is shown read-only to editors.
+- **Renaming a page didn't update links**: the re-linking never matched (escaped slashes in the stored JSON). Links in
+  buttons, menus and text are now updated in pages, collection items, header/footer and masters. Deleting a master
+  also removes it from collection items and the header/footer.
+- **New Buttons ignored the brand color** (a fixed blue default); **placeholder images were broken** (the service
+  is gone: built-in placeholders now); emptied button/form texts fall back to their defaults.
+- Editors no longer see (or receive from the server) the form email and security settings; new accounts need
+  8+ character passwords; the Pricing badge can be edited (or cleared) whether or not the plan is highlighted.
+- Friendly block names instead of internal ones in the canvas; accurate "Add inside / at the end" label in Layers;
+  a warning for video links that aren't YouTube/Vimeo; the version warning also compares build numbers.
+- Publishing reports sitemap/robots/404 write failures; hosts without mbstring no longer break forms.
 - README: the admin folder must keep the name `canvascore-admin` (published forms post to it); the dev server
   note points to the Developer Guide. `docs/VERSIONING.md` gave the wrong changelog location; the PHASE notes are
   marked as historical. `npm run lint` now enforces zero warnings.

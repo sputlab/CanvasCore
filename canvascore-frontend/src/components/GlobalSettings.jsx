@@ -9,7 +9,8 @@ import { confirmDialog } from '../ui/dialog';
 const DEFAULT_SETTINGS = { brandColor: '#3b82f6', fontFamily: 'Inter', adminEmail: '', emailFrom: '', emailSubject: '', siteSuffix: ' | My Site' };
 
 export default function GlobalSettings() {
-  const { setView, publishSiteAsync, setActivePage, setBlocks, setSelectedBlockId } = useStore();
+  const { setView, publishSiteAsync, setActivePage, setBlocks, setSelectedBlockId, userRole } = useStore();
+  const isAdmin = userRole === 'admin';
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
   // Saving before the data arrives (or after it failed) would overwrite the site's data with defaults
@@ -134,6 +135,7 @@ export default function GlobalSettings() {
         </div>
       </Card>
 
+      {isAdmin && <>
       <Card title="Form emails" icon={Mail} description="Where messages sent through the site's forms are delivered.">
         <Field label="Default receiving email (To)" hint="Used by forms that don't have their own receiving email.">
           <Input type="email" value={settings.adminEmail || ''} onChange={e => set({ adminEmail: e.target.value })} placeholder="admin@yoursite.com" />
@@ -148,7 +150,11 @@ export default function GlobalSettings() {
         <Field label="Session timeout (minutes of inactivity)" hint="Between 5 and 720 (12 h). Working in the editor counts as activity. When it expires you are asked to sign in again and your unsaved work is kept.">
           <Input type="number" min="5" max="720" value={settings.sessionTimeoutMinutes ?? 30} onChange={e => set({ sessionTimeoutMinutes: e.target.value === '' ? '' : parseInt(e.target.value, 10) })} style={{ maxWidth: 160 }} />
         </Field>
+        <Field label="Trusted proxy addresses" hint="Only if the site is behind a reverse proxy or CDN: the proxy's IP addresses, separated by commas. Login protection and form spam limits then use each visitor's real address. Leave empty otherwise.">
+          <Input value={settings.trustedProxies || ''} onChange={e => set({ trustedProxies: e.target.value })} placeholder="e.g. 10.0.0.2, 10.0.0.3" />
+        </Field>
       </Card>
+      </>}
     </div>
   );
 }

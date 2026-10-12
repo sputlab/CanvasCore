@@ -250,7 +250,7 @@ export default function VisualEditor() {
               <Button variant="danger" size="sm" icon={AlertCircle} onClick={discardChanges} title="Throw away the draft and go back to the published version"><span className="cc-ed-hide-md">Discard draft</span></Button>
             )}
             <Button size="sm" icon={Save} onClick={saveDraft} disabled={isSaving || isPublishing} title="Save draft (Ctrl+S)"><span className="cc-ed-hide-sm">{activePage?.__part ? 'Save' : 'Save Draft'}</span></Button>
-            <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing || isSaving} title="Save and publish online">{isPublishing ? 'Publishing…' : 'Publish'}</Button>
+            <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing || isSaving} title="Publish this page, then update the whole site (menus and lists)">{isPublishing ? 'Publishing…' : 'Publish'}</Button>
           </div>
         </header>
       )}

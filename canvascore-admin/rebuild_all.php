@@ -216,18 +216,18 @@ try {
 
     // Form recipient registry (per form, server-side: no email addresses in the client)
     $forms = function_exists('cc_form_registry') ? cc_form_registry() : [];
-    @file_put_contents($data_dir . '/forms.json', json_encode($forms, JSON_UNESCAPED_UNICODE));
+    if (@file_put_contents($data_dir . '/forms.json', json_encode($forms, JSON_UNESCAPED_UNICODE)) === false) $failed[] = $data_dir . '/forms.json';
 
     // --- sitemap.xml ---
     $sm = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
     foreach (array_unique($sitemap_urls) as $u) $sm .= '  <url><loc>' . htmlspecialchars($u) . '</loc></url>' . "\n";
     $sm .= '</urlset>' . "\n";
-    @file_put_contents(__DIR__ . '/../sitemap.xml', $sm);
+    $write(__DIR__ . '/../sitemap.xml', $sm);
 
     // --- robots.txt ---
     $robots = "User-agent: *\n" . ($robots_allow ? "Allow: /\n" : "Disallow: /\n");
     if ($site_url) $robots .= "Sitemap: $site_url/sitemap.xml\n";
-    @file_put_contents(__DIR__ . '/../robots.txt', $robots);
+    $write(__DIR__ . '/../robots.txt', $robots);
 
     // --- 404.html ---
     $nf_content = '<div style="max-width:600px;margin:0 auto;padding:100px 20px;text-align:center;">'
@@ -239,7 +239,7 @@ try {
     $nf = str_replace('{{PAGE_TITLE}}', '404 - Not Found' . $site_suffix, $template);
     $nf = str_replace(['{{META_DESCRIPTION}}', '{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}', '{{BASE_URL}}'],
                       ['', $menu_html, $google_fonts_link, $brand_color, $font_family, $nf_content, $base_url], $nf);
-    @file_put_contents(__DIR__ . '/../404.html', $nf);
+    $write(__DIR__ . '/../404.html', $nf);
 
     // ErrorDocument for Apache (best effort; on Nginx it must be configured by hand)
     $root_ht = __DIR__ . '/../.htaccess';

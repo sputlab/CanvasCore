@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import {
   FileText, LayoutTemplate, Library, Image as ImageIcon, ListTree, Palette, Inbox, Users, LogOut, Globe,
-  Menu as MenuIcon, X, DatabaseBackup, Layers,
+  Menu as MenuIcon, X, DatabaseBackup, Layers, KeyRound,
 } from 'lucide-react';
 import { Button } from '../ui/kit';
+import ChangePasswordDialog from './ChangePasswordDialog';
 import { notify } from '../ui/notify';
 
 const NAV = [
@@ -31,6 +32,7 @@ export default function AdminLayout({ children, wide }) {
   const { currentView, setView, userRole, username, logout, publishSiteAsync, appVersion, appBuild, serverVersion } = useStore();
   const [navOpen, setNavOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const version = (serverVersion && serverVersion.app) || appVersion || '0.0.0';
   const build = (serverVersion && serverVersion.build) || appBuild;
 
@@ -73,15 +75,17 @@ export default function AdminLayout({ children, wide }) {
                 <div className="ui-user__name">{username}</div>
                 <div className="ui-user__role" style={{ color: userRole === 'admin' ? '#38bdf8' : '#a78bfa' }}>{userRole}</div>
               </span>
+              <Button variant="ghost" size="sm" icon={KeyRound} onClick={() => setPwOpen(true)} title="Change your password" aria-label="Change your password" />
               <Button variant="ghost" size="sm" icon={LogOut} onClick={logout} title="Log out">Logout</Button>
             </div>
           )}
           <div className="ui-version">CanvasCore v{version}{build ? ` · build ${build}` : ''}</div>
-          {serverVersion && appVersion && serverVersion.app !== appVersion && (
-            <div className="ui-version" style={{ color: '#f59e0b' }}>Editor v{appVersion} / server v{serverVersion.app}: reload the page after updating.</div>
+          {serverVersion && appVersion && (serverVersion.app !== appVersion || (appBuild && serverVersion.build && Number(serverVersion.build) !== Number(appBuild))) && (
+            <div className="ui-version" style={{ color: '#f59e0b' }}>Editor v{appVersion}{appBuild ? ` (build ${appBuild})` : ''} / server v{serverVersion.app}{serverVersion.build ? ` (build ${serverVersion.build})` : ''}: reload the page after updating.</div>
           )}
         </div>
       </aside>
+      {pwOpen && <ChangePasswordDialog onClose={() => setPwOpen(false)} />}
       {navOpen && <div className="ui-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <div className="ui-main">
         <div className="ui-topbar">

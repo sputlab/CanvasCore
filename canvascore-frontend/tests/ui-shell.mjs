@@ -275,6 +275,45 @@ try {
     check('…in order, each with its own answer', order.join(',') === '1:true,2:false', order.join(','));
   }
 
+  console.log('\nPRODUCT FIXES');
+  {
+    const tabBtn = (t) => $$('[role="tab"]').find((b) => b.textContent.trim() === t);
+    const blk2 = (id) => (function find(list) { for (const b of list) { if (b.id === id) return b; const r = b.children && find(b.children); if (r) return r; } return null; })(st().blocks);
+    const flex = { id: 'fr1', type: 'FLEX_ROW', styles: { display: 'flex', gap: '20px', flexWrap: 'wrap' }, content: {}, children: [] };
+    const html = { id: 'hb1', type: 'HTML', styles: {}, content: { code: '<b>admin code</b>' } };
+    const video = { id: 'vd1', type: 'VIDEO', styles: {}, content: { url: 'https://example.com/clip' } };
+    const form = { id: 'fm1', type: 'FORM', styles: {}, content: { title: '<h3>T</h3>', fields: [{ label: 'A', type: 'text' }, { label: 'B', type: 'text' }] } };
+    useStore.setState({ blocks: [flex, html, video, form], selectedBlockId: 'fr1', userRole: 'editor', pastBlocks: [], futureBlocks: [] });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    check('Flex Row has a Content tab with its layout (direction, space, alignment, wrap)', !!tabBtn('Content') && !!btnHas('Row Layout') && ['Direction', 'Space between blocks', 'Horizontal alignment', 'Vertical alignment'].every((l) => $$('label').some((x) => x.textContent.trim() === l)));
+    const dir = $$('label').find((x) => x.textContent.trim() === 'Direction').parentElement.querySelector('select');
+    pick(dir, 'column'); await sleep(30);
+    check('…and it changes the row\'s styles', blk2('fr1').styles.flexDirection === 'column');
+    useStore.setState({ selectedBlockId: 'hb1' }); await sleep(40);
+    const ta = $('.cc-ed-right textarea, textarea');
+    check('Custom HTML is read-only for editors, with an explanation', !!ta && ta.readOnly && /Only admins can change custom code/.test(doc.body.textContent));
+    useStore.setState({ selectedBlockId: 'vd1' }); await sleep(40);
+    check('a link that is not YouTube/Vimeo shows a warning', /doesn't look like a YouTube or Vimeo/.test(doc.body.textContent));
+    useStore.setState({ selectedBlockId: 'fm1' }); await sleep(40);
+    check('editors don\'t see the form\'s receiving email; everyone gets "Message after sending"', !$$('label').some((x) => x.textContent.trim() === 'Receiving Email') && $$('label').some((x) => x.textContent.trim() === 'Message after sending'));
+    await openSec('Form Fields');
+    const typeSel = $$('select').find((x) => [...x.options].some((o) => o.value === 'tel'));
+    check('form fields offer phone, website and date types', !!typeSel && ['tel', 'url', 'date'].every((v) => [...typeSel.options].some((o) => o.value === v)));
+    click($$('button[title="Move down"]')[0]); await sleep(30);
+    check('form fields can be reordered', blk2('fm1').content.fields.map((f) => f.label).join('') === 'BA');
+    useStore.setState({ userRole: 'admin' });
+
+    const ChangePasswordDialog = (await vite.ssrLoadModule('/src/components/ChangePasswordDialog.jsx')).default;
+    let closed = false;
+    mount(React.createElement(ChangePasswordDialog, { onClose: () => { closed = true; } })); await sleep(40);
+    const pw = $$('.ui-dialog input[type="password"]');
+    check('change password: current + new twice, button disabled until valid', pw.length === 3 && btn('Change password').disabled);
+    typeIn(pw[0], 'oldpass1'); typeIn(pw[1], 'short'); await sleep(20);
+    check('…too short is explained', /At least 8 characters/.test($('.ui-dialog').textContent));
+    typeIn(pw[1], 'newpass123'); typeIn(pw[2], 'newpass123'); await sleep(20);
+    check('…valid → can submit', !btn('Change password').disabled && !closed);
+  }
+
   console.log('\nSTORE & SAVING');
   {
     const { newBlockId } = await vite.ssrLoadModule('/src/store/useStore.js');

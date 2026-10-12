@@ -142,7 +142,7 @@ export default function PropertyPanel() {
 
   // Layout blocks have no Content tab; the tab in use falls back to Style for them
   const ContentPanel = CONTENT_PANELS[selectedBlock.type];
-  const tabs = TABS.filter(([id]) => id !== 'content' || !['SECTION', 'CONTAINER', 'FLEX_ROW'].includes(selectedBlock.type));
+  const tabs = TABS.filter(([id]) => id !== 'content' || !!CONTENT_PANELS[selectedBlock.type]); // blocks without a content panel (Section, Container) open on Style
   const tab = tabs.some(([id]) => id === activeTab) ? activeTab : tabs[0][0];
   const c = selectedBlock.content || {};
   const ctx = {

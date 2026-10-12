@@ -29,7 +29,7 @@ export default function PricingPanel({ ctx }) {
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#cbd5e1', cursor: 'pointer', marginBottom: '6px' }}>
               <input type="checkbox" checked={!!pl.highlighted} onChange={e => lstPatch('plans', idx, { highlighted: e.target.checked })} /> Highlight this plan
             </label>
-            {pl.highlighted && <input type="text" style={inputStyle} value={pl.badge || ''} onChange={e => lstPatch('plans', idx, { badge: e.target.value })} placeholder="Badge (e.g. Most popular)" />}
+            <input type="text" style={inputStyle} value={pl.badge || ''} onChange={e => lstPatch('plans', idx, { badge: e.target.value })} placeholder="Badge (e.g. Most popular) — empty = none" aria-label="Badge" />
           </ItemCard>
         ))}
         <button onClick={() => lstAdd('plans', { name: 'New plan', price: '$0', period: '/month', description: '', features: ['Feature one'], buttonText: 'Choose', buttonUrl: '#', highlighted: false, badge: '' })} style={lstAddBtn}>+ Add plan</button>

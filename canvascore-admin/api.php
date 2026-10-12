@@ -134,7 +134,7 @@ if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
 if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions']) && !$is_admin) {
-    echo json_encode(['success' => false, 'message' => 'Only Admins can manage accounts.']); exit;
+    echo json_encode(['success' => false, 'message' => 'Only admins can do this.']); exit;
 }
 
 if ($action === 'get_users') {
@@ -145,6 +145,7 @@ if ($action === 'add_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($data['username'] ?? '');
     $password = $data['password'] ?? '';
     if ($username === '' || $password === '') { echo json_encode(['success' => false, 'message' => 'Username and password required.']); exit; }
+    if (strlen($password) < 8) { echo json_encode(['success' => false, 'message' => 'The password must be at least 8 characters.']); exit; }
     $chk = $pdo->prepare("SELECT COUNT(*) FROM admin WHERE username = ?"); $chk->execute([$username]);
     if ($chk->fetchColumn() > 0) { echo json_encode(['success' => false, 'message' => 'Username already exists.']); exit; }
     $role = ($data['role'] ?? '') === 'admin' ? 'admin' : 'editor';
@@ -172,7 +173,14 @@ if ($action === 'force_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // Change the password of one's OWN account (any role) + clear the must_change_pw flag
 if ($action === 'change_own_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $pwd = $data['password'] ?? '';
+    $pwd = (string)($data['password'] ?? '');
+    $me = $pdo->prepare("SELECT password_hash, must_change_pw FROM admin WHERE username = ?"); $me->execute([$_SESSION['username'] ?? '']);
+    $meRow = $me->fetch(PDO::FETCH_ASSOC);
+    if (!$meRow) { echo json_encode(['success' => false, 'message' => 'Account not found.']); exit; }
+    // A voluntary change needs the current password (the forced first change comes right after signing in)
+    if ((int)$meRow['must_change_pw'] !== 1 && !password_verify((string)($data['current'] ?? ''), $meRow['password_hash'])) {
+        echo json_encode(['success' => false, 'message' => 'The current password is not correct.']); exit;
+    }
     if (strlen($pwd) < 8) { echo json_encode(['success' => false, 'message' => 'Password must be at least 8 characters.']); exit; }
     if ($pwd === 'admin') { echo json_encode(['success' => false, 'message' => 'Please choose a different password.']); exit; }
     $pdo->prepare("UPDATE admin SET password_hash = ?, must_change_pw = 0 WHERE username = ?")
@@ -238,7 +246,11 @@ if ($action === 'delete_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---------------------------------------------------------------------------
 if ($action === 'get_settings') {
     $file = $data_dir . '/settings.json';
-    echo file_exists($file) ? file_get_contents($file) : json_encode(new stdClass()); exit;
+    $s = file_exists($file) ? json_decode((string)file_get_contents($file), true) : [];
+    if (!is_array($s)) $s = [];
+    // Email addresses and security options are for admins only
+    if (!$is_admin) foreach (['adminEmail', 'emailFrom', 'emailSubject', 'sessionTimeoutMinutes', 'trustedProxies'] as $k) unset($s[$k]);
+    echo json_encode($s ? $s : new stdClass()); exit;
 }
 if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $raw = file_get_contents('php://input');
@@ -249,9 +261,12 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$is_admin) {
         $current = @json_decode(@file_get_contents($data_dir . '/settings.json'), true);
         if (!is_array($current)) $current = [];
-        foreach (['adminEmail', 'emailFrom', 'emailSubject', 'sessionTimeoutMinutes'] as $k) {
+        foreach (['adminEmail', 'emailFrom', 'emailSubject', 'sessionTimeoutMinutes', 'trustedProxies'] as $k) {
             if (array_key_exists($k, $current)) $decoded[$k] = $current[$k]; else unset($decoded[$k]);
         }
+    }
+    if (isset($decoded['trustedProxies'])) {   // comma separated IP addresses only
+        $decoded['trustedProxies'] = implode(', ', array_filter(array_map('trim', explode(',', (string)$decoded['trustedProxies'])), function ($ip) { return filter_var($ip, FILTER_VALIDATE_IP); }));
     }
     if (isset($decoded['brandColor']) && !preg_match('/^#[0-9a-fA-F]{3,8}$/', (string)$decoded['brandColor'])) {
         echo json_encode(['success' => false, 'message' => 'The brand color must be a hex color such as #3b82f6.']); exit;
@@ -292,22 +307,25 @@ function apply_home($pdo, $primaryId, $val) {
 }
 
 // Update internal links when the slug of a published page changes.
+// A page's address changed: links pointing to it are updated everywhere they can be stored
+// (pages, collection items, header/footer, masters, menu), see cc_relink_node() in config.php.
 function relink_slug_change($pdo, $data_dir, $old_slug, $new_slug) {
     if (!$old_slug || $old_slug === $new_slug) return;
-    $old_url = $old_slug . '/index.html';
-    $new_url = $new_slug . '/index.html';
-    $pairs = [
-        ['"url":"' . $old_url . '"', '"url":"' . $new_url . '"'],
-        ['"btnUrl":"' . $old_url . '"', '"btnUrl":"' . $new_url . '"'],
-    ];
-    $up = $pdo->prepare("UPDATE pages SET content_json = REPLACE(content_json, ?, ?)");
-    foreach ($pairs as $p) { $up->execute([$p[0], $p[1]]); }
-
+    $args = [$old_slug . '/index.html', $new_slug . '/index.html', '{{BASE_URL}}' . $old_slug . '/', '{{BASE_URL}}' . $new_slug . '/'];
+    foreach ([['pages', 'id'], ['collection_items', 'id'], ['site_parts', 'name'], ['master_components', 'id']] as [$table, $key]) {
+        try {
+            $rows = $pdo->query("SELECT $key AS k, content_json FROM $table")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) { continue; }
+        $up = $pdo->prepare("UPDATE $table SET content_json = ? WHERE $key = ?");
+        foreach ($rows as $r) {
+            $data = json_decode((string)$r['content_json'], true);
+            if (is_array($data) && cc_relink_node($data, ...$args)) $up->execute([json_encode($data), $r['k']]);
+        }
+    }
     $menu_file = $data_dir . '/menu.json';
     if (file_exists($menu_file)) {
-        $menu = file_get_contents($menu_file);
-        $menu = str_replace('"url":"' . $old_url . '"', '"url":"' . $new_url . '"', $menu);
-        file_put_contents($menu_file, $menu);
+        $menu = json_decode((string)file_get_contents($menu_file), true);
+        if (is_array($menu) && cc_relink_node($menu, ...$args)) file_put_contents($menu_file, json_encode($menu, JSON_UNESCAPED_UNICODE));
     }
 }
 
@@ -338,7 +356,8 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $boxed_width = $data['boxed_width'] ?? '1200px';
     // Non-admin users cannot save "code" surfaces (HTML block / custom CSS).
     if (!$is_admin && isset($data['blocks']) && is_array($data['blocks'])) {
-        cc_strip_code_surfaces($data['blocks']);
+        $prevRow = $pdo->prepare("SELECT content_json FROM pages WHERE id = ?"); $prevRow->execute([$data['id'] ?? '']);
+        cc_keep_code_surfaces($data['blocks'], $prevRow->fetchColumn() ?: '[]');
     }
     $content     = isset($data['blocks']) ? json_encode($data['blocks']) : '[]';
     $publish     = !empty($data['publish']);
@@ -582,13 +601,13 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL slug \"$slug\" is already used by \"$t\" in this collection. Change it and publish again."]); exit;
         }
     }
-    $chk = $pdo->prepare("SELECT id, archived FROM collection_items WHERE id = ?"); $chk->execute([$id]);
+    $chk = $pdo->prepare("SELECT id, archived, content_json FROM collection_items WHERE id = ?"); $chk->execute([$id]);
     $existing_item = $chk->fetch(PDO::FETCH_ASSOC);
     if ($existing_item) {
         // A client that does not send the flag must never reset it: the saved value is kept
         if (!$archived_sent) $archived = (int)($existing_item['archived'] ?? 0);
         if ($blocks !== null) {
-            if (!$is_admin) cc_strip_code_surfaces($blocks);
+            if (!$is_admin) cc_keep_code_surfaces($blocks, $existing_item['content_json'] ?? '[]');
             $pdo->prepare("UPDATE collection_items SET collection_id=?, title=?, slug=?, excerpt=?, cover_image=?, date=?, status=?, archived=?, seo_title=?, seo_description=?, content_json=?, content_schema=?, updated_at=? WHERE id=?")
                 ->execute([$cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($blocks), $cschema, $now, $id]);
         } else {
@@ -597,7 +616,7 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } else {
         $b = $blocks ?? [];
-        if (!$is_admin) cc_strip_code_surfaces($b);
+        if (!$is_admin) cc_keep_code_surfaces($b, []);
         $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $now]);
     }
@@ -623,7 +642,10 @@ if ($action === 'save_part' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $name = ($data['name'] ?? '') === 'footer' ? 'footer' : 'header';
     $blocks = isset($data['blocks']) && is_array($data['blocks']) ? $data['blocks'] : [];
-    if (!$is_admin) cc_strip_code_surfaces($blocks); // editor: no "code" blocks
+    if (!$is_admin) {   // editor: keeps the admin's code as saved, can't add new code
+        $prevPart = $pdo->prepare("SELECT content_json FROM site_parts WHERE name = ?"); $prevPart->execute([$name]);
+        cc_keep_code_surfaces($blocks, $prevPart->fetchColumn() ?: '[]');
+    }
     $pdo->prepare("INSERT INTO site_parts (name, content_json, content_schema) VALUES (?, ?, ?)
                    ON CONFLICT(name) DO UPDATE SET content_json = excluded.content_json, content_schema = excluded.content_schema")
         ->execute([$name, json_encode($blocks), cc_version()['content_schema']]);
@@ -705,8 +727,15 @@ if ($action === 'get_templates') {
 }
 if ($action === 'save_template' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
+    $tplJson = (string)($data['content_json'] ?? '{}');
+    if (!$is_admin) {   // an editor's template carries no code
+        $tmp = json_decode($tplJson, true);
+        if (is_array($tmp)) { $wrap = [$tmp]; cc_keep_code_surfaces($wrap, []); $tplJson = json_encode($wrap[0]); }
+    }
+    // Names are stored as typed (the interface escapes them when it shows them)
+    $tplName = trim(mb_substr((string)($data['name'] ?? 'Template'), 0, 120)) ?: 'Template';
     $pdo->prepare("INSERT INTO templates (id, name, content_json) VALUES (?, ?, ?)")
-        ->execute([uniqid('tpl_'), htmlspecialchars($data['name'] ?? 'Template'), $data['content_json'] ?? '{}']);
+        ->execute([uniqid('tpl_'), $tplName, $tplJson]);
     echo json_encode(['success' => true, 'message' => 'Saved!']); exit;
 }
 if ($action === 'delete_template' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -723,11 +752,15 @@ if ($action === 'get_masters') {
 if ($action === 'save_master' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $id = $data['id'];
-    $name = htmlspecialchars($data['name'] ?? 'Master');
+    $name = trim(mb_substr((string)($data['name'] ?? 'Master'), 0, 120)) ?: 'Master';
     $content_json = $data['content_json'] ?? '{}';
     if (!$is_admin) {
         $tmp = json_decode($content_json, true);
-        if (is_array($tmp)) { $wrap = [$tmp]; cc_strip_code_surfaces($wrap); $content_json = json_encode($wrap[0]); }
+        if (is_array($tmp)) {
+            $prevM = $pdo->prepare("SELECT content_json FROM master_components WHERE id = ?"); $prevM->execute([$id]);
+            $prevBlock = json_decode($prevM->fetchColumn() ?: 'null', true);
+            $wrap = [$tmp]; cc_keep_code_surfaces($wrap, is_array($prevBlock) ? [$prevBlock] : []); $content_json = json_encode($wrap[0]);
+        }
     }
 
     $stmt = $pdo->prepare("SELECT id FROM master_components WHERE id = ?");
@@ -761,12 +794,13 @@ if ($action === 'delete_master' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $masterId = json_decode(file_get_contents('php://input'), true)['id'];
     $pdo->prepare("DELETE FROM master_components WHERE id = ?")->execute([$masterId]);
 
-    $pages = $pdo->query("SELECT id, content_json FROM pages")->fetchAll(PDO::FETCH_ASSOC);
-    $updateStmt = $pdo->prepare("UPDATE pages SET content_json = ? WHERE id = ?");
-    foreach ($pages as $page) {
-        $blocks = json_decode($page['content_json'], true);
-        if (is_array($blocks) && purge_master_from_blocks($blocks, $masterId)) {
-            $updateStmt->execute([json_encode($blocks), $page['id']]);
+    // Removed wherever it was placed: pages, collection items, header/footer
+    foreach ([['pages', 'id'], ['collection_items', 'id'], ['site_parts', 'name']] as [$table, $key]) {
+        try { $rows = $pdo->query("SELECT $key AS k, content_json FROM $table")->fetchAll(PDO::FETCH_ASSOC); } catch (Exception $e) { continue; }
+        $updateStmt = $pdo->prepare("UPDATE $table SET content_json = ? WHERE $key = ?");
+        foreach ($rows as $row) {
+            $blocks = json_decode((string)$row['content_json'], true);
+            if (is_array($blocks) && purge_master_from_blocks($blocks, $masterId)) $updateStmt->execute([json_encode($blocks), $row['k']]);
         }
     }
     echo json_encode(['success' => true]); exit;
