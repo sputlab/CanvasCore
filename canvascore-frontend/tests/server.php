@@ -82,6 +82,8 @@ check('a large photo gets WebP copies at 480, 960 and 1600 px', $meta['variants'
 $v = getimagesize("$up/_cc/photo-480.webp");
 check('…with the right proportions', $v && $v[0] === 480 && $v[1] === 240);
 $m2 = cc_media_process($up, 'icon.png');
+file_put_contents($up . '/broken.jpg', 'not really a jpeg');
+check('a photo GD can\'t open stays "not optimized" (retried later)', cc_media_process($up, 'broken.jpg')['optimized'] === false);
 check('a small image is never enlarged (no copies) but is marked as processed', $m2['variants'] === [] && $m2['optimized'] === true && $m2['w'] === 300);
 cc_media_meta_update(function (&$all) { $all['photo.jpg']['alt'] = 'Blue sky'; });
 $meta2 = cc_media_process($up, 'photo.jpg');
@@ -91,6 +93,9 @@ $out = cc_optimize_images($page, '/uploads/');
 check('published pages get a srcset of the copies (and the original at its width)', strpos($out, 'srcset="/uploads/_cc/photo-480.webp 480w, /uploads/_cc/photo-960.webp 960w, /uploads/_cc/photo-1600.webp 1600w, /uploads/photo.jpg 2000w"') !== false, $out);
 check('the first image loads with priority (even if a block marked it lazy), the next ones lazily', preg_match('#<img[^>]*fetchpriority="high"[^>]*src="/uploads/photo.jpg"#', $out) && !preg_match('#src="/uploads/photo.jpg"[^>]*loading="lazy"#', $out) && preg_match('#<img[^>]*loading="lazy"[^>]*src="/uploads/icon.png"#', $out));
 check('an image that already says how to load keeps it; others decode async', strpos($out, 'loading="eager"') !== false && substr_count($out, 'decoding="async"') === 3);
+@unlink("$up/_cc/photo-1600.webp");
+$mx = cc_media_meta_existing($up);
+check('a missing copy is left out of srcset (restored site without uploads/_cc)', $mx['photo.jpg']['variants'] === [480, 960]);
 cc_media_forget($up, 'photo.jpg');
 check('deleting an image removes its copies and its description', !is_file("$up/_cc/photo-480.webp") && !isset(cc_media_meta_all()['photo.jpg']));
 array_map('unlink', glob("$up/_cc/*") ?: []); @rmdir("$up/_cc"); array_map('unlink', glob("$up/*") ?: []); @rmdir($up);

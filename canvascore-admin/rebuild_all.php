@@ -84,7 +84,7 @@ try {
         if ($real && $site_root && strpos($real, $site_root . DIRECTORY_SEPARATOR) === 0) $written[] = str_replace(DIRECTORY_SEPARATOR, '/', substr($real, strlen($site_root) + 1));
     };
 
-    $media_meta = cc_media_meta_all();   // optimized image copies (srcset)
+    $media_meta = cc_media_meta_existing(__DIR__ . '/../uploads');   // optimized image copies that exist (srcset)
 
     // RSS feeds: one per collection with published items, announced in every page's <head>
     // (feeds need absolute addresses, so they're made only when Global Options › Site address is set)

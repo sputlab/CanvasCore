@@ -70,9 +70,12 @@ function cc_media_process($uploads_dir, $name) {
     $info = @getimagesize($path);
     if ($info) { $meta['w'] = (int)$info[0]; $meta['h'] = (int)$info[1]; }
     $canWebp = function_exists('imagewebp');
-    if ($canWebp && in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+    $raster = in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true);
+    $processed = !$raster;   // SVG, GIF, ICO…: nothing to make
+    if ($canWebp && $raster) {
         $im = cc_img_load($path, $ext);
         if ($im) {
+            $processed = true;
             $w = imagesx($im); $h = imagesy($im);
             $meta['w'] = $w; $meta['h'] = $h;   // upright size
             $dir = $uploads_dir . '/' . CC_IMG_VARIANT_DIR;
@@ -89,7 +92,9 @@ function cc_media_process($uploads_dir, $name) {
             unset($im);
         }
     }
-    $meta['optimized'] = true;   // processed (even when there was nothing to make, e.g. a small image or SVG)
+    // Done = processed, or nothing to make (SVG, GIF…). A photo GD couldn't open (no WebP support, too big for
+    // the memory limit) stays "not optimized", so "Optimize older images" tries it again later.
+    $meta['optimized'] = $processed;
     cc_media_meta_update(function (&$all) use ($name, $meta) {
         $old = is_array($all[$name] ?? null) ? $all[$name] : [];
         $all[$name] = array_merge($old, $meta);
@@ -101,6 +106,20 @@ function cc_media_process($uploads_dir, $name) {
 function cc_media_forget($uploads_dir, $name) {
     foreach (CC_IMG_WIDTHS as $w) @unlink($uploads_dir . '/' . CC_IMG_VARIANT_DIR . '/' . cc_variant_name($name, $w));
     cc_media_meta_update(function (&$all) use ($name) { unset($all[$name]); });
+}
+
+// The metadata, keeping only copies that really exist in uploads/_cc/ (e.g. a site restored without
+// that folder falls back to the originals instead of pointing at missing files)
+function cc_media_meta_existing($uploads_dir) {
+    $meta = cc_media_meta_all();
+    foreach ($meta as $n => $info) {
+        if (!empty($info['variants'])) {
+            $meta[$n]['variants'] = array_values(array_filter($info['variants'], function ($w) use ($uploads_dir, $n) {
+                return is_file($uploads_dir . '/' . CC_IMG_VARIANT_DIR . '/' . cc_variant_name($n, $w));
+            }));
+        }
+    }
+    return $meta;
 }
 
 // Published page HTML: srcset for uploaded images that have copies, lazy loading, async decoding.

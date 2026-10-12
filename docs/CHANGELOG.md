@@ -153,6 +153,10 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- Images the server can't process (GD without WebP, memory) stay "not optimized" and are retried; Media says how many
+  were skipped. Publishing leaves missing optimized copies out of the `srcset` (e.g. a site restored without
+  `uploads/_cc/`). Collection items no longer show the page-only share image / noindex options (they use the cover).
+- Manuals updated for all the new features (User Guide, Block Reference, Administrator Guide, Developer Guide).
 - **An editor's save wiped the admin's code**: Custom HTML, custom CSS and a form's receiving email set by an admin
   are now kept as they were (editors still can't add or change code); Custom HTML is shown read-only to editors.
 - **Renaming a page didn't update links**: the re-linking never matched (escaped slashes in the stored JSON). Links in

@@ -260,13 +260,14 @@ if ($action === 'optimize_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach (array_diff(scandir($uploads_dir) ?: [], ['.', '..', '.htaccess']) as $f) {
         if (is_file($uploads_dir . '/' . $f) && empty($meta[$f]['optimized'])) $todo[] = $f;
     }
-    $done = 0;
+    $done = 0; $tried = 0; $skipped = [];
     foreach ($todo as $f) {
         if (microtime(true) - $start > 20) break;   // keep each request short
-        cc_media_process($uploads_dir, $f);
-        $done++;
+        $tried++;
+        $m = cc_media_process($uploads_dir, $f);
+        if (!empty($m['optimized'])) $done++; else $skipped[] = $f;   // e.g. GD without WebP, or too big for the memory limit
     }
-    echo json_encode(['success' => true, 'done' => $done, 'remaining' => count($todo) - $done]); exit;
+    echo json_encode(['success' => true, 'done' => $done, 'remaining' => count($todo) - $tried, 'skipped' => $skipped]); exit;
 }
 if ($action === 'delete_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);

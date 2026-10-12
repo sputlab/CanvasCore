@@ -11,6 +11,20 @@ that you are a developer.
 Throughout this guide, `example.com` is your domain and `/var/www/example.com/public` is the
 web root (the folder the domain serves). Replace both with your own values.
 
+**Contents**
+
+1. [Requirements](#1-requirements)
+2. [Folder layout on the server](#2-folder-layout-on-the-server)
+3. [Installation](#3-installation)
+4. [Web server configuration](#4-web-server-configuration) (Apache, Nginx, HTTPS, reverse proxy / CDN)
+5. [Updating to a new version](#5-updating-to-a-new-version)
+6. [Accounts and roles](#6-accounts-and-roles)
+7. [Publishing](#7-publishing) (what a publish writes, redirects, RSS, site search, cookie banner, images)
+8. [Backup and restore](#8-backup-and-restore)
+9. [Forms and email](#9-forms-and-email)
+10. [Security](#10-security)
+11. [Troubleshooting](#11-troubleshooting)
+
 ---
 
 ## 1. Requirements
@@ -18,19 +32,20 @@ web root (the folder the domain serves). Replace both with your own values.
 | Item | Requirement |
 |---|---|
 | PHP | **8.0 or newer** (the installer refuses older versions) |
-| PHP extensions (required) | `pdo_sqlite`, `json`, `session`, `mbstring` |
+| PHP extensions (required) | `pdo_sqlite`, `json`, `session` |
 | PHP extensions (recommended) | `dom` (without it rich text is cleaned by a simpler, more conservative fallback sanitizer, and SVG uploads are checked with a simpler test) |
+| PHP extensions (optional) | `gd` **with WebP support** (`imagewebp()`), for image optimization: without it uploaded images are used as they are, with no smaller copies (section 7.7). `exif`, to turn phone photos the right way up in those copies. `mbstring`: CanvasCore has built-in fallbacks for the functions it uses, so forms, the site search and the media library work without it |
 | PHP functions | `mail()` enabled, if you want form notifications by email (submissions are stored either way) |
-| PHP settings | `file_uploads = On`; `upload_max_filesize` / `post_max_size` large enough for your images (and for backup files you import) |
-| Web server | Apache 2.4 (with `.htaccess` enabled) or Nginx + PHP-FPM |
+| PHP settings | `file_uploads = On`; `upload_max_filesize` / `post_max_size` large enough for your images (and for backup files you import); a `memory_limit` large enough for your photos if you want them optimized (about 5 bytes per pixel: a 12-megapixel photo needs roughly 60 MB free; larger images are skipped) |
+| Web server | Apache 2.4 (with `.htaccess` enabled; `mod_alias` for real 301 redirects) or Nginx + PHP-FPM |
 | HTTPS | Strongly recommended. Without it, passwords and session cookies travel unencrypted |
 | To build the editor | Node.js 20 or newer and npm (on your computer, not on the server) |
 
-> `mbstring` is not checked by the installer, but the form handler uses it: make sure it is
-> enabled (it is on almost every PHP host).
-
-The installer (`install.php`) checks all of the above and shows each item as OK, warning or
-failure before it lets you install.
+The installer (`install.php`) checks the PHP version, the required extensions, `dom`, the
+writable folders, the editor build, `mail()` and HTTPS, and shows each item as OK, warning or
+failure before it lets you install. It does **not** check GD/WebP or `mbstring`: to see whether
+GD can write WebP, run `php -r 'var_dump(function_exists("imagewebp"));'` with the same PHP the
+site uses (or look for "WebP Support" in the `gd` section of `phpinfo()`).
 
 ---
 
@@ -42,23 +57,31 @@ root, and published pages are written to the folder above it (the web root itsel
 ```
 /var/www/example.com/
 ├── canvascore-data/              Data: DB, settings, sessions (NOT reachable from the web)
-│   ├── canvascore.sqlite         Pages, collections, accounts, templates, masters, submissions
+│   ├── canvascore.sqlite         Pages, collections, accounts, templates, masters, submissions,
+│   │                             version history (page_revisions), redirects
 │   ├── settings.json             Global Options
 │   ├── menu.json                 Menu
+│   ├── media.json                Image metadata: description (alt text), size, optimized copies
 │   ├── forms.json                Form registry (form id → recipient), written on publish
-│   ├── published_files.json      List of pages written by the last successful publish
+│   ├── published_files.json      Files written by the last successful publish (pages, items,
+│   │                             redirect pages, feed.xml, ...)
 │   ├── login_attempts.json       Login throttling state
 │   ├── rate_forms.json           Form rate-limit state
 │   ├── sessions/                 PHP session files for the editor
 │   └── .htaccess                 "Deny all" (safety net)
 └── public/                       Web root
-    ├── index.html                Home page          ┐
-    ├── about/index.html          One folder per page │
-    ├── blog/my-post/index.html   Collection items    │ written by "Publish Site"
-    ├── sitemap.xml, robots.txt   SEO files           │
-    ├── 404.html                  Not-found page      │
-    ├── .htaccess                 ErrorDocument 404   ┘ (created once, Apache only)
+    ├── index.html                Home page               ┐
+    ├── about/index.html          One folder per page      │
+    ├── blog/my-post/index.html   Collection items         │
+    ├── blog/feed.xml             RSS feed per collection  │ written by "Publish Site"
+    ├── old-page/index.html       Redirect page (old URL)  │
+    ├── sitemap.xml, robots.txt   SEO files                │
+    ├── search-index.json         Site search data         │
+    ├── 404.html                  Not-found page           │
+    ├── .htaccess                 ErrorDocument 404 +      ┘ (Apache only; see 4.1)
+    │                             "CanvasCore redirects" block
     ├── uploads/                  Media library (images), with its own .htaccess
+    │   └── _cc/                  Optimized WebP copies (480/960/1600 px), made on upload
     └── canvascore-admin/         The editor (PHP backend + built React app)
         ├── index.html, assets/   Editor build (from canvascore-frontend/dist/)
         ├── api.php, rebuild_all.php, submit_form.php, config.php, ...
@@ -79,7 +102,8 @@ Rules to keep in mind:
    - The choice is made automatically on every request. If the outside folder becomes writable
      later, the database and the `settings.json`, `menu.json`, `forms.json` files are copied there
      and the old database file is deleted; the reverse happens if the outside folder stops being
-     writable.
+     writable. Other files are **not** moved: copy `media.json` (image descriptions) and
+     `published_files.json` (stale page cleanup) to the new folder yourself.
    - To get the recommended layout, create the folder and give the PHP user write access:
      ```bash
      mkdir /var/www/example.com/canvascore-data
@@ -90,8 +114,9 @@ Rules to keep in mind:
      account user elsewhere.)
    - If your domain's web root is the account root itself, check where `canvascore-data` ends up
      and make sure it cannot be opened with a URL.
-4. **Write permissions.** PHP must be able to write to the web root (published pages), to
-   `uploads/` and to the data directory.
+4. **Write permissions.** PHP must be able to write to the web root (published pages, feeds,
+   `search-index.json`, the root `.htaccess` on Apache), to `uploads/` (including the `_cc/`
+   sub-folder it creates) and to the data directory.
 
 ---
 
@@ -148,7 +173,10 @@ is created with a default account **`admin` / `admin`**. You must choose a new p
 
 ### 3.5 After installation
 
-1. In **Global Options**, check the site address, the form emails and the session timeout.
+1. In **Global Options**, check the site address (needed for RSS feeds and canonical links),
+   the form emails and the session timeout. If the site is behind a reverse proxy or CDN, fill
+   in **Trusted proxy addresses** (section 4.4). Turn on the **Cookie banner** if the site needs
+   one (section 7.6).
 2. Build your homepage, mark it as Home and click **Publish Site**.
 3. Open `https://example.com/` and check that the page and `https://example.com/sitemap.xml` load.
 
@@ -165,10 +193,13 @@ CanvasCore writes its own `.htaccess` files; they work only if Apache reads them
 |---|---|---|
 | `canvascore-data/.htaccess` and `canvascore-admin/data/.htaccess` | on every request, if missing or changed | Deny all access |
 | `uploads/.htaccess` | on every image upload, if missing or changed | Deny `.php`, `.phtml`, `.phar`, `.php3`–`.php7`, `.phps`, `.pht`, `.cgi`, `.pl`, `.py`, `.sh`; `php_flag engine off` under mod_php; for `.svg`, the header `Content-Security-Policy: script-src 'none'; sandbox` (needs `mod_headers`) |
-| `.htaccess` in the web root | on publish, **only if it does not exist yet** | `ErrorDocument 404 /404.html` (with the site's base path) |
+| `.htaccess` in the web root | on every publish | Created with `ErrorDocument 404 /404.html` (with the site's base path) if it does not exist. On every publish CanvasCore rewrites **only** the block between `# BEGIN CanvasCore redirects` and `# END CanvasCore redirects` (one `Redirect 301 /old/ /new/` line per redirect, inside `<IfModule mod_alias.c>`); the block is removed when there are no redirects |
 
-If you already have a root `.htaccess` (redirects, HTTPS rules), CanvasCore does not touch it:
-add the line `ErrorDocument 404 /404.html` yourself.
+If you already have a root `.htaccess` (HTTPS rules, your own redirects), CanvasCore keeps
+everything outside its marked block as it is; it does not add the `ErrorDocument` line to an
+existing file, so add `ErrorDocument 404 /404.html` yourself. Do not edit inside the marked
+block: it is replaced on the next publish. Manage redirects in Global Options › Redirects
+instead (section 7.4).
 
 ### 4.2 Nginx
 
@@ -221,13 +252,46 @@ server {
 The `^~` prefix makes the uploads and data rules win over the `\.php$` location, so a script
 uploaded under another name can never reach PHP-FPM.
 
+**Redirects on Nginx.** Nginx ignores the `.htaccess` block of 301s. The old addresses still
+work, because publishing also writes a small redirect page at each old address (it sends the
+browser on at once and tells search engines the new address with a canonical link), but they
+answer `200` instead of a permanent `301`. To give search engines real 301s, copy the list from
+Global Options › Redirects into the server block, one line per redirect, and reload Nginx:
+
+```nginx
+    location = /old-page/          { return 301 /new-page/; }
+    location = /blog/old-post/     { return 301 /blog/new-post/; }
+```
+
+Repeat this when the list changes (renaming a published page or item adds a redirect). An exact
+`location =` match wins over `location /`, so the redirect page on disk is never reached.
+
 ### 4.3 HTTPS
 
 1. Install a certificate (Let's Encrypt or your host's panel) and redirect HTTP to HTTPS.
 2. Behind a proxy or load balancer that terminates TLS, make sure it sends
    `X-Forwarded-Proto: https`: CanvasCore uses it to mark the session cookie `Secure`.
 3. Set the site address in Global Options to the `https://` URL and publish again, so the
-   sitemap and sharing tags use it.
+   sitemap, canonical links, RSS feeds and sharing tags use it.
+
+### 4.4 Behind a reverse proxy or CDN
+
+Behind a reverse proxy, load balancer or CDN (Cloudflare, a Docker/Kubernetes ingress, an Nginx
+in front of Apache…), every request reaches PHP from the proxy's address. Login throttling and
+the form rate limit would then count all visitors as one: one person's wrong passwords could
+lock an account for everybody, and 8 messages from anyone would block the site's forms.
+
+Fix it in **Global Options › Security › Trusted proxy addresses** (admins): enter the IP
+addresses the proxy connects from, separated by commas (for example `10.0.0.2, 10.0.0.3`).
+Only valid IP addresses are kept; ranges (CIDR) are not accepted, so list each address.
+
+- When a request comes **from a listed address**, CanvasCore reads `X-Forwarded-For` and uses
+  the nearest address in it that is not a listed proxy as the visitor's address.
+- From any other address, `X-Forwarded-For` is ignored, so a visitor cannot fake their address
+  by sending the header.
+- Leave the field empty when nothing sits in front of the server.
+
+Make sure the proxy sets (or appends to) `X-Forwarded-For`.
 
 ---
 
@@ -248,7 +312,16 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
    should not stay on the server).
 6. Open the editor. **Database migrations run automatically** on the first request: each
    pending schema step is applied in order, in a transaction, and recorded in the `cc_meta`
-   table. There is nothing to run by hand.
+   table (key `db_schema`). There is nothing to run by hand. The current schema is **7**
+   (`db_schema` in `version.json`); the most recent steps are:
+
+   | Migration | Adds |
+   |---|---|
+   | 6 | `page_revisions` table: version history of pages and collection items (section 7.8) |
+   | 7 | `redirects` table (old addresses → new ones, section 7.4) and the `pages.noindex` column ("Hide this page from search engines") |
+
+   Back up the data directory before updating: a migration cannot be undone by installing the
+   older release again.
 7. Ask everyone to **reload any open editor tabs** (a hard refresh, Ctrl/Cmd+Shift+R). A tab
    opened before the update still runs the old editor.
 8. Check the version at the bottom of the sidebar: `CanvasCore v0.13.0 · build 20` (example).
@@ -257,6 +330,9 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
    `dist/` was not uploaded (or a cache/CDN is serving the old `index.html`).
 9. Click **Publish Site** so every page is regenerated with the new release (the version is
    written into each page as `<meta name="generator" content="CanvasCore x.y.z">`).
+10. Optional, after updating from a release without image optimization: in **Media**, click
+    **Optimize N older images** to make the smaller copies of the images uploaded before
+    (section 7.7), then publish again so pages get the `srcset`.
 
 The release notes (`docs/RELEASE-NOTES-x.y.z.md`) and `docs/CHANGELOG.md` list what changed.
 
@@ -275,39 +351,52 @@ header/footer and most Global Options, and can run Publish Site. Editors **canno
 - use **Backup** (export or import the site);
 - see, export or delete form **Submissions**;
 - create or delete **collections** (they can edit the items of existing ones);
-- save **code**: the content of HTML blocks and custom CSS/JS are removed server-side from
-  anything an editor saves (pages, items, header/footer, masters); the HTML block and the
-  Custom Code panel are hidden for them;
-- change the **form email settings** (default recipient, From address, subject) or the
-  **session timeout**: when an editor saves Global Options, those fields keep their current
-  values.
+- add or change **code**. Custom HTML blocks and a block's custom CSS/JS stay **exactly as an
+  admin saved them** when an editor saves the page, item, header/footer, master or template
+  (matched by block id on the server); an editor can only move or delete those blocks. Custom
+  HTML is shown read-only to editors, the custom code fields of the Advanced tab are hidden, and
+  code an editor tries to add is dropped;
+- see or change a **Form block's own receiving email**: the field is hidden for editors and
+  the server keeps the value the admin saved;
+- see or change the **form email settings** (default recipient, From address, subject), the
+  **session timeout** or the **trusted proxy addresses**: the server does not send these values
+  to an editor, and when an editor saves Global Options those fields keep their current values;
+- add, change or remove **redirects** (Global Options › Redirects is shown to admins only;
+  renaming a page or item still adds its redirect automatically).
 
-Every user, whatever the role, can change their own password.
+### 6.1 Change your own password
 
-### 6.1 Add a user
+Every user, whatever the role, can change their own password: click the **key icon** next to
+Logout in the sidebar, enter the **current password** and the new one twice (8 or more
+characters, not `admin`). The current password is required for every voluntary change; only
+the forced change right after signing in (new account, reset, default `admin`) asks for the new
+password alone.
+
+### 6.2 Add a user
 
 1. Go to **Accounts**.
-2. Enter a username, a temporary password and the role (Editor or Admin), then add the account.
+2. Enter a username, a temporary password (**at least 8 characters**: the server refuses
+   shorter ones) and the role (Editor or Admin), then add the account.
 3. Give the credentials to the person through a safe channel. At their first sign-in they must
    choose a new password (8 or more characters).
 
 The role cannot be changed later: to change it, delete the account and create it again (the
 person's pages are kept).
 
-### 6.2 Reset a password
+### 6.3 Reset a password
 
 1. In **Accounts**, choose the password action on the user's row.
 2. Enter the new password twice (at least 8 characters).
 3. The user signs in with it and is asked to choose a new one immediately.
 
-### 6.3 Delete a user
+### 6.4 Delete a user
 
 1. In **Accounts**, click delete on the row and confirm.
 2. The person can no longer sign in; the pages they wrote stay.
 
 You cannot delete your own account, so there is always at least one admin left (you).
 
-### 6.4 Lost the only admin password
+### 6.5 Lost the only admin password
 
 There is no "forgot password" email. With shell access to the server:
 
@@ -341,23 +430,39 @@ produced by publishing.
 | Home page | `index.html` in the web root (the page marked Home; without one, a page with slug `index` or `home`) |
 | Every other published page | `<slug>/index.html` |
 | Every published collection item | `<collection-slug>/<item-slug>/index.html` |
-| Sitemap | `sitemap.xml` (all published pages and items; absolute URLs if the site address is set) |
+| RSS feeds | `<collection-slug>/feed.xml` for each collection with published, non-archived items (newest 50); only when the site address is set (section 7.5) |
+| Redirect pages | `<old-address>/index.html` for each redirect (section 7.4) |
+| Site search data | `search-index.json` in the web root (section 7.5) |
+| Sitemap | `sitemap.xml` (published pages and items, except pages hidden from search engines; absolute URLs if the site address is set) |
 | Robots | `robots.txt` (`Allow: /` or `Disallow: /` per Global Options, plus the `Sitemap:` line if the site address is set) |
 | Not-found page | `404.html` |
-| Apache 404 rule | `.htaccess` in the web root, only if it does not exist |
+| Apache rules | `.htaccess` in the web root: created with the 404 rule if it does not exist; its "CanvasCore redirects" block rewritten every time (section 4.1) |
 | Form registry | `forms.json` in the data directory |
 | Manifest | `published_files.json` in the data directory |
+
+Every page and item also gets, in its HTML:
+
+- a **canonical link** (`<link rel="canonical">`) to its own address, when the site address is
+  set;
+- `<meta name="robots" content="noindex">` for pages marked **Hide this page from search
+  engines** (Page Settings). Those pages are also left out of `sitemap.xml` and of the site
+  search; the 404 page is always `noindex`;
+- the links announcing the RSS feeds;
+- the **cookie banner**, when it is turned on (section 7.6);
+- for uploaded images, a `srcset` of the optimized copies, lazy loading and async decoding
+  (section 7.7).
 
 A URL can belong to only one live page, collection or system folder (`uploads`,
 `canvascore-admin`): publishing a page on a URL already in use is refused with a message.
 
 ### 7.2 Removal of stale pages
 
-After a fully successful publish, CanvasCore compares the pages it just wrote with the
+After a fully successful publish, CanvasCore compares the files it just wrote with the
 manifest of the previous publish (`published_files.json`) and deletes the `index.html` of pages
-that are no longer published (deleted, unpublished, renamed, deleted collection items), plus
-the folders left empty. It only ever deletes files that a previous publish wrote, and never the
-root `index.html`. Files you placed in the web root yourself are never touched.
+that are no longer published (deleted, unpublished, renamed, deleted collection items, removed
+redirects) and the `feed.xml` of collections that no longer have a feed, plus the folders left
+empty. It only ever deletes files that a previous publish wrote, and never the root
+`index.html`. Files you placed in the web root yourself are never touched.
 
 If any file could not be written, nothing is removed and the manifest is not updated, so the
 next successful publish cleans up.
@@ -365,12 +470,109 @@ next successful publish cleans up.
 ### 7.3 Results and errors
 
 - Success: `Build successful: N pages published.` (plus `N old page(s) removed.` when relevant).
+  A trailing `Warning: Feeds: …`, `Collections: …` or `Redirects: …` means that part of the
+  build failed while the rest was published; the details are in the message.
 - `Publish incomplete: N file(s) could not be written (check the folder permissions on the server), e.g. about/index.html.`
-  See section 11.
+  This also covers `sitemap.xml`, `robots.txt`, `404.html`, feeds, `search-index.json` and
+  `forms.json`. See section 11.
 - `PHP Error: ...` / `Database not found.` / `master.html missing!`: see section 11.
 
 Publishing only accepts a POST with the session's security token: a link or another website
 cannot trigger it.
+
+### 7.4 Redirects
+
+When a **published** page or collection item gets a new address (slug), CanvasCore records a
+redirect from the old address to the new one, so links and search results keep working. Links
+to it inside pages, items, header/footer, masters and the menu are also updated. Admins see the
+list in **Global Options › Redirects** ("automatic" or "added by hand") and can add their own
+(old address such as `/old-page/`, new address such as `/new-page/` or a full `https://…`) or
+remove one.
+
+- Chains collapse (A → B then B → C becomes A → C) and loops are avoided. The home page cannot
+  be redirected.
+- Publishing a page or item at an old address cancels its redirect.
+- Redirects take effect at the next publish. Each one becomes:
+  - a small **redirect page** at the old address (`old-page/index.html`), which works on every
+    host: it forwards the browser at once (keeping `?query` and `#anchor`), is marked `noindex`
+    and points search engines to the new address with a canonical link;
+  - on **Apache**, a real **`301`** in the marked block of the root `.htaccess` (section 4.1),
+    which answers before the redirect page is reached;
+  - on **Nginx**, add the 301s by hand if you want them (section 4.2).
+- Removing a redirect deletes its redirect page at the next publish; the old address then
+  answers "not found".
+
+Redirects are not part of the Backup export (section 8.1).
+
+### 7.5 RSS feeds and site search
+
+- **RSS**: each collection with published, non-archived items gets
+  `https://example.com/<collection-slug>/feed.xml` (RSS 2.0, newest 50 items, with excerpt and
+  cover image), announced in the head of every page. Feeds need absolute addresses, so they are
+  written **only when Global Options › Site address is set**.
+- **Site search**: the Site Search block reads `search-index.json` in the web root, rebuilt at
+  every publish with the titles, descriptions and text of published pages and non-archived
+  items (pages hidden from search engines are left out). It reflects the site as of the last
+  publish.
+
+### 7.6 Cookie banner and consent
+
+Global Options › **Cookie banner**: turn it on and set the text, the Accept/Decline labels, an
+optional link to the privacy policy page and the position (bottom centered, bottom left, bottom
+right). It is added to every published page (and to `404.html`) at the next publish. The
+visitor's choice is stored in their browser (`localStorage`, key `cc_consent`) and the banner
+is not shown again.
+
+The banner does not block anything by itself: scripts and embeds that need consent must be
+written so that they wait for it. An admin can do this in a Custom HTML block:
+
+```html
+<!-- runs only after the visitor clicks Accept (and on later visits once accepted) -->
+<script type="text/plain" data-cc-consent>
+  /* tracking or marketing code */
+</script>
+<script type="text/plain" data-cc-consent src="https://analytics.example/tag.js"></script>
+
+<!-- the embed loads only after Accept -->
+<iframe data-cc-consent-src="https://www.youtube-nocookie.com/embed/VIDEO_ID"></iframe>
+
+<!-- any element with this attribute shows the banner again, e.g. in the footer -->
+<a href="#" data-cc-consent-open>Cookie settings</a>
+```
+
+Pages also get `window.ccConsent` (`"granted"`, `"denied"` or `null`) and a `cc-consent` event
+on `document` for scripts of your own. Whether your site needs a banner, and what it must say,
+depends on the law that applies to you; CanvasCore only provides the mechanism.
+
+### 7.7 Images
+
+- **On upload**, every JPG, PNG and WebP photo gets smaller **WebP copies** 480, 960 and
+  1600 px wide (never wider than the original; phone photos turned upright when `exif` is
+  available) in `uploads/_cc/`, made with PHP's GD. The original file is never changed. The
+  size in pixels, the file size and the description (alt text) are recorded in `media.json` in
+  the data directory; the Media page shows an "Optimized" badge.
+- **On publish**, every image from `uploads/` that has copies gets a `srcset` of them, so
+  phones download a fraction of the size. Images load lazily, except the first one on the page,
+  which loads with priority.
+- **Optimize older images**: images uploaded before this feature have no copies. In **Media**,
+  click **Optimize N older images**: the copies are made in batches of about 20 seconds per
+  request until none are left. Publish afterwards.
+- **Limits**: without GD with WebP support, images are used as they are (no copies, no
+  `srcset`; everything else works). An image too large for PHP's `memory_limit` (about 5 bytes
+  per pixel are needed) is skipped and used as it is. GIF, AVIF, SVG, ICO and BMP files and
+  images 480 px wide or less get no copies. In all these cases the image still counts as
+  processed (section 11, "Images are not optimized").
+- Deleting an image in Media also deletes its copies and its metadata.
+
+### 7.8 Version history
+
+Every Save Draft or Publish that changes a page or a collection item stores a version in the
+`page_revisions` table (a save that changes nothing adds none). The **newest 40 versions per
+page or item** are kept; older ones are deleted automatically. Users open them with the
+**History** button in the editor and can restore one into the editor as an unsaved change.
+
+**Deleting a page or an item also deletes its history.** Version history is in the database,
+so it is included in a full backup (section 8.2) but not in the Backup export.
 
 ---
 
@@ -391,7 +593,9 @@ It does **not** include:
 - **collections and their items**,
 - **uploaded images** (copy `uploads/` separately),
 - **user accounts**,
-- **form submissions**.
+- **form submissions**,
+- **redirects**, **version history** and the "Hide this page from search engines" setting,
+- **image descriptions** and the optimized copies (`media.json`, `uploads/_cc/`).
 
 **Import** (Backup → Import a backup file) **replaces** all pages, masters, templates, the
 menu, Global Options and the header/footer with the file's content, then republishes the site.
@@ -406,8 +610,10 @@ not a complete backup.
 A complete backup is three folders:
 
 1. **The data directory** (`canvascore-data/` or `canvascore-admin/data/`): the database with
-   everything including collections, accounts and submissions, plus settings and menu.
-2. **`uploads/`**: all images.
+   everything including collections, accounts, submissions, version history and redirects,
+   plus settings, menu and `media.json` (image descriptions and sizes).
+2. **`uploads/`**: all images. Backing up the `uploads/_cc/` sub-folder (optimized copies) is
+   optional: the copies can be regenerated from the originals (section 8.3).
 3. **The site files** (optional, they can be regenerated by publishing): the web root without
    `uploads/` and `canvascore-admin/`.
 
@@ -420,7 +626,7 @@ DEST=/backups/example.com/$(date +%F)
 mkdir -p "$DEST"
 sqlite3 "$SITE/canvascore-data/canvascore.sqlite" ".backup '$DEST/canvascore.sqlite'"
 tar czf "$DEST/data.tgz" -C "$SITE" --exclude=canvascore-data/sessions canvascore-data
-tar czf "$DEST/uploads.tgz" -C "$SITE/public" uploads
+tar czf "$DEST/uploads.tgz" -C "$SITE/public" uploads   # add --exclude=uploads/_cc to skip the copies
 ```
 
 Keep copies off the server. `sqlite3 .backup` is safe while the site is in use; copying the
@@ -430,7 +636,16 @@ Keep copies off the server. `sqlite3 .backup` is safe while the site is in use; 
 
 1. Put the release's `canvascore-admin/` in place (section 3.2), without running the installer.
 2. Restore the data directory and `uploads/`; make sure the PHP user owns them and can write.
-3. Sign in and click **Publish Site** to regenerate all pages.
+3. If `uploads/_cc/` was not backed up, pages still work (publishing leaves missing copies out of
+   the `srcset` and uses the originals), but phones lose the smaller files. To make the copies
+   again, clear the "optimized" marks in the data directory (descriptions are kept):
+   ```bash
+   php -r '$f="media.json"; $m=json_decode(file_get_contents($f), true);
+     foreach ($m as &$e) { unset($e["optimized"], $e["variants"]); }
+     file_put_contents($f, json_encode($m, JSON_UNESCAPED_UNICODE));'
+   ```
+   then sign in and click **Optimize N older images** in Media.
+4. Click **Publish Site** to regenerate all pages.
 
 ---
 
@@ -438,7 +653,8 @@ Keep copies off the server. `sqlite3 .backup` is safe while the site is in use; 
 
 ### 9.1 Recipients and sender
 
-- **Per-form recipient**: the Form block's own receiving email.
+- **Per-form recipient**: the Form block's own receiving email (set by an admin; editors
+  don't see the field, and their saves keep the admin's value).
 - **Default recipient**: Global Options → Form emails → *Default receiving email (To)*, used by
   forms without their own address.
 - **From** address: *Sender email (From)*; if empty, `noreply@<your domain>`. It is also used as
@@ -473,7 +689,8 @@ them as formulas.
 - **Honeypot**: a hidden field that people never fill in. If it is filled, the visitor sees the
   success message but nothing is stored or sent.
 - **Rate limit**: at most **8 submissions every 10 minutes per IP address**; beyond that the
-  visitor gets "Too many messages sent in a short time." (HTTP 429).
+  visitor gets "Too many messages sent in a short time." (HTTP 429). Behind a reverse proxy or
+  CDN, set the trusted proxy addresses (section 4.4), or all visitors share one limit.
 - **Unknown forms refused**: a submission naming a form that is not in the published registry
   is rejected ("This form is no longer available."). This check is active once the site has been
   published with at least one form.
@@ -496,9 +713,12 @@ What CanvasCore does for you:
 - **CSRF**: every state-changing request needs a per-session token sent in the `X-CSRF-Token`
   header; otherwise the server answers 403 ("Invalid CSRF token. Reload the page.").
 - **Login throttling**: **5 wrong passwords in 15 minutes** for the same account from the same
-  IP address lock that account/address pair for **15 minutes**.
-- **Forced password changes**: the default `admin`/`admin`, new accounts and reset passwords
-  must be changed at first sign-in (8 or more characters).
+  IP address lock that account/address pair for **15 minutes**. Behind a reverse proxy or CDN
+  the visitor's real address is used once the proxy is listed in Trusted proxy addresses
+  (section 4.4); `X-Forwarded-For` is never trusted from other addresses.
+- **Passwords**: at least 8 characters everywhere (installer, new accounts, resets, own
+  changes). The default `admin`/`admin`, new accounts and reset passwords must be changed at
+  first sign-in; any later change of your own password requires the current one.
 - **HTML sanitizer**: rich text is filtered through an allow-list that removes scripts, iframes,
   forms, `on*` event handlers and `javascript:`/`vbscript:`/`data:` links (only `data:image` is
   allowed in image sources).
@@ -507,7 +727,10 @@ What CanvasCore does for you:
   HTML (`foreignObject`) or external entities are refused. File names are sanitized and
   prefixed with a timestamp. The uploads folder cannot run scripts (Apache `.htaccess`, or the
   Nginx rules in section 4.2).
-- **Editors' limits**: see section 6.
+- **Editors' limits**: see section 6 (no code, no form recipients, no security settings, no
+  redirects, no accounts, backups or submissions).
+- **Cookie consent**: scripts and embeds marked for consent run only after Accept
+  (section 7.6).
 - **Publishing and forms**: publishing requires POST + token; form recipients are only read
   from the server-side registry (no open mail relay).
 
@@ -523,7 +746,8 @@ Recommended hardening:
 6. Optionally restrict `/canvascore-admin/` by IP or with HTTP basic auth at the web server, if
    your editors work from known locations. Leave `/canvascore-admin/submit_form.php` reachable,
    or the site's forms stop working.
-7. Keep PHP up to date and keep regular off-server backups (section 8.2).
+7. Behind a reverse proxy or CDN, list its addresses in Trusted proxy addresses (section 4.4).
+8. Keep PHP up to date and keep regular off-server backups (section 8.2).
 
 ---
 
@@ -567,16 +791,52 @@ other applications' cleanup may delete CanvasCore sessions).
 **"Too many failed attempts. Try again in N minute(s)."**
 Five wrong passwords for that account from that address. Wait 15 minutes. To unlock at once,
 delete `login_attempts.json` from the data directory (this resets the counters for everyone).
-If the user forgot the password, an admin can reset it (section 6.2).
+If the user forgot the password, an admin can reset it (section 6.3). If accounts get locked
+although their owners typed nothing wrong, or forms answer "Too many messages" to everyone, the
+site is probably behind a proxy or CDN: set the trusted proxy addresses (section 4.4).
 
 **"Invalid CSRF token. Reload the page."**
 The editor tab is older than the current session (for example after a sign-in in another tab
 or an update). Reload the page.
 
 **Deleted or renamed pages are still online**
-They are removed on the next successful **Publish Site**. Files created by an old version
+Deleted and unpublished pages are removed on the next successful **Publish Site**. A renamed
+page's old address is meant to stay: it now holds a redirect page (section 7.4); remove the
+redirect in Global Options › Redirects if you don't want it. Files created by an old version
 before the manifest existed, or files you added by hand, are never deleted automatically:
 remove them by FTP/SSH.
+
+**Redirects don't work, or answer 200 instead of 301**
+- Publish after renaming or adding a redirect: redirects take effect at the next publish.
+- Nginx: the redirect pages forward visitors, but the `.htaccess` 301s are ignored. Add
+  `location = /old/ { return 301 /new/; }` lines to the server block (section 4.2).
+- Apache: check that the root `.htaccess` contains the `# BEGIN CanvasCore redirects` block,
+  that PHP can write that file, that `AllowOverride` allows it and that `mod_alias` is enabled
+  (the rules are inside `<IfModule mod_alias.c>`).
+- An old address that is used again by a published page loses its redirect, by design.
+
+**RSS feeds are missing**
+Feeds are written only when **Global Options › Site address** is set, and only for collections
+with at least one published, non-archived item. Set the address and publish again; check
+`https://example.com/<collection-slug>/feed.xml`. A publish message ending in
+`Warning: Feeds: …` gives the reason.
+
+**Images are not optimized (no "Optimized" copies, no `srcset`)**
+- GD without WebP: check `php -r 'var_dump(function_exists("imagewebp"));'` with the site's PHP
+  and enable/upgrade the `gd` extension (with WebP support), or ask your host.
+- Memory: images that need more than the free `memory_limit` (about 5 bytes per pixel) are
+  skipped. Raise `memory_limit` (for example to 256M) or upload smaller images.
+- `uploads/_cc/` not writable by PHP.
+- Images that couldn't be processed (GD/WebP missing, memory too low) stay "not optimized":
+  after fixing the cause, click **Optimize N older images** again (Media says how many were
+  skipped), then publish.
+- Only JPG, PNG and WebP wider than 480 px get copies; pages need a publish to get the `srcset`.
+
+**Site search shows old or missing results**
+`search-index.json` is rebuilt only when the site is published: click **Publish Site**. Pages
+marked "Hide this page from search engines" and archived items are never in the results. If the
+search finds nothing at all, check that `https://example.com/search-index.json` loads (a CDN or
+a server rule may block or cache it).
 
 **Version mismatch warning in the sidebar**
 `Editor vX / server vY: reload the page after updating`: reload the tab (hard refresh). If it

@@ -107,11 +107,17 @@ export default function PageSettings({ ctx }) {
           <input type="text" value={activePage?.seo_title || ''} onChange={e => updateActivePage({seo_title: e.target.value})} style={inputStyle} placeholder={activePage?.title || ''} />
           <label style={labelStyle}>Meta Description <Count n={(activePage?.seo_description || '').length} max={160} /></label>
           <textarea value={activePage?.seo_description || ''} onChange={e => updateActivePage({seo_description: e.target.value})} style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} placeholder="One or two sentences that make people want to click" />
-          <ImgF label="Social share image" value={activePage?.seo_image || ''} onChange={v => updateActivePage({ seo_image: v })} onPick={() => setSharePicker(true)} />
-          <p style={{ fontSize: '11px', color: '#64748b', margin: '4px 0 0' }}>Shown when the page is shared on social networks and chats (best 1200×630). Empty = the site's default share image.</p>
-          <SnippetPreview page={activePage} />
-          <ChkF label="Hide this page from search engines" checked={!!Number(activePage?.noindex)} onChange={v => updateActivePage({ noindex: v ? 1 : 0 })} />
-          <p style={{ fontSize: '11px', color: '#64748b', margin: '4px 0 0' }}>Adds “noindex”, leaves it out of the sitemap and of the site search. Useful for thank-you pages, drafts of campaigns, legal pages.</p>
+          {activePage?.__item ? (
+            <p style={{ fontSize: '11px', color: '#64748b', margin: '8px 0 0' }}>When this item is shared, its cover image is used as the picture.</p>
+          ) : <>
+            <ImgF label="Social share image" value={activePage?.seo_image || ''} onChange={v => updateActivePage({ seo_image: v })} onPick={() => setSharePicker(true)} />
+            <p style={{ fontSize: '11px', color: '#64748b', margin: '4px 0 0' }}>Shown when the page is shared on social networks and chats (best 1200×630). Empty = the site's default share image.</p>
+          </>}
+          <SnippetPreview page={activePage?.__item ? { ...activePage, seo_image: activePage.cover_image } : activePage} />
+          {!activePage?.__item && <>
+            <ChkF label="Hide this page from search engines" checked={!!Number(activePage?.noindex)} onChange={v => updateActivePage({ noindex: v ? 1 : 0 })} />
+            <p style={{ fontSize: '11px', color: '#64748b', margin: '4px 0 0' }}>Adds “noindex”, leaves it out of the sitemap and of the site search. Useful for thank-you pages, drafts of campaigns, legal pages.</p>
+          </>}
           {sharePicker && <MediaPickerModal onClose={() => setSharePicker(false)} onSelect={(url) => { updateActivePage({ seo_image: url }); setSharePicker(false); }} />}
         </PanelAccordion>
       </div>

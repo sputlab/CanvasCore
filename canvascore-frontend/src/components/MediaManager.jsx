@@ -64,17 +64,20 @@ export default function MediaManager() {
 
   // Optimized copies for images uploaded before this feature (a batch per request)
   const optimizeAll = async () => {
-    let done = 0;
+    let done = 0; let skipped = 0;
     setOptimizing({ done: 0, remaining: images.filter((x) => !x.optimized).length });
     try {
       for (let i = 0; i < 200; i++) {
         const data = await (await fetch('api.php?action=optimize_media', { method: 'POST', body: '{}' })).json();
         if (!data.success) { notify(data.message || 'Optimization stopped.', 'error'); break; }
         done += data.done;
+        skipped += (data.skipped || []).length;
         setOptimizing({ done, remaining: data.remaining });
-        if (!data.remaining || !data.done) break;
+        if (!data.remaining) break;
       }
-      notify(done ? `${done} image${done === 1 ? '' : 's'} optimized.` : 'Nothing to optimize.');
+      if (done) notify(`${done} image${done === 1 ? '' : 's'} optimized.`);
+      if (skipped) notify(`${skipped} image${skipped === 1 ? '' : 's'} could not be optimized here (the server may lack WebP support or memory). They still work as they are.`, 'info');
+      if (!done && !skipped) notify('Nothing to optimize.');
     } catch { notify('Optimization stopped (connection problem).', 'error'); }
     setOptimizing(null);
     fetchMedia();

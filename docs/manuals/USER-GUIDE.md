@@ -1,8 +1,8 @@
 # CanvasCore User Guide
 
-*For CanvasCore 0.13.0 · for editors and administrators*
+*For CanvasCore 0.13.0 and the changes that follow it · for editors and administrators*
 
-CanvasCore is where you build and update your website. You put pages together from ready-made blocks (text, images, buttons, galleries, forms and more), see them exactly as visitors will, and publish them when they're ready. Your work stays private as a draft until you publish it, and unsaved changes are backed up on your device, so a lost connection or an expired session doesn't cost you your work. This guide covers day-to-day work. For the full list of blocks, see the [Block Reference](BLOCK-REFERENCE.md). For installation, accounts and server settings, see the [Administrator Guide](ADMIN-GUIDE.md).
+CanvasCore is where you build and update your website. You put pages together from ready-made blocks (text, images, buttons, galleries, forms and more), see them exactly as visitors will, and publish them when they're ready. Your work stays private as a draft until you publish it, unsaved changes are backed up on your device, and every saved version of a page is kept for a while, so a lost connection, an expired session or a wrong edit doesn't cost you your work. This guide covers day-to-day work. For the full list of blocks, see the [Block Reference](BLOCK-REFERENCE.md). For installation, accounts and server settings, see the [Administrator Guide](ADMIN-GUIDE.md).
 
 ## Contents
 
@@ -12,13 +12,14 @@ CanvasCore is where you build and update your website. You put pages together fr
 4. [Editing text](#4-editing-text)
 5. [The settings panel](#5-the-settings-panel)
 6. [Drafts and publishing](#6-drafts-and-publishing)
-7. [Templates and global masters](#7-templates-and-global-masters)
-8. [Collections](#8-collections)
-9. [Media](#9-media)
-10. [The menu](#10-the-menu)
-11. [Global Options](#11-global-options)
-12. [Administration (admins only)](#12-administration-admins-only)
-13. [Good to know and troubleshooting](#13-good-to-know-and-troubleshooting)
+7. [Version history](#7-version-history)
+8. [Templates and global masters](#8-templates-and-global-masters)
+9. [Collections](#9-collections)
+10. [Media](#10-media)
+11. [The menu](#11-the-menu)
+12. [Global Options](#12-global-options)
+13. [Administration (admins only)](#13-administration-admins-only)
+14. [Good to know and troubleshooting](#14-good-to-know-and-troubleshooting)
 
 ---
 
@@ -29,7 +30,7 @@ CanvasCore is where you build and update your website. You put pages together fr
 There are two roles:
 
 - **editor**: builds and edits pages, collection items, media, the menu and most global options.
-- **admin**: can do everything an editor can, and also manages accounts, backups, form submissions and collections, and can use custom code (the **Custom HTML** block and **Custom Code** settings).
+- **admin**: can do everything an editor can, and also manages accounts, backups, form submissions, collections and redirects, and can use custom code (the **Custom HTML** block and **Custom Code** settings).
 
 Your role is shown under your name at the bottom of the sidebar.
 
@@ -51,7 +52,16 @@ The first time you sign in with the default password, CanvasCore asks you to **S
 
 To stop without changing it, click **Log out**. You can't use CanvasCore until you set a new password.
 
-Editors can't change their own password later. If you need a new one, ask an administrator.
+### Changing your password
+
+Anyone, editor or admin, can change their own password at any time.
+
+1. At the bottom of the sidebar, click the key icon next to your name (**Change your password**).
+2. Type your **Current password**.
+3. Type the new one in **New password (at least 8 characters)** and again in **Repeat the new password**.
+4. Click **Change password**. A notification says "Password changed.".
+
+If the current password is wrong, or the two new ones don't match, the box tells you and nothing changes. If you've forgotten your password, ask an administrator to set a new one.
 
 ### The sidebar
 
@@ -62,7 +72,7 @@ Every screen except the page editor has a sidebar on the left. On a narrow scree
 - **Site**: **Menu**, **Global Options**.
 - **Administration** (admins only): **Submissions**, **Accounts**, **Backup**.
 
-At the bottom you see your name, your role, the **Logout** button and the CanvasCore version. If it says "Editor v… / server v…: reload the page after updating", CanvasCore was just updated. Reload the page in your browser.
+At the bottom you see your name, your role, two icons (the key, **Change your password**, and the arrow leaving a box, **Log out**) and the CanvasCore version. If it says "Editor v… / server v…: reload the page after updating", CanvasCore was just updated. Reload the page in your browser.
 
 ### Session expiry
 
@@ -149,7 +159,19 @@ When no block is selected, the right-hand panel shows **Page Settings**:
 
 - **Page Info**: **Internal Title** and **URL (Slug)**. The slug is the page's address. If another page already uses it, a red message tells you to choose another one.
 - **Page Structure**: **Set as Homepage (site root)**, **Page Layout** (**Boxed (Centered)** or **Full Width**), **Maximum Width** for boxed pages, and the page **Background Color**.
-- **SEO & Meta Data**: **Meta Title**, **Meta Description** and **Social Share Image (OG)**. This is what search engines and social networks show.
+- **SEO & Meta Data**: what search engines and social networks show (see below).
+
+### Search engines and sharing (SEO & Meta Data)
+
+Open **Page Settings › SEO & Meta Data**:
+
+- **Meta Title**: the title shown in search results. If you leave it empty, the page title is used. A counter next to the label (for example "52 / 60") turns amber when the text is longer than search engines usually show.
+- **Meta Description**: one or two sentences shown under the title in search results. Its counter goes up to 160.
+- **Social share image**: the picture shown when someone shares the page on a social network or in a chat. Type an address, or click the blue image button to choose one from the media library. The best size is 1200 × 630. If it's empty, the site's **Default social image (OG)** from Global Options is used.
+- Two previews show how the page will look **in a search result** and **as a shared link**. They change as you type.
+- **Hide this page from search engines**: asks search engines not to list the page, and leaves it out of the sitemap and of the site search. Useful for thank-you pages, campaign pages or legal pages. Visitors who have the address can still open it.
+
+Like everything else on the page, these settings go online when you publish.
 
 ---
 
@@ -169,6 +191,7 @@ From left to right:
   - "Unsaved changes: local backup failed": save soon.
 - **Preview size**: **Desktop**, **Tablet** or **Mobile**. The canvas resizes so you can check how the page looks on each screen.
 - **Undo** and **Redo**.
+- **Version history** (the clock icon): earlier saved versions of the page or item (see [Version history](#7-version-history)). Not shown for the global header and footer.
 - **Discard draft**: only on a page that is online and has unpublished changes (see [Drafts and publishing](#6-drafts-and-publishing)).
 - **Save Draft**: saves without publishing.
 - **Publish**: saves and puts the page online.
@@ -189,9 +212,13 @@ To add a block:
    - Otherwise it goes at the end of the page ("Adds at the end of the page").
 3. Click the block.
 
-At the bottom of the Add tab you also find **My templates** and **Global masters** (see [Templates and global masters](#7-templates-and-global-masters)).
+If you've copied a block (see [Duplicating, copying and pasting blocks](#duplicating-copying-and-pasting-blocks)), a **Paste copied …** button at the top of the Add tab pastes it, for example **Paste copied Hero**.
+
+At the bottom of the Add tab you also find **My templates** and **Global masters** (see [Templates and global masters](#8-templates-and-global-masters)).
 
 Editors don't see the **Custom HTML** block. Only admins can add it.
+
+To give visitors a search box for your whole site, add the **Site Search** block (in **Business & dynamic**). It searches the titles, descriptions and texts of published pages and collection items. See the [Block Reference](BLOCK-REFERENCE.md).
 
 ### The page structure (the Layers tab)
 
@@ -202,7 +229,8 @@ The **Layers** tab shows the page as a tree (**PAGE STRUCTURE**). Blocks inside 
   - A **blue line** above or below a row means the block lands before or after it.
   - A **highlighted row** with a dashed outline means the block goes inside that container. Drop on the middle of a Section or Container to put a block inside it.
   - You can't drop a container inside itself.
-- To delete the selected block, click the bin icon on its row.
+- To duplicate a block, click the copy icon on its row (**Duplicate**). The copy appears right below it.
+- To delete a block, click the bin icon on its row and confirm with **Delete block**.
 - The buttons at the bottom (**+ Section**, **+ Container**, **+ Flex Row**, **+ Text**) add a block inside the selected container, or at the end of the page when nothing is selected.
 
 ### Selecting blocks on the canvas
@@ -215,9 +243,34 @@ The **Layers** tab shows the page as a tree (**PAGE STRUCTURE**). Blocks inside 
 
 When a block is selected, a small blue label with the block's type appears above it. Drag that label up or down to change the block's position among its neighbours. To move a block into a different container, use the **Layers** tab.
 
+You can also move the selected block one step up or down among its neighbours with **Alt+↑** and **Alt+↓** (**Option** on a Mac), or with the **Move up** and **Move down** arrows under the settings panel header.
+
+### Duplicating, copying and pasting blocks
+
+**Duplicate** makes a copy of the selected block, with everything inside it, right below the original. The copy is selected so you can change it straight away. Press **Ctrl/Cmd+D**, or click **Duplicate** in the settings panel (under the header) or on the block's row in **Layers**.
+
+**Copy and paste** lets you reuse a block on another page:
+
+1. Select the block and press **Ctrl/Cmd+C**, or click **Copy** under the settings panel header. A notification confirms it.
+2. Open the page where you want it. It can be another page, a collection item, or the same page, even in another browser tab.
+3. Choose where it goes:
+   - Select a **Section**, **Container**, **Flex Row** or **CSS Grid** to paste it inside, at the end.
+   - Select any other block to paste it right after that block.
+   - Select nothing to paste it at the end of the page.
+4. Press **Ctrl/Cmd+V**, or click **Paste copied …** at the top of the **Add** tab.
+
+The pasted block is selected. You can paste the same block as many times as you like. The copied block is kept in this browser until you copy another one, so it doesn't follow you to another computer. It isn't a template either: to keep a block for good, use **Save as template** (see [My templates](#my-templates-saved-blocks)).
+
+If you've selected some words on the page, **Ctrl/Cmd+C** copies those words as usual instead of the block.
+
 ### Deleting blocks
 
-Select the block, then click the bin icon in the settings panel header (or on its row in **Layers**). Confirm with **Delete block**. If it's a container, everything inside it is deleted too. You can bring it back with **Undo**.
+Select the block, then do one of these:
+
+- Press **Delete** or **Backspace**. The block is removed at once and a notification reminds you that **Ctrl/Cmd+Z** brings it back.
+- Click the bin icon in the settings panel header (or on its row in **Layers**) and confirm with **Delete block**.
+
+If it's a container, everything inside it is deleted too. You can bring it back with **Undo**.
 
 ### Keyboard shortcuts
 
@@ -226,10 +279,19 @@ Select the block, then click the bin icon in the settings panel header (or on it
 | **Ctrl+S** / **Cmd+S** | Save draft (works while you type, too) |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
-| **Ctrl+Y** | Redo (Windows) |
+| **Ctrl+Y** | Redo (Windows and Linux) |
+| **Ctrl+D** / **Cmd+D** | Duplicate the selected block |
+| **Ctrl+C** / **Cmd+C** | Copy the selected block (when no words are selected) |
+| **Ctrl+V** / **Cmd+V** | Paste the copied block |
+| **Alt+↑** / **Alt+↓** (**Option** on a Mac) | Move the selected block up or down |
+| **Delete** / **Backspace** | Delete the selected block (Undo brings it back) |
 | **Esc** | Deselect the block |
 
-While you're typing in a text, **Ctrl/Cmd+Z** undoes your typing in that text, not changes to the page.
+The block shortcuts work only when you aren't typing in a text or a field. While you're typing in a text or a settings field, **Ctrl/Cmd+Z** undoes your typing in that place, not changes to the page, and **Delete**, **Backspace** and the arrows work on the text as usual.
+
+### Undo
+
+**Undo** goes back one change at a time; **Redo** goes forward again. Typing in a settings field counts as one step, not one step per key: a word or a sentence you type without pausing is undone in one go. Undo works until you leave the page. To go back further, use [Version history](#7-version-history).
 
 ---
 
@@ -310,13 +372,30 @@ When a block is selected, the right-hand panel shows its name and three buttons 
 - **Master**: makes the block a global master (see [Global masters](#global-masters)).
 - **Delete block** (the bin icon).
 
+Just below the header, a small bar of quick actions works on the selected block:
+
+- **Move up** and **Move down** (the arrows): one step among its neighbours. An arrow is greyed out when the block is already first or last.
+- **Duplicate**: a copy right below it.
+- **Copy**: copies it so you can paste it on any page (see [Duplicating, copying and pasting blocks](#duplicating-copying-and-pasting-blocks)).
+
+Point at a button to see its name and keyboard shortcut.
+
 Below are three tabs: **Content**, **Style** and **Advanced**. Each tab has sections you can open and close.
 
 ### Content tab
 
-This tab holds the block's own settings: its texts, images, links, items and layout options. They differ for each block. See the [Block Reference](BLOCK-REFERENCE.md). **Section**, **Container** and **Flex Row** have no Content tab, because you add blocks inside them and set their look in **Style**.
+This tab holds the block's own settings: its texts, images, links, items and layout options. They differ for each block. See the [Block Reference](BLOCK-REFERENCE.md). **Section** and **Container** have no Content tab, because you add blocks inside them and set their look in **Style**.
 
-To pick an image, click the blue image button next to an image field. In **Choose Image**, click an image, or click **Upload File** to add a new one.
+**Choosing an image.** Click the blue image button (**Choose from the media library**) next to an image field. The **Choose an image** window opens:
+
+- Each image shows its size in pixels and its file size.
+- Type in **Search by name or description…** to find an image.
+- Click **Upload** to add new images. You can choose several files at once.
+- Click an image to use it. Press **Esc**, or click **×**, to close without choosing.
+
+If the image has a description in the Media Library and the block's description (alt text) field is still empty, the description is filled in for you. A description you've already typed in the block is never replaced.
+
+**Custom HTML for editors.** Editors can see the code of a **Custom HTML** block an admin added, but can't change it. They can still move or delete the block. When an editor saves the page, the admin's code (and any custom CSS) is kept as it was.
 
 ### Style tab
 
@@ -402,10 +481,17 @@ On a Modified page, **Discard draft** throws away all unpublished changes and br
 - **Publish Site** (in the sidebar) rebuilds the whole site from the published versions of all pages. **Drafts and unpublished changes are not published.** Use it after changes that affect many pages, for example after archiving collection items.
 - **Save & Publish** in **Menu** and **Global Options** saves your changes and republishes the site.
 
+Each time the site is rebuilt, CanvasCore also updates the sitemap, the list the **Site Search** block searches in, the collections' RSS feeds and the redirects. That's why new pages only turn up in the site search, and a renamed page's old address only forwards, after a publish.
+
 ### Deleted and renamed pages
 
 - **Deleting** a page that is online removes it from the site right away.
-- **Renaming** a page's address (slug) takes effect when you publish it. The old address stops working. Buttons and menu links that pointed to the old address are updated for you. Check links you typed inside text by hand.
+- **Renaming** a page's address (slug) takes effect when you publish it. When you do:
+  - Links to the page are updated for you everywhere: in buttons, menus and links inside text, on other pages, collection items, the global header and footer and global masters.
+  - **The old address keeps working.** Visitors and search engines that use it are sent on to the new address (a "redirect"), so bookmarks and search results don't break.
+- **Renaming a published collection item** works the same way: its old address forwards to the new one after you publish.
+- If you later publish a page at an address that used to forward somewhere, the page wins and the redirect is removed.
+- Administrators can see every redirect, and add or remove them, in **Global Options › Redirects** (see [Redirects](#redirects-admins)).
 - Pages and collection items that are no longer published are removed from the site the next time the site is published.
 
 ### Local backups of unsaved work
@@ -424,7 +510,33 @@ If you click the back button with unsaved changes, CanvasCore asks **Leave with 
 
 ---
 
-## 7. Templates and global masters
+## 7. Version history
+
+Every time you click **Save Draft** or **Publish** and the content of a page or collection item has changed, CanvasCore keeps a copy of that version on the server. The newest 40 versions of each page and each item are kept; older ones are dropped. Unlike the backups of unsaved work, version history is kept on the server: you see it from any computer, and it includes versions saved by other people.
+
+### Looking at an earlier version
+
+1. Open the page or collection item in the editor.
+2. Click the clock icon in the top bar (**Version history**).
+3. The list on the left shows each version with its date and time, a **Draft** or **Published** badge and the name of the person who saved it. The newest is marked **latest**.
+4. Click a version to see a preview of it on the right.
+
+Press **Esc** or click **×** to close the window without changing anything.
+
+### Restoring a version
+
+1. Pick the version and click **Restore this version**.
+2. Confirm with **Restore version**.
+3. The editor now shows the blocks of that version. **Nothing is saved yet**: the restore is an unsaved change like any other.
+4. Click **Save Draft** or **Publish** to keep it. If you change your mind, press **Ctrl/Cmd+Z** (or click **Undo**) to go back to what you had before.
+
+Restoring brings back the page's blocks and their content. The settings shown when no block is selected (title, address, SEO, item settings) stay as they are now.
+
+When you save a restored version, it becomes a new version in the list, so the one you replaced is still there if you need it. When a page or item is deleted, its history is deleted too. The global header and footer have no version history.
+
+---
+
+## 8. Templates and global masters
 
 ### Starter templates
 
@@ -470,7 +582,7 @@ The new version appears online on each page that uses the master the next time t
 
 ---
 
-## 8. Collections
+## 9. Collections
 
 A collection is a group of similar pages, such as a blog, news or a portfolio. Each entry is an **item** with its own page. You show a list of items on any page with the **Collection List** block.
 
@@ -493,7 +605,9 @@ An item opens in the same editor as a page, with a **Collection item** badge. Bu
 - **Cover image**: type an address, or click the upload button.
 - **Excerpt**: a short summary shown in lists.
 
-**Page Info** (title and URL) and **SEO & Meta Data** work as for pages. An item's address is the collection's address followed by the item's slug.
+**Page Info** (title and URL) works as for pages. In **SEO & Meta Data**, the **Meta Title** and **Meta Description** are saved for items, and when the item is shared its **cover image** is used as the picture (the **Social share image** and **Hide this page from search engines** options are for pages only). An item's address is the collection's address followed by the item's slug. If you change the address of a published item, the old address forwards to the new one after you publish.
+
+Each collection with published items also gets an RSS feed at its address followed by `feed.xml` (for example `/blog/feed.xml`), so visitors can follow it in a feed reader. The feed lists the newest 50 items and is updated each time the site is published. It's only made when **Site address** is filled in **Global Options**.
 
 - **Save Draft** saves the item with the status chosen in **Item Settings**.
 - **Publish** marks it **Published**, saves it and republishes the site.
@@ -519,22 +633,43 @@ On the canvas you see grey placeholder cards. The real items are filled in when 
 
 ---
 
-## 9. Media
+## 10. Media
 
 Click **Media** in the sidebar to open the **Media Library**, where all your images are kept.
 
 - **Uploading**: click **Upload Images** and choose one or more files. You can also drag files from your computer and drop them anywhere on the page.
 - **Accepted files**: JPG, PNG, GIF, WebP, AVIF, SVG, ICO and BMP.
 - **SVG files with scripts** or other active content are refused. Export the SVG again as a plain SVG, or as PNG.
-- **Searching**: type in **Search by file name…**.
+- **Searching**: type in **Search by file name…**. The line next to it says how many images are shown (for example "12 of 40 images").
 - **Copying an address**: click the copy icon under an image. If your browser blocks copying, the address appears in a box so you can copy it yourself.
 - **Deleting**: click the bin and confirm. **Pages that use the image will show a broken image**, so check first.
 
-You can also upload while editing: any **Choose Image** window has an **Upload File** button.
+### What each image shows
+
+Under each image you see its name, its size in pixels (for example 1600×1067), its file size, and an **Optimized** badge when phone-sized copies have been made (see below).
+
+### Image descriptions (alt text)
+
+Each image has a **Description (alt text)** field. Describe what the picture shows in a few words, for example "Our team at the 2025 summer party". Screen readers read it aloud to people who can't see the image, and search engines use it too.
+
+1. Click in the field under the image and type the description.
+2. Press **Enter** or click elsewhere. The description is saved.
+
+When you later choose this image for a block, its description is filled into the block's description field for you, if that field is still empty.
+
+### Faster images on phones
+
+When you upload a photo, CanvasCore also makes smaller copies of it. On the published site, each visitor's browser then downloads the size that fits their screen: a phone gets a small, light copy instead of the full-size photo. Pages load faster and use less mobile data, and you don't have to resize anything yourself. The original is kept as it is, and images are never made larger: a small image doesn't need copies, so it doesn't get the **Optimized** badge. Images further down a page are loaded only when the visitor scrolls near them.
+
+Images uploaded before this feature have no copies yet. If there are any, a button **Optimize N older images** appears next to the search box (for example **Optimize 12 older images**). Click it once and wait: it shows how many are done and how many are left. When it's finished, those images get the **Optimized** badge too. The copies are used on the site after the next publish.
+
+### Uploading while editing
+
+You can also upload while editing: the **Choose an image** window has an **Upload** button (see [Content tab](#content-tab)).
 
 ---
 
-## 10. The menu
+## 11. The menu
 
 Click **Menu** in the sidebar to open the **Menu Builder**. A **Live preview** at the top shows the real menu as it will appear on the site. Switch it between **Desktop** and **Mobile**, and scroll inside it to try "Fixed on top". Links in the preview don't work.
 
@@ -590,7 +725,7 @@ Switch the preview to **Mobile** to check the result.
 
 ---
 
-## 11. Global Options
+## 12. Global Options
 
 Click **Global Options** in the sidebar for settings that apply to the whole site. Click **Save & Publish** to save them. This also republishes the site.
 
@@ -602,11 +737,13 @@ Click **Global Options** in the sidebar for settings that apply to the whole sit
 
 ### Site identity & SEO
 
-- **Site name** and **Site address (for sitemap & social)**.
+- **Site name** and **Site address (for sitemap, social and RSS)**: the full address of your site, for example `https://www.example.com`. The collections' RSS feeds are only made when it's filled in, and search engines use it to know the main address of each page.
 - **Page title suffix**: added to every page title in the browser tab (for example " | My Site"). Leave it empty for none.
 - **Favicon address**: the small icon in the browser tab.
 - **Default social image (OG)**: used when a page has no social share image of its own.
 - **Allow search engines to index the site (robots.txt)**.
+
+To hide a single page from search engines, use **Hide this page from search engines** in that page's settings (see [Search engines and sharing](#search-engines-and-sharing-seo--meta-data)).
 
 ### Global header & footer
 
@@ -616,6 +753,32 @@ The header and footer are groups of blocks shown at the top and bottom of every 
 - **Edit header** / **Edit footer**: opens it in the editor, with a **Global header** or **Global footer** badge. Edit it like a page, then click **Save**. Click **Publish** to also put it online.
 - **Delete**: removes all its blocks from every page and republishes the site. This can't be undone.
 
+### Cookie banner
+
+The cookie banner is a notice shown on every page of the site with an Accept and a Decline button. The visitor's choice is remembered, so the banner doesn't come back on every page.
+
+1. Tick **Show the cookie banner**.
+2. Optional: change the **Text**, the **Accept button** and **Decline button** labels, and the **Link text**. Empty fields use the text shown in grey.
+3. Choose your **Privacy policy page**, or **— no link —**.
+4. Choose a **Position**: **Bottom, centered**, **Bottom left** or **Bottom right**.
+5. Click **Save & Publish**.
+
+The banner by itself doesn't block anything. If your site loads tracking or marketing tools, an administrator can set them up so they start only after the visitor clicks Accept (see the [Administrator Guide](ADMIN-GUIDE.md)).
+
+### Redirects (admins)
+
+A redirect sends visitors from an old address to a new one. CanvasCore adds one automatically when you rename a published page or collection item (see [Deleted and renamed pages](#deleted-and-renamed-pages)). The **Redirects** card lists them all: **Old address**, **Goes to**, and whether each one is **automatic** or **added by hand**.
+
+To add one yourself, for example for a page that was on your old website:
+
+1. Type the **Old address** (for example `/old-page/`).
+2. Type the **New address**: a page of the site (for example `/new-page/`) or a full web address.
+3. Click **Add redirect**.
+
+To remove one, click its bin icon and confirm with **Remove redirect**. Visitors using that old address will then get "page not found".
+
+Redirects are put online, and removed, the next time the site is published.
+
 ### Form emails (admins)
 
 - **Default receiving email (To)**: where form messages go when a form has no email of its own.
@@ -624,12 +787,13 @@ The header and footer are groups of blocks shown at the top and bottom of every 
 ### Security (admins)
 
 - **Session timeout (minutes of inactivity)**: between 5 and 720. The default is 30.
+- **Trusted proxy addresses**: fill this in only if your hosting company tells you the site sits behind a "reverse proxy" or a CDN. Type the proxy's IP addresses, separated by commas. The protection against repeated wrong passwords and against form spam then counts each visitor separately. Leave it empty otherwise.
 
-Editors can see the Form emails and Security fields, but only an administrator's changes to them are saved.
+Editors don't see the **Redirects**, **Form emails** and **Security** cards. They can still change everything else on this screen.
 
 ---
 
-## 12. Administration (admins only)
+## 13. Administration (admins only)
 
 These sections appear under **Administration** in the sidebar only for admins. Details are in the [Administrator Guide](ADMIN-GUIDE.md).
 
@@ -640,10 +804,10 @@ These sections appear under **Administration** in the sidebar only for admins. D
 
 ---
 
-## 13. Good to know and troubleshooting
+## 14. Good to know and troubleshooting
 
 **My changes aren't on the live site.**
-You probably saved a draft. Open the page and click **Publish**. In the page list, **Modified** means there are saved changes that aren't online yet. For archive changes or deleted collection items, click **Publish Site**.
+You probably saved a draft. Open the page and click **Publish**. In the page list, **Modified** means there are saved changes that aren't online yet. For archive changes, deleted collection items, a changed global master or new redirects, click **Publish Site**.
 
 **An image is broken on the site.**
 The image was probably deleted from the Media Library, or its address was typed wrongly. Upload it again and choose it again in the block.
@@ -664,10 +828,28 @@ Another page (or a collection) already has that address. Change the **URL (Slug)
 That's intentional, so blocks are easy to edit. Use **Preview animation** in the **Advanced** tab, or view the published page.
 
 **I deleted a block by mistake.**
-Press **Ctrl/Cmd+Z**, or click **Undo** in the top bar, before you leave the page.
+Press **Ctrl/Cmd+Z**, or click **Undo** in the top bar, before you leave the page. If you've already left the page or saved over it, open **Version history** in the editor and restore a version that still has the block.
+
+**I want an earlier version of a page back.**
+Open the page, click the clock icon (**Version history**), pick the version and click **Restore this version**. Then **Save Draft** or **Publish**. See [Version history](#7-version-history).
+
+**Ctrl/Cmd+C, Ctrl/Cmd+V or Delete don't work on the block.**
+These shortcuts work on the selected block only when you aren't typing. If the cursor is in a text or a field (for example after clicking a Text block on the canvas), the keys work on the text instead. Select the block by clicking its row in **Layers**, then press the shortcut, or use the quick action buttons under the settings panel header.
+
+**The old address of a renamed page still shows the old page, or "page not found".**
+The redirect from the old address goes online when the page is published. Open the page and click **Publish**, or click **Publish Site**. If the page was only saved as a draft, the old address doesn't change yet.
+
+**The Site Search box doesn't find a new page or a new text.**
+The search uses a list of pages that is rebuilt each time the site is published. Publish the page (or click **Publish Site**). Pages with **Hide this page from search engines** ticked are never found, and drafts aren't either. For the Site Search block itself, see the [Block Reference](BLOCK-REFERENCE.md).
+
+**My collection has no RSS feed.**
+A feed is only made when **Global Options › Site identity & SEO › Site address** is filled in and the collection has at least one published item. Fill in the address, then publish the site. The feed is at the collection's address followed by `feed.xml`.
+
+**The "Optimize … older images" button is shown in Media.**
+Some images were uploaded before CanvasCore started making phone-sized copies. Click the button once; then publish the site so pages use the smaller copies. If the button keeps coming back for the same images, the server can't make copies of them (for example a very large photo). Ask an administrator.
 
 **For editors: pages with custom code.**
-Custom HTML and custom CSS can only be saved by administrators. If an administrator added custom code to a page, saving that page as an editor removes the code. Ask an administrator to make changes to those pages.
+Custom HTML and custom CSS can only be changed by administrators. You can see a Custom HTML block's code, move the block or delete it, and saving the page as an editor keeps the administrator's code as it was. Ask an administrator if the code itself needs to change.
 
 **"Editor v… / server v…" appears at the bottom of the sidebar.**
 CanvasCore was updated while you had it open. Save your work, then reload the page.

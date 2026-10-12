@@ -6,7 +6,11 @@ Every page in CanvasCore is built from **blocks**: a title, a photo, a pricing t
 - **Style**: how the block looks (size, spacing, typography, background, borders). It is the same for every block.
 - **Advanced**: entrance animation, hover effect, looping motion and, for admins only, custom code. It is the same for every block.
 
-The panel header also has three buttons: **Save as template** (the save icon: a reusable copy under **Add › My templates**), **Master** (makes the block a global master: edit it once and it changes on every page that uses it) and **Delete block** (you can undo with Ctrl+Z).
+The panel header also has three buttons: **Save as template** (the save icon: a reusable copy under **Add › My templates**), **Master** (makes the block a global master: edit it once and it changes on every page that uses it) and **Delete block** (you can undo with Ctrl+Z). Under the header, a quick bar has **Move up**, **Move down**, **Duplicate** and **Copy** (to paste the block on any page).
+
+The same actions have keyboard shortcuts on the selected block: **Alt+↑ / Alt+↓** move it among its neighbours, **Ctrl/Cmd+D** duplicates it, **Ctrl/Cmd+C** copies it and **Ctrl/Cmd+V** pastes it (inside the selected container, after the selected block, or at the end of the page), **Delete** or **Backspace** deletes it, **Ctrl/Cmd+Z** undoes and **Esc** deselects it.
+
+When you pick an image from the media library and the block's alt text field is still empty, it is filled with the description saved for that image in the library. New image, slide and logo blocks start with a built-in grey placeholder that shows its size, so they work without any outside service.
 
 This manual covers each block's Content tab. For the editor in general, and for the Style and Advanced tabs, see the [User Guide](USER-GUIDE.md).
 
@@ -52,6 +56,7 @@ This manual covers each block's Content tab. For the editor in general, and for 
 | **Business & dynamic** | [Business Info](#business-info) | Address, contacts and opening hours |
 | | [Map](#map) | A Google map of a place |
 | | [Collection List](#collection-list) | The latest posts, news or items of a collection |
+| | [Site Search](#site-search) | A search box that finds your pages and items |
 
 Tip: the **Search blocks…** box in the Add tab also finds blocks by keyword, for example "carousel" finds Slider and "faq" finds Accordion and FAQ.
 
@@ -85,11 +90,15 @@ A box that holds other blocks. New containers are centered with a **Max Width** 
 
 Places the blocks inside it side by side. When there is not enough room, they wrap onto a new line.
 
-**Settings**
-- Flex Row has **no Content tab**. The gap between items is 20px and wrapping is on.
-- To control how wide each item is, select the item and set its **Width** in **Style › Size & Dimensions** (for example 48% for two per row, 31% for three).
+**Settings** (panel: **Row Layout**)
+- **Direction**: **Side by side (left → right)** (default), **Side by side (right → left)** or **Stacked (top → bottom)**.
+- **Space between blocks**: for example `20px`. New rows use 20px.
+- **Horizontal alignment**: **Start** (default), **Center**, **End**, **Spread out (space between)**, **Spread out (space around)** or **Spread out evenly**.
+- **Vertical alignment**: **Same height (stretch)** (default), **Top**, **Middle** or **Bottom**.
+- **When there is not enough room**: **Wrap to a new line** (new rows) or **Keep on one line**.
 
 **Tips**
+- To control how wide each item is, select the item and set its **Width** in **Style › Size & Dimensions** (for example 48% for two per row, 31% for three).
 - Good for a row of buttons, icon boxes or images.
 
 ### CSS Grid
@@ -162,7 +171,7 @@ A link styled as a button.
 - **Link**: pick one of your pages from **Select internal page...**, or type any address in **Custom URL...**.
 
 **Colors**
-- **Background**, **Text color** and **Border** (empty = no border).
+- **Background**, **Text color** and **Border** (empty = no border). With **Use Global Style (Brand)** on, the field reads **Background (empty = brand color)**: new buttons leave it empty, so they follow your brand color.
 - For an outline button: set Background to transparent, then pick a Border and a Text color.
 
 **Hover**
@@ -172,7 +181,7 @@ A link styled as a button.
 
 **Tips**
 - To center the button, use **Style › Background & Alignment › Text Alignment**.
-- Do not leave **Text** empty: the button would show with no label.
+- If you leave **Text** empty, the button shows "Click here".
 
 ### Divider
 
@@ -198,19 +207,19 @@ Embeds a video from YouTube or Vimeo.
 
 **Tips**
 - The video is always 16:9 and fills the width of its place.
-- Only YouTube and Vimeo links work. With any other link, or an empty one, **the block is not shown on the site**.
+- Only YouTube and Vimeo links work. With any other link, or an empty one, **the block is not shown on the site**. When the link is not recognized, the panel warns you under the field: paste the address of the video page.
 - Rounded corners come from **Style › Borders & Shadows › Border Radius** (12px by default).
 
 ### Custom HTML
 
 Raw HTML code, for example an embed from another service.
 
-**Availability**: only **admins** see this block in the Add tab.
+**Availability**: only **admins** see this block in the Add tab and can change its code. Editors see the code read-only, with the note "Only admins can change custom code"; they can still move the block or delete it. When an editor saves the page, the admin's code is kept as it was.
 
 **Settings** (panel: **Custom HTML**)
 - **HTML Code**: the code, inserted on the page as it is.
 
-**On the canvas**: when selected, the block turns into a code box you can type in.
+**On the canvas**: when selected, the block turns into a code box you can type in (admins).
 
 **Tips**
 - Code that is wrong can break the layout of the page. Preview before publishing.
@@ -248,14 +257,14 @@ A picture beside a block of text.
 
 **Settings** (panel: **Text Content**)
 - **Image URL**: paste or pick from the media library.
+- **Image description (alt text)**: what the image shows, for screen readers and search engines.
 - **Layout**: **Image Left** (default) or **Image Right**.
-- **HTML Text**: the text, with the full toolbar.
+- **Text**: the text, with the full toolbar.
 
 **On the canvas**: click the block and type the text directly.
 
 **Tips**
 - On narrow screens the image and text stack on top of each other.
-- There is no alt text field for this image. If the picture carries meaning, use an Image block inside a Flex Row instead.
 
 ### Cards
 
@@ -307,22 +316,21 @@ A form visitors fill in. Submissions are sent by email.
 
 **Form Settings**
 - **Form Title**: formatted text. Default "Contact Us".
-- **Receiving Email**: where submissions go. Leave blank to use the site's global email.
+- **Receiving Email** (admins only): where submissions go. Leave blank to use the site's global email. Editors do not see this field, and their saves keep the address the admin set.
 - **Submit Button Text**: default "Send".
+- **Message after sending**: shown to the visitor once the message has been sent. Default "Sent!".
 
-**Form Fields**: one card per field.
-- Label (for example "Name").
-- Type: **Short Text**, **Email**, **Long Text** or **Number**.
-- **Required Field**: the visitor cannot send the form without it.
-- **+ Add Field** adds a new short text field; the bin icon removes a field.
+**Form Fields**: one card per field, with move up/down and remove.
+- **Label** (for example "Name").
+- **Type**: **Short text**, **Email**, **Phone**, **Number**, **Website address**, **Date** or **Long text**.
+- **Required field**: the visitor cannot send the form without it.
+- **+ Add Field** adds a new short text field.
 
 **On the canvas**: click the form and type the title directly.
 
 **Tips**
 - New forms have Name, Email and Message, all required.
-- After sending, the visitor sees the message "Sent!". It cannot be changed from the panel.
-- Fields cannot be reordered: to change the order, remove and re-add them.
-- Do not leave **Submit Button Text** empty, or the button shows no label.
+- Empty texts fall back to the defaults: an empty **Submit Button Text** shows "Send Message", an empty **Message after sending** shows "Sent!".
 - The form includes a hidden anti-spam trap; you do not need to set anything.
 
 ---
@@ -367,13 +375,13 @@ Content split into panels; visitors click a tab to switch.
 
 A simple list of questions that open to show the answer.
 
-**Settings** (panel: **FAQ Items**)
-- **Question** and **Answer** for each item. The bin icon removes an item.
+**Settings** (panel: **FAQ Items**): one card per question, with move up/down and remove.
+- **Question** and **Answer**.
 - **+ Add Question**.
 
 **Tips**
 - Answers are plain text: line breaks are kept, HTML is shown as typed.
-- Items cannot be reordered here. If you need ordering, HTML answers or more options, use the **Accordion** block.
+- If you need HTML answers or more options, use the **Accordion** block.
 
 ### Slider
 
@@ -387,14 +395,13 @@ A slideshow of images, one at a time.
 - **Image Fit**: **Cover (fill and crop)** (default), **Contain (show full)**, **Fill (stretch)**.
 - **Focus / Object Position**: Center, Top, Bottom, Left, Right.
 
-**Images**: one card per slide with the image address (or media button) and **Alt Text (SEO)**. **+ Add Slide** adds a placeholder slide; the bin icon removes one.
+**Images**: one card per slide, with move up/down and remove: the **Image** (address or media button) and **Alt text (what the image shows)**. **+ Add Slide** adds a placeholder slide.
 
 **Tips**
-- There are no arrows or dots. With **Slide**, visitors can also swipe or scroll sideways.
-- With **Fade**, only autoplay changes the slide: if you turn autoplay off, visitors only ever see the first image.
-- Autoplay needs at least two slides.
+- With two or more images, the site shows previous/next arrows on the sides. There are no dots. With **Slide**, visitors can also swipe or scroll sideways.
+- With **Fade** and autoplay off, visitors change image with the arrows.
+- Autoplay needs at least two slides. It pauses while the mouse is over the slider, and it is off for visitors who ask their system for less motion (they use the arrows).
 - If you set a **Height** in Style, it replaces the aspect ratio.
-- Slides cannot be reordered here; remove and re-add to change the order.
 
 ### Gallery
 
@@ -544,7 +551,8 @@ Plan cards side by side, each with price, features and a button.
 - **Short description**.
 - **Features — one per line**. Each line gets a check mark.
 - **Button text** and its link (**URL or mailto:**), or **Link to a page…** to pick one of your pages.
-- **Highlight this plan**: brand-colored border and button. When on, you can also add a **Badge** (for example "Most popular").
+- **Highlight this plan**: brand-colored border and button.
+- **Badge** (for example "Most popular"): always editable, whether or not the plan is highlighted. Leave it empty for no badge.
 - **+ Add plan**.
 
 **Pricing Layout**
@@ -554,8 +562,6 @@ Plan cards side by side, each with price, features and a button.
 - New pricing blocks have three plans, with "Pro" highlighted.
 - Leave **Button text** empty to hide a plan's button. Empty feature lines are skipped.
 - On screens 900px wide or less, plans stack in one column.
-- If you turn off **Highlight this plan**, clear the **Badge** first (see the note in [Known issues](#known-issues)).
-
 ### Team
 
 People cards with photo, name, role, short bio and links.
@@ -657,6 +663,27 @@ Shows items from one of your collections (blog posts, news, products…) as card
 - If there is nothing to show, the site displays "No published items yet."
 - On phones the grid becomes one column.
 
+### Site Search
+
+A search box. Visitors type a word and see a list of matching pages and collection items, each linking to its page.
+
+**Settings** (panel: **Site Search**)
+- **Placeholder**: the hint inside the empty box. Default "Search the site…".
+- **Button text**: default "Search".
+- **When nothing is found**: the message shown when there are no results, followed by what the visitor typed. Default "No results for".
+- **Results to show (1–50)**: the most results listed at once. Default 10.
+
+**How it works**
+- The search looks at the titles, descriptions and text of every published page and collection item. The list it searches (`search-index.json`) is rebuilt each time you publish, so publish after adding or changing content.
+- Pages set to **Hide this page from search engines** are left out of the results.
+- Results appear as the visitor types (and when they press the button). Every word typed must match; pages whose title matches come first. Accents and capital letters do not matter.
+- A link to the page with `?q=` and a word, for example `/search/?q=pizza`, opens it with the results already shown.
+- Results only appear on the published site; on the canvas you see the box and the button.
+
+**Tips**
+- Put this block on a page called "Search" (address `/search/`), then link to that page from your menu.
+- The box takes up to 720px and is centered. Change it in **Style**.
+
 ---
 
 ## Working with layout blocks
@@ -704,14 +731,3 @@ If the selected block is not a container, or nothing is selected, the line says 
 ### Deleting a container
 
 Deleting a container also deletes everything inside it. The confirmation says so, and you can undo with Ctrl+Z.
-
----
-
-## Known issues
-
-These behaviors may surprise you. They are tracked for a fix.
-
-- **Pricing badge**: turning off **Highlight this plan** hides the **Badge** field, but a badge already typed still shows on the site. Clear the badge before turning off the highlight.
-- **Slider with Fade and no autoplay**: only the first image is ever shown.
-- **Button colors**: a new button has a fixed blue background, so **Use Global Style (Brand)** does not switch it to your brand color. Clear **Colors › Background** to use the brand color.
-- **Layers quick buttons**: "Add inside selected" adds to the end of the page when the selected block is not a container.
