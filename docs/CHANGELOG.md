@@ -11,6 +11,15 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Media library folders**: create, rename and delete folders (nested), see counts, open a folder to see its images
+  and sub-folders; drag images onto a folder to move them. Folders are labels (`media-folders.json` + `folder` in
+  `media.json`): files never move, so image addresses and pages that use them don't change. Deleting a folder deletes
+  no image (they go to the parent). New uploads go into the open folder. The image picker can filter by folder.
+- **Select several images**: checkboxes (Shift+click for a range, Select all) and a bar to move them to a folder,
+  copy their addresses or delete them together. Deleting warns where the images are still used (pages, drafts,
+  collection items, header/footer, masters, Global Options, menu). Sorting: newest, oldest, name, size.
+- **Upload progress**: a panel lists every file being uploaded with its progress bar and result (files that aren't
+  images are refused with a reason); it stays until closed. Also in the image picker.
 - **Redirects**: renaming a published page or collection item makes its old address forward to the new one (a page
   at the old address on any host, plus real `301`s in a marked block of the site's `.htaccess` on Apache). Chains
   collapse, loops are avoided, a page published at an old address cancels its redirect. Global Options › Redirects
@@ -153,6 +162,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- **Media library: long file names pushed the copy/delete buttons out of the card**: names are now cut with "…" (full
+  name on hover) and the buttons always stay visible.
 - Images the server can't process (GD without WebP, memory) stay "not optimized" and are retried; Media says how many
   were skipped. Publishing leaves missing optimized copies out of the `srcset` (e.g. a site restored without
   `uploads/_cc/`). Collection items no longer show the page-only share image / noindex options (they use the cover).

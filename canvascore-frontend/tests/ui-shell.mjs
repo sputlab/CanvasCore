@@ -42,7 +42,12 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url); calls.push({ u, body: init.body });
   if (u.includes('save_page')) return new Response(JSON.stringify({ success: true }));
   if (u.includes('get_pages')) return new Response(JSON.stringify(PAGES));
-  if (u.includes('get_media')) return new Response(JSON.stringify([{ name: 'sky.jpg', url: '/uploads/sky.jpg', alt: 'Blue sky', w: 2000, h: 1000, bytes: 345000, optimized: true, variants: [480, 960, 1600] }, { name: 'old.png', url: '/uploads/old.png', alt: '', w: 0, h: 0, bytes: 1200, optimized: false, variants: [] }]));
+  if (u.includes('get_media_folders')) return new Response(JSON.stringify(MEDIA_FOLDERS));
+  if (u.includes('get_media')) return new Response(JSON.stringify(MEDIA));
+  if (u.includes('media_move')) { const b = JSON.parse(init.body); MEDIA.forEach((m) => { if (b.names.includes(m.name)) m.folder = b.folder; }); return new Response(JSON.stringify({ success: true, moved: b.names.length, folders: MEDIA_FOLDERS })); }
+  if (u.includes('media_usage')) return new Response(JSON.stringify({ success: true, usage: { 'sky.jpg': ['Page: Home'] } }));
+  if (u.includes('delete_media')) { const b = JSON.parse(init.body); return new Response(JSON.stringify({ success: true, deleted: b.names.length, message: `${b.names.length} images deleted.` })); }
+  if (u.includes('upload_media')) return new Response(JSON.stringify({ success: true }));
   if (u.includes('optimize_media')) return new Response(JSON.stringify({ success: true, done: 1, remaining: 0 }));
   if (u.includes('save_media_meta')) return new Response(JSON.stringify({ success: true }));
   if (u.includes('get_revisions')) return new Response(JSON.stringify([{ id: 2, title: 'P', kind: 'published', author: 'ann', created_at: '2026-10-12 10:00:00' }, { id: 1, title: 'P', kind: 'draft', author: 'bob', created_at: '2026-10-11 09:00:00' }]));
@@ -64,6 +69,13 @@ const typeIn = (el, v) => { Object.getOwnPropertyDescriptor(w.HTMLInputElement.p
 const btn = (txt, root = doc) => $$('button', root).find((b) => b.textContent.trim() === txt);
 const btnHas = (txt, root = doc) => $$('button', root).find((b) => b.textContent.includes(txt));
 
+const LONG = 'a-really-really-long-file-name-that-has-no-spaces-at-all-and-keeps-going-forever-2026.jpg';
+const MEDIA = [
+  { name: 'sky.jpg', url: '/uploads/sky.jpg', folder: 'Products', mtime: 200, alt: 'Blue sky', w: 2000, h: 1000, bytes: 345000, optimized: true, variants: [480, 960, 1600] },
+  { name: 'old.png', url: '/uploads/old.png', folder: '', mtime: 100, alt: '', w: 0, h: 0, bytes: 1200, optimized: false, variants: [] },
+  { name: LONG, url: '/uploads/' + LONG, folder: '', mtime: 300, alt: '', w: 10, h: 10, bytes: 900, optimized: true, variants: [] },
+];
+const MEDIA_FOLDERS = ['Products', 'Products/Shoes'];
 const PAGES = [
   { id: 'p1', title: 'Home', clean_slug: 'index', status: 'published', is_home: 1, updated_at: '2026-10-01 10:00:00', content_json: '[]' },
   { id: 'p2', title: 'About us', clean_slug: 'about', status: 'modified', updated_at: '2026-10-05 10:00:00', content_json: '[{"id":"b1","type":"TEXT","content":{"text":"<p>x</p>"},"styles":{}}]' },
@@ -366,23 +378,72 @@ try {
   {
     const MediaManager = (await vite.ssrLoadModule('/src/components/MediaManager.jsx')).default;
     mount(React.createElement(MediaManager));
-    await waitFor(() => $$('figure').length === 2);
-    const cards = $$('figure');
-    check('the library shows size, file size and "Optimized"', /2000×1000/.test(cards[0].textContent) && /337 KB/.test(cards[0].textContent) && /Optimized/.test(cards[0].textContent) && !/Optimized/.test(cards[1].textContent));
-    const altIn = cards[1].querySelector('input[aria-label^="Description"]');
-    typeIn(altIn, 'Old logo'); altIn.dispatchEvent(new w.FocusEvent('blur', { bubbles: false })); altIn.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true })); await sleep(40);
+    await waitFor(() => $$('figure').length === 3);
+    const card = (name) => $$('figure').find((f) => f.querySelector('.cc-media-card__name').textContent === name);
+    check('the library shows size, file size and "Optimized"', /2000×1000/.test(card('sky.jpg').textContent) && /337 KB/.test(card('sky.jpg').textContent) && /Optimized/.test(card('sky.jpg').textContent) && !/Optimized/.test(card('old.png').textContent));
+    const altIn = card('old.png').querySelector('input[aria-label^="Description"]');
+    typeIn(altIn, 'Old logo'); altIn.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true })); await sleep(40);
     const saved = calls.filter((c) => c.u.includes('save_media_meta')).pop();
     check('an image description is saved when you leave the field', !!saved && JSON.parse(saved.body).alt === 'Old logo' && JSON.parse(saved.body).name === 'old.png');
     const opt = btnHas('Optimize 1 older image');
     check('"Optimize older images" appears when some aren\'t optimized', !!opt);
     click(opt); await waitFor(() => calls.some((c) => c.u.includes('optimize_media'))); await sleep(60);
     check('…and runs the optimization on the server', calls.some((c) => c.u.includes('optimize_media')));
+  }
 
+  console.log('\nMEDIA LIBRARY: FOLDERS, SELECTION, UPLOADS');
+  {
+    const MediaManager = (await vite.ssrLoadModule('/src/components/MediaManager.jsx')).default;
+    mount(React.createElement(MediaManager));
+    await waitFor(() => $$('figure').length === 3);
+    const card = (name) => $$('figure').find((f) => f.querySelector('.cc-media-card__name').textContent === name);
+    const lc = card(LONG);
+    check('a long file name is cut with "…" and its buttons stay inside the card (copy, move, delete)',
+      lc.querySelector('.cc-media-card__name').title === LONG && lc.querySelectorAll('.cc-media-card__actions button').length === 3
+      && /cc-media-card__name \{[^}]*min-width: 0;[^}]*text-overflow: ellipsis/.test(readFileSync(path.join(PROJECT, 'src/ui/kit.css'), 'utf8')));
+    check('newest first by default', $$('.cc-media-card__name').map((n) => n.textContent)[0] === LONG);
+    const folderBtn = (label) => $$('.cc-media-folder__btn').find((b) => b.querySelector('.cc-media-folder__name').textContent === label);
+    check('folders on the left with counts (All, Not in a folder, Products, Shoes)', /3/.test(folderBtn('All images').textContent) && /2/.test(folderBtn('Not in a folder').textContent) && !!folderBtn('Products') && !!folderBtn('Shoes'));
+    click(folderBtn('Products')); await sleep(30);
+    check('opening a folder shows its images and its sub-folders', $$('figure').length === 1 && !!$$('.cc-media-subfolder').find((b) => /Shoes/.test(b.textContent)));
+    click(folderBtn('All images')); await sleep(30);
+    // selection: click one, Shift+click another selects the range
+    const box = (name) => card(name).querySelector('input[type="checkbox"]');
+    click(box(LONG)); await sleep(10);
+    box('old.png').dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true })); await sleep(30);
+    check('selecting images (Shift+click selects the range in between)', /3 selected/.test($('.cc-media-selbar').textContent));
+    click(btnHas('Move to folder…'));
+    const md = await waitFor(() => $('[aria-labelledby="cc-move-title"]'));
+    check('"Move to folder…" lists the folders', !!md && [...md.querySelectorAll('option')].some((o) => o.value === 'Products/Shoes'));
+    pick(md.querySelector('select'), 'Products/Shoes'); await sleep(10);
+    click(btn('Move', md)); await sleep(60);
+    const mv = calls.filter((c) => c.u.includes('media_move')).pop();
+    check('…moves all the selected images at once', !!mv && JSON.parse(mv.body).names.length === 3 && JSON.parse(mv.body).folder === 'Products/Shoes');
+    await waitFor(() => $$('figure').length === 3);
+    click(card('sky.jpg').querySelector('input[type="checkbox"]')); click(card('old.png').querySelector('input[type="checkbox"]')); await sleep(30);
+    click(btnHas('Delete', $('.cc-media-selbar')));
+    const dd = await waitFor(() => $('[role="alertdialog"]'));
+    check('deleting several images asks once, and warns where they are still used', !!dd && /Delete 2 images\?/.test(dd.textContent) && /Page: Home/.test(dd.textContent));
+    click(btn('Delete 2 images', dd)); await sleep(60);
+    const del = calls.filter((c) => c.u.includes('delete_media')).pop();
+    check('…and deletes them in one go', !!del && JSON.parse(del.body).names.length === 2);
+    // uploads with a progress panel (fetch path: no XMLHttpRequest in this test)
+    const fileInput = $('input[type="file"]');
+    const F = globalThis.File || w.File; const f1 = new F(['x'], 'one.jpg', { type: 'image/jpeg' }); const f2 = new F(['y'], 'notes.txt', { type: 'text/plain' });
+    Object.defineProperty(fileInput, 'files', { value: [f1, f2], configurable: true });
+    fileInput.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const panel = await waitFor(() => $('.cc-upload-panel') && /1 uploaded, 1 failed/.test($('.cc-upload-panel').textContent) && $('.cc-upload-panel'), 3000);
+    check('uploading shows a panel with each file, its progress and the result', !!panel && /one\.jpg/.test(panel.textContent) && /Not an image/.test(panel.textContent));
+    click($('.cc-upload-panel [aria-label="Close"]')); await sleep(20);
+    check('…which closes when you are done', !$('.cc-upload-panel'));
+  }
+
+  {
     // picking an image fills the block's alt text when it is empty
     useStore.setState({ blocks: [{ id: 'im1', type: 'IMAGE', styles: {}, content: { src: '', alt: '' } }], selectedBlockId: 'im1' });
     mount(React.createElement(PropertyPanel)); await sleep(60);
     click($('[aria-label="Choose from the media library"]'));
-    const item = await waitFor(() => $('.cc-picker__item'));
+    const item = await waitFor(() => $('.cc-picker__item[aria-label="Choose Blue sky"]'));
     check('the picker shows the library with sizes and a search box', !!item && /2000×1000/.test($('.cc-picker').textContent) && !!$('.cc-picker input[type="search"], .cc-picker .ui-search input'));
     if (item) click(item);
     await sleep(40);

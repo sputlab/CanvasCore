@@ -154,3 +154,113 @@ function cc_optimize_images($html, $uploads_url, $meta = null) {
         return $tag;
     }, $html);
 }
+
+// ---------------------------------------------------------------------------
+// Folders of the media library. They are labels in the metadata ("folder" => "Products/Shoes"): the files
+// stay in uploads/, so their addresses never change and moving an image can't break a page that uses it.
+// The folder list (including empty folders) is kept in the data dir (media-folders.json).
+// ---------------------------------------------------------------------------
+function cc_media_folders_file() { return $GLOBALS['CC_MEDIA_FOLDERS_FILE'] ?? (cc_data_dir() . '/media-folders.json'); }   // overridable for tests
+
+// "Products/ Shoes " → "Products/Shoes"; null when not valid. "" = no folder (the library's top level).
+function cc_media_folder_path($p) {
+    $p = trim(str_replace('\\', '/', (string)$p), " /");
+    if ($p === '') return '';
+    $parts = array_map('trim', explode('/', $p));
+    if (count($parts) > 5) return null;
+    foreach ($parts as $seg) if (!preg_match('/^[\p{L}\p{N} _.()&-]{1,50}$/u', $seg) || $seg === '.' || $seg === '..') return null;
+    return implode('/', $parts);
+}
+function cc_media_folders() {
+    $f = @json_decode((string)@file_get_contents(cc_media_folders_file()), true);
+    $list = is_array($f) ? array_values(array_filter($f, 'is_string')) : [];
+    foreach (cc_media_meta_all() as $m) if (!empty($m['folder'])) $list[] = $m['folder'];   // folders that hold files
+    $all = [];
+    foreach ($list as $p) {   // every parent of a folder is a folder too
+        $acc = '';
+        foreach (explode('/', $p) as $seg) { $acc = $acc === '' ? $seg : "$acc/$seg"; $all[$acc] = true; }
+    }
+    $all = array_keys($all);
+    sort($all, SORT_NATURAL | SORT_FLAG_CASE);
+    return $all;
+}
+function cc_media_folders_save($list) {
+    $list = array_values(array_unique(array_filter($list, function ($p) { return is_string($p) && $p !== ''; })));
+    return @file_put_contents(cc_media_folders_file(), json_encode($list, JSON_UNESCAPED_UNICODE), LOCK_EX) !== false;
+}
+// $p is $folder itself or inside it
+function cc_in_folder($p, $folder) { return $p === $folder || strpos($p, $folder . '/') === 0; }
+
+function cc_media_folder_create($path) {
+    $path = cc_media_folder_path($path);
+    if (!$path) return false;
+    $list = cc_media_folders(); $list[] = $path;
+    return cc_media_folders_save($list);
+}
+// Rename or move a folder (and everything in it); false when the new place is taken or invalid
+function cc_media_folder_rename($from, $to) {
+    $from = cc_media_folder_path($from); $to = cc_media_folder_path($to);
+    if (!$from || !$to || $from === $to || cc_in_folder($to, $from)) return false;
+    $list = cc_media_folders();
+    if (in_array($to, $list, true)) return false;
+    $mapped = array_map(function ($p) use ($from, $to) { return cc_in_folder($p, $from) ? $to . substr($p, strlen($from)) : $p; }, $list);
+    cc_media_meta_update(function (&$all) use ($from, $to) {
+        foreach ($all as &$m) if (is_array($m) && !empty($m['folder']) && cc_in_folder($m['folder'], $from)) $m['folder'] = $to . substr($m['folder'], strlen($from));
+        unset($m);
+    });
+    return cc_media_folders_save($mapped);
+}
+// Delete a folder: its images (and its sub-folders' images) go to the parent folder; nothing is deleted from disk
+function cc_media_folder_delete($path) {
+    $path = cc_media_folder_path($path);
+    if (!$path) return false;
+    $parent = strpos($path, '/') !== false ? substr($path, 0, strrpos($path, '/')) : '';
+    cc_media_meta_update(function (&$all) use ($path, $parent) {
+        foreach ($all as &$m) if (is_array($m) && !empty($m['folder']) && cc_in_folder($m['folder'], $path)) $m['folder'] = $parent;
+        unset($m);
+    });
+    return cc_media_folders_save(array_filter(cc_media_folders(), function ($p) use ($path) { return !cc_in_folder($p, $path); }));
+}
+function cc_media_move($names, $folder) {
+    $folder = cc_media_folder_path($folder);
+    if ($folder === null) return false;
+    if ($folder !== '') cc_media_folder_create($folder);
+    $names = array_values(array_filter(array_map('basename', (array)$names)));
+    cc_media_meta_update(function (&$all) use ($names, $folder) {
+        foreach ($names as $n) $all[$n] = array_merge(is_array($all[$n] ?? null) ? $all[$n] : [], ['folder' => $folder]);
+    });
+    return true;
+}
+
+// Where images are used: name => list of "Page title" / "Item title" / "Header"… (stored content, published or not)
+function cc_media_usage($pdo, $names) {
+    $out = [];
+    $names = array_values(array_filter(array_map('basename', (array)$names)));
+    foreach ($names as $n) $out[$n] = [];
+    if (!$names) return $out;
+    $sources = [
+        ["SELECT title AS label, content_json, seo_image AS extra FROM pages WHERE is_draft_copy = 0", 'Page'],
+        ["SELECT p.title AS label, d.content_json, d.seo_image AS extra FROM pages d JOIN pages p ON p.id = d.parent_id WHERE d.is_draft_copy = 1", 'Page draft'],
+        ["SELECT title AS label, content_json, cover_image AS extra FROM collection_items", 'Item'],
+        ["SELECT name AS label, content_json, '' AS extra FROM site_parts", 'Global'],
+        ["SELECT name AS label, content_json, '' AS extra FROM master_components", 'Master'],
+    ];
+    foreach ($sources as [$sql, $kind]) {
+        try { $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC); } catch (Exception $e) { continue; }
+        foreach ($rows as $r) {
+            // stored JSON escapes slashes: look for the bare file name in both the content and the share image
+            $hay = (string)$r['content_json'] . ' ' . (string)$r['extra'];
+            foreach ($names as $n) {
+                if (strpos($hay, $n) !== false) {
+                    $label = $kind . ': ' . (string)$r['label'];
+                    if (!in_array($label, $out[$n], true)) $out[$n][] = $label;
+                }
+            }
+        }
+    }
+    foreach (['settings.json' => 'Global Options', 'menu.json' => 'Menu'] as $file => $label) {
+        $hay = (string)@file_get_contents(cc_data_dir() . '/' . $file);
+        foreach ($names as $n) if ($hay !== '' && strpos($hay, $n) !== false && !in_array($label, $out[$n], true)) $out[$n][] = $label;
+    }
+    return $out;
+}

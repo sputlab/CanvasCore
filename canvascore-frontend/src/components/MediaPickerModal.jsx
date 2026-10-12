@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { notify } from '../ui/notify';
 import { Image as ImageIcon, X, Upload } from 'lucide-react';
 import { SearchInput } from '../ui/kit';
+import { useUploader } from '../editor/useUploader';
+import { UploadPanel } from './UploadPanel';
 import { formatBytes } from '../editor/mediaInfo';
 
 // Media library picker (modal): choose an uploaded image or upload new ones.
@@ -9,32 +11,29 @@ import { formatBytes } from '../editor/mediaInfo';
 // description saved in the library (empty when none), so blocks can fill their alt field.
 const MediaPickerModal = ({ onClose, onSelect }) => {
   const [images, setImages] = useState(null);   // null = loading
-  const [uploading, setUploading] = useState(false);
   const [query, setQuery] = useState('');
+  const [folders, setFolders] = useState([]);
+  const [folder, setFolder] = useState('\u0000all');   // filter: every image, '' = not in a folder, or a folder
   const closeRef = useRef(null);
   const fetchMedia = () => fetch('api.php?action=get_media').then((res) => res.json())
     .then((data) => setImages(Array.isArray(data) ? data : []))
     .catch(() => { setImages([]); notify('Could not load the media library.', 'error'); });
-  useEffect(() => { fetchMedia(); if (closeRef.current) closeRef.current.focus(); }, []);
+  useEffect(() => {
+    fetchMedia(); if (closeRef.current) closeRef.current.focus();
+    fetch('api.php?action=get_media_folders').then((r) => r.json()).then((d) => { if (Array.isArray(d)) setFolders(d); }).catch(() => {});
+  }, []);
+  const uploader = useUploader(useCallback((ok) => { if (ok) fetchMedia(); }, []));
 
-  const handleUpload = async (e) => {
+  // New images go into the folder being shown (none when showing every image)
+  const handleUpload = (e) => {
     const files = [...(e.target.files || [])];
     e.target.value = '';
-    if (!files.length) return;
-    setUploading(true);
-    for (const file of files) {
-      const formData = new FormData(); formData.append('file', file);
-      try {
-        const data = await (await fetch('api.php?action=upload_media', { method: 'POST', body: formData })).json();
-        if (!data.success) notify(`${file.name}: ${data.message || 'upload error'}`, 'error');
-      } catch { notify(`${file.name}: upload failed (connection problem).`, 'error'); }
-    }
-    setUploading(false);
-    fetchMedia();
+    uploader.start(files, folder === '\u0000all' ? '' : folder);
   };
 
   const q = query.trim().toLowerCase();
-  const shown = (images || []).filter((img) => !q || `${img.name} ${img.alt || ''}`.toLowerCase().includes(q));
+  const shown = (images || []).filter((img) => (folder === '\u0000all' || (img.folder || '') === folder) && (!q || `${img.name} ${img.alt || ''}`.toLowerCase().includes(q)))
+    .sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
 
   return (
     <div className="ui-dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -46,14 +45,23 @@ const MediaPickerModal = ({ onClose, onSelect }) => {
             <h2 id="cc-picker-title" className="ui-dialog__title">Choose an image</h2>
           </span>
           <span className="ui-row" style={{ gap: 8 }}>
-            <label className="ui-btn ui-btn--success ui-btn--sm" style={{ cursor: uploading ? 'progress' : 'pointer' }}>
-              <Upload size={14} aria-hidden="true" /> {uploading ? 'Uploading…' : 'Upload'}
-              <input type="file" multiple style={{ display: 'none' }} accept="image/*" onChange={handleUpload} disabled={uploading} />
+            <label className="ui-btn ui-btn--success ui-btn--sm" style={{ cursor: 'pointer' }}>
+              <Upload size={14} aria-hidden="true" /> {uploader.busy ? 'Uploading…' : 'Upload'}
+              <input type="file" multiple style={{ display: 'none' }} accept="image/*" onChange={handleUpload} />
             </label>
             <button ref={closeRef} type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label="Close" onClick={onClose}><X size={16} /></button>
           </span>
         </div>
-        {images && images.length > 0 && <div style={{ margin: '6px 0 10px' }}><SearchInput value={query} onChange={setQuery} placeholder="Search by name or description…" label="Search images" /></div>}
+        {images && images.length > 0 && (
+          <div style={{ margin: '6px 0 10px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 220px' }}><SearchInput value={query} onChange={setQuery} placeholder="Search by name or description…" label="Search images" /></div>
+            <select className="ui-select" aria-label="Folder" value={folder} onChange={(e) => setFolder(e.target.value)} style={{ flex: '0 1 220px' }}>
+              <option value={'\u0000all'}>All images</option>
+              <option value="">Not in a folder</option>
+              {folders.map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+        )}
         <div className="cc-picker__grid">
           {images === null ? <p className="ui-hint">Loading…</p>
             : images.length === 0 ? <p className="ui-hint">No images yet: upload one.</p>
@@ -67,6 +75,7 @@ const MediaPickerModal = ({ onClose, onSelect }) => {
             ))}
         </div>
       </div>
+      <UploadPanel uploader={uploader} />
     </div>
   );
 };

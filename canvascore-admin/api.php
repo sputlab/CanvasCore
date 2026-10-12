@@ -221,6 +221,8 @@ if ($action === 'upload_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $base_dir = dirname($_SERVER['SCRIPT_NAME'], 2);
             if ($base_dir === '\\' || $base_dir === '/') $base_dir = '';
             $meta = cc_media_process($uploads_dir, $fname);   // smaller WebP copies + size info
+            $upFolder = cc_media_folder_path($_POST['folder'] ?? '');
+            if ($upFolder) { cc_media_move([$fname], $upFolder); $meta['folder'] = $upFolder; }
             echo json_encode(['success' => true, 'message' => 'Uploaded successfully.', 'url' => $base_dir . '/uploads/' . $fname, 'filename' => $fname, 'meta' => $meta]);
         } else { echo json_encode(['success' => false, 'message' => 'Cannot move the uploaded file.']); }
     } else { echo json_encode(['success' => false, 'message' => 'No file received or upload error.']); }
@@ -237,7 +239,8 @@ if ($action === 'get_media') {
     foreach ($files as $f) {
         if (!is_file($uploads_dir . '/' . $f)) continue;   // the _cc folder of optimized copies is not listed
         $m = is_array($meta[$f] ?? null) ? $meta[$f] : [];
-        $media[] = ['name' => $f, 'url' => $base_url . $f, 'alt' => (string)($m['alt'] ?? ''), 'w' => (int)($m['w'] ?? 0), 'h' => (int)($m['h'] ?? 0),
+        $media[] = ['name' => $f, 'url' => $base_url . $f, 'folder' => (string)($m['folder'] ?? ''), 'mtime' => (int)@filemtime($uploads_dir . '/' . $f),
+                    'alt' => (string)($m['alt'] ?? ''), 'w' => (int)($m['w'] ?? 0), 'h' => (int)($m['h'] ?? 0),
                     'bytes' => (int)($m['bytes'] ?? @filesize($uploads_dir . '/' . $f)), 'optimized' => !empty($m['optimized']), 'variants' => array_values($m['variants'] ?? [])];
     }
     echo json_encode($media); exit;
@@ -271,12 +274,47 @@ if ($action === 'optimize_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 if ($action === 'delete_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $filename = basename($data['name'] ?? '');
-    if ($filename && $filename !== '.htaccess' && is_file($uploads_dir . '/' . $filename)) {
-        unlink($uploads_dir . '/' . $filename);
-        cc_media_forget($uploads_dir, $filename);   // its optimized copies and alt text
+    // One file ("name") or several ("names")
+    $names = isset($data['names']) && is_array($data['names']) ? $data['names'] : [$data['name'] ?? ''];
+    $deleted = 0;
+    foreach ($names as $n) {
+        $filename = basename((string)$n);
+        if ($filename && $filename !== '.htaccess' && is_file($uploads_dir . '/' . $filename)) {
+            unlink($uploads_dir . '/' . $filename);
+            cc_media_forget($uploads_dir, $filename);   // its optimized copies and alt text
+            $deleted++;
+        }
     }
-    echo json_encode(['success' => true, 'message' => 'Image deleted.']); exit;
+    echo json_encode(['success' => true, 'deleted' => $deleted, 'message' => $deleted === 1 ? 'Image deleted.' : "$deleted images deleted."]); exit;
+}
+// Folders (labels: files never move on disk, addresses don't change)
+if ($action === 'get_media_folders') {
+    echo json_encode(cc_media_folders()); exit;
+}
+if (in_array($action, ['media_folder_create', 'media_folder_rename', 'media_folder_delete', 'media_move'], true) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($d)) $d = [];
+    $bad = ['success' => false, 'message' => 'Folder names can use letters, numbers, spaces and - _ . ( ) & (up to 50 characters, 5 levels).'];
+    if ($action === 'media_folder_create') {
+        if (!cc_media_folder_path($d['path'] ?? '')) { echo json_encode($bad); exit; }
+        cc_media_folder_create($d['path']);
+    } elseif ($action === 'media_folder_rename') {
+        if (!cc_media_folder_path($d['to'] ?? '')) { echo json_encode($bad); exit; }
+        if (!cc_media_folder_rename($d['from'] ?? '', $d['to'] ?? '')) { echo json_encode(['success' => false, 'message' => 'A folder with that name already exists there (or it would go inside itself).']); exit; }
+    } elseif ($action === 'media_folder_delete') {
+        cc_media_folder_delete($d['path'] ?? '');
+    } else {
+        $names = array_values(array_filter((array)($d['names'] ?? []), function ($n) use ($uploads_dir) { return is_file($uploads_dir . '/' . basename((string)$n)); }));
+        if (cc_media_folder_path($d['folder'] ?? '') === null) { echo json_encode($bad); exit; }
+        cc_media_move($names, $d['folder'] ?? '');
+        echo json_encode(['success' => true, 'moved' => count($names), 'folders' => cc_media_folders()]); exit;
+    }
+    echo json_encode(['success' => true, 'folders' => cc_media_folders()]); exit;
+}
+// Where the given images are used (warning before deleting)
+if ($action === 'media_usage' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true);
+    echo json_encode(['success' => true, 'usage' => cc_media_usage($pdo, (array)($d['names'] ?? []))]); exit;
 }
 
 // ---------------------------------------------------------------------------
