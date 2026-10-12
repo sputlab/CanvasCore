@@ -61,7 +61,7 @@ echo "\nREVISION HISTORY\n";
 $_SESSION['username'] = 'ann';
 $db = new PDO('sqlite::memory:'); $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
-foreach (cc_db_migrations() as $v => $m) if ($v >= 6) $m($db);
+foreach (cc_db_migrations() as $v => $m) if ($v === 6) $m($db);
 cc_add_revision($db, 'p1', 'Home', '[1]', 'draft');
 cc_add_revision($db, 'p1', 'Home', '[1]', 'draft');
 check('a save without changes adds no version', (int)$db->query("SELECT COUNT(*) FROM page_revisions")->fetchColumn() === 1);
@@ -94,6 +94,28 @@ check('an image that already says how to load keeps it; others decode async', st
 cc_media_forget($up, 'photo.jpg');
 check('deleting an image removes its copies and its description', !is_file("$up/_cc/photo-480.webp") && !isset(cc_media_meta_all()['photo.jpg']));
 array_map('unlink', glob("$up/_cc/*") ?: []); @rmdir("$up/_cc"); array_map('unlink', glob("$up/*") ?: []); @rmdir($up);
+
+echo "\nREDIRECTS, COOKIE BANNER, SEARCH\n";
+check('redirect paths are normalized and validated', cc_redirect_path('old-page') === null && cc_redirect_path('/Old-Page') === '/old-page/' && cc_redirect_path('/') === null && cc_redirect_path('/a b/') === null && cc_redirect_target('https://x.com/a') === 'https://x.com/a');
+$rdb = new PDO('sqlite::memory:'); $rdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$rdb->exec("CREATE TABLE pages (id TEXT)"); foreach (cc_db_migrations() as $v => $m) if ($v === 7) $m($rdb);
+cc_add_redirect($rdb, '/a/', '/b/'); cc_add_redirect($rdb, '/b/', '/c/');
+$rows = $rdb->query("SELECT from_path, to_path FROM redirects ORDER BY from_path")->fetchAll(PDO::FETCH_KEY_PAIR);
+check('renaming twice: both old addresses go straight to the newest (no chains)', $rows === ['/a/' => '/c/', '/b/' => '/c/'], json_encode($rows));
+cc_add_redirect($rdb, '/c/', '/a/');
+$rows = $rdb->query("SELECT from_path, to_path FROM redirects ORDER BY from_path")->fetchAll(PDO::FETCH_KEY_PAIR);
+check('renaming back never makes a loop (the page\'s own address is not redirected)', !isset($rows['/a/']) && ($rows['/c/'] ?? '') === '/a/' && ($rows['/b/'] ?? '') === '/a/', json_encode($rows));
+$ht = cc_htaccess_with_redirects("ErrorDocument 404 /404.html\n", [['/old/', '/new/']]);
+$ht2 = cc_htaccess_with_redirects($ht, [['/x/', 'https://e.com/']]);
+check('.htaccess gets a marked block of 301s, replaced (not duplicated) on the next publish, the rest kept', strpos($ht2, 'ErrorDocument 404') === 0 && substr_count($ht2, '# BEGIN CanvasCore redirects') === 1 && strpos($ht2, 'Redirect 301 /x/ https://e.com/') !== false && strpos($ht2, '/old/') === false);
+check('…and removed when there are none', strpos(cc_htaccess_with_redirects($ht2, []), 'CanvasCore redirects') === false);
+$rp = cc_redirect_page_html('/new/');
+check('the page at the old address forwards (refresh + script), is noindex and canonical to the new one', strpos($rp, 'http-equiv="refresh" content="0; url=/new/"') !== false && strpos($rp, 'noindex') !== false && strpos($rp, 'rel="canonical" href="/new/"') !== false);
+check('cookie banner: off unless enabled', cc_cookie_banner_html(['enabled' => false]) === '' && cc_cookie_banner_html(null) === '');
+$cb = cc_cookie_banner_html(['enabled' => true, 'text' => 'Cookies <b>!</b>', 'privacyUrl' => 'privacy/index.html', 'position' => 'bottom-left']);
+check('cookie banner: escaped text, privacy link, Accept/Decline, consent gating script', strpos($cb, 'Cookies &lt;b&gt;!&lt;/b&gt;') !== false && strpos($cb, 'href="{{BASE_URL}}privacy/"') !== false && strpos($cb, 'data-cc-consent-choice="granted"') !== false && strpos($cb, 'data-cc-consent-src') !== false);
+$sb = render_block(['id' => 'sr', 'type' => 'SEARCH', 'styles' => [], 'content' => ['placeholder' => 'Find "it"', 'limit' => 999]]);
+check('Site Search block: escaped placeholder, index address, limit capped at 50, its script', strpos($sb, 'placeholder="Find &quot;it&quot;"') !== false && strpos($sb, 'data-index="{{BASE_URL}}search-index.json"') !== false && strpos($sb, 'data-limit="50"') !== false && strpos($sb, "getElementById('sr')") !== false);
 
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);

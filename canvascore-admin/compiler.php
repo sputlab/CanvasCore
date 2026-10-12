@@ -200,6 +200,19 @@ function cc_int($v, $def, $min, $max) {
     if (!is_scalar($v) || is_bool($v) || !preg_match('/^\s*([+-]?\d+)/', (string)$v, $m)) return $def;
     return min($max, max($min, (int)$m[1]));
 }
+// Site search script (SEARCH block); %ID% = the block's id
+const CC_SEARCH_SCRIPT = <<<'CCJS'
+(function(){var r=document.getElementById('%ID%');if(!r)return;var f=r.querySelector('form'),i=r.querySelector('input'),o=r.querySelector('.cc-search-results'),idx=null,lim=+r.getAttribute('data-limit')||10;
+function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function load(){if(idx)return Promise.resolve(idx);return fetch(r.getAttribute('data-index')).then(function(x){return x.json();}).then(function(d){idx=(Array.isArray(d)?d:[]).map(function(e){e._t=norm(e.t);e._a=norm(e.t+' '+(e.d||'')+' '+(e.x||''));return e;});return idx;});}
+function run(q){var w=norm(q).split(/\s+/).filter(Boolean);if(!w.length){o.innerHTML='';return;}load().then(function(d){var res=d.filter(function(e){return w.every(function(x){return e._a.indexOf(x)>-1;});}).sort(function(a,b){return (b._t.indexOf(w[0])>-1)-(a._t.indexOf(w[0])>-1);}).slice(0,lim);
+o.innerHTML=res.length?'<ul style="list-style:none;margin:0;padding:0">'+res.map(function(e){return '<li style="padding:12px 0;border-bottom:1px solid #e2e8f0"><a href="'+esc(e.u)+'" style="font-weight:600;font-size:17px;color:var(--brand-color,#3b82f6)">'+esc(e.t)+'</a>'+(e.d?'<p style="margin:4px 0 0;color:#475569">'+esc(e.d)+'</p>':'')+'</li>';}).join('')+'</ul>':'<p style="color:#64748b">'+esc(r.getAttribute('data-empty'))+' “'+esc(q)+'”</p>';}).catch(function(){o.textContent='Search is not available right now.';});}
+f.addEventListener('submit',function(e){e.preventDefault();run(i.value);try{history.replaceState(null,'',location.pathname+(i.value?'?q='+encodeURIComponent(i.value):''));}catch(x){}});
+var t;i.addEventListener('input',function(){clearTimeout(t);t=setTimeout(function(){run(i.value);},250);});
+var q=new URLSearchParams(location.search).get('q');if(q){i.value=q;run(q);}})();
+CCJS;
+
 const CC_FORM_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date'];
 
 function build_inline_style($styles) {
@@ -1578,7 +1591,61 @@ function render_block($block) {
             $html .= "</div>\n";
             return $customCss . $html;
 
+        case 'SEARCH':
+            // Site search: the script searches search-index.json (written by rebuild_all.php)
+            $c = $block['content'] ?? [];
+            $ph = htmlspecialchars(trim((string)($c['placeholder'] ?? '')) !== '' ? $c['placeholder'] : 'Search the site…');
+            $sbtn = htmlspecialchars(trim((string)($c['buttonText'] ?? '')) !== '' ? $c['buttonText'] : 'Search');
+            $empty = htmlspecialchars(trim((string)($c['noResults'] ?? '')) !== '' ? $c['noResults'] : 'No results for');
+            $limit = cc_int($c['limit'] ?? null, 10, 1, 50);
+            $html = "<div id=\"$innerId\" class=\"cc-search$animClass$innerClass\" style=\"$styleAttr\" data-index=\"{{BASE_URL}}search-index.json\" data-empty=\"$empty\" data-limit=\"$limit\">\n";
+            $html .= "<form class=\"cc-search-form\" role=\"search\" style=\"display:flex; gap:8px; flex-wrap:wrap;\">\n";
+            $html .= "<input type=\"search\" name=\"q\" aria-label=\"$ph\" placeholder=\"$ph\" style=\"flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:inherit; box-sizing:border-box;\">\n";
+            $html .= "<button type=\"submit\" style=\"padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;\">$sbtn</button>\n";
+            $html .= "</form>\n<div class=\"cc-search-results\" aria-live=\"polite\" style=\"margin-top:16px;\"></div>\n";
+            $html .= "<script>" . str_replace('%ID%', $innerId, CC_SEARCH_SCRIPT) . "</script>\n</div>\n";
+            return $customCss . $html;
+
         default: return "<!-- Unknown element: " . preg_replace('/[^A-Za-z0-9_]/', '', (string)$block['type']) . " -->\n";
     }
+}
+
+// ---------------------------------------------------------------------------
+// Cookie / privacy banner (Global Options › Cookie banner), added to every published page.
+// The visitor's choice is remembered in localStorage ("cc_consent": granted | denied).
+// Until they accept, scripts written as <script type="text/plain" data-cc-consent> and embeds
+// written as <iframe data-cc-consent-src="…"> stay off; Accept turns them on. Any element with
+// data-cc-consent-open (e.g. a "Cookie settings" link in the footer) shows the banner again.
+// ---------------------------------------------------------------------------
+function cc_cookie_banner_html($cfg) {
+    if (!is_array($cfg) || empty($cfg['enabled'])) return '';
+    $t = function ($k, $def) use ($cfg) { $v = trim((string)($cfg[$k] ?? '')); return htmlspecialchars($v !== '' ? $v : $def); };
+    $text = $t('text', 'We use cookies to improve your experience and to understand how the site is used.');
+    $accept = $t('acceptLabel', 'Accept');
+    $decline = $t('declineLabel', 'Decline');
+    $plabel = $t('privacyLabel', 'Privacy policy');
+    $purl = trim((string)($cfg['privacyUrl'] ?? ''));
+    $link = '';
+    if ($purl !== '') {
+        if (!preg_match('~^(https?://|/|#)~i', $purl)) $purl = '{{BASE_URL}}' . ltrim(str_replace(['index.html'], '', $purl), '/');
+        $link = ' <a href="' . htmlspecialchars($purl) . '">' . $plabel . '</a>';
+    }
+    $pos = in_array($cfg['position'] ?? '', ['bottom-left', 'bottom-right'], true) ? $cfg['position'] : 'bottom';
+    $place = $pos === 'bottom' ? 'left:16px; right:16px; bottom:16px; margin:0 auto; max-width:760px;' : ($pos === 'bottom-left' ? 'left:16px; bottom:16px; max-width:380px;' : 'right:16px; bottom:16px; max-width:380px;');
+    return "\n<div id=\"cc-consent\" role=\"dialog\" aria-live=\"polite\" aria-label=\"Cookie consent\" hidden style=\"position:fixed; $place z-index:2147483000; background:#0f172a; color:#f1f5f9; border-radius:12px; padding:16px 18px; box-shadow:0 12px 32px rgba(0,0,0,.35); font:14px/1.5 var(--font-family, system-ui, sans-serif); display:flex; flex-wrap:wrap; gap:12px; align-items:center;\">"
+        . "<p style=\"margin:0; flex:1 1 260px;\">$text$link</p>"
+        . "<span style=\"display:flex; gap:8px; flex-wrap:wrap;\">"
+        . "<button type=\"button\" data-cc-consent-choice=\"denied\" style=\"padding:9px 14px; border-radius:8px; border:1px solid #475569; background:transparent; color:#f1f5f9; font:inherit; cursor:pointer;\">$decline</button>"
+        . "<button type=\"button\" data-cc-consent-choice=\"granted\" style=\"padding:9px 14px; border-radius:8px; border:none; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;\">$accept</button>"
+        . "</span></div>\n"
+        . "<style>#cc-consent a{color:inherit; text-decoration:underline} #cc-consent[hidden]{display:none !important}</style>\n"
+        . "<script>(function(){var K='cc_consent',b=document.getElementById('cc-consent');if(!b)return;"
+        . "function get(){try{return localStorage.getItem(K)}catch(e){return null}}"
+        . "function on(){document.querySelectorAll('script[type=\"text/plain\"][data-cc-consent]').forEach(function(o){var s=document.createElement('script');for(var i=0;i<o.attributes.length;i++){var a=o.attributes[i];if(a.name!=='type'&&a.name!=='data-cc-consent')s.setAttribute(a.name,a.value);}s.text=o.text;o.parentNode.replaceChild(s,o);});"
+        . "document.querySelectorAll('iframe[data-cc-consent-src]').forEach(function(f){f.src=f.getAttribute('data-cc-consent-src');f.removeAttribute('data-cc-consent-src');});}"
+        . "function set(v){try{localStorage.setItem(K,v)}catch(e){}window.ccConsent=v;b.hidden=true;if(v==='granted')on();document.dispatchEvent(new CustomEvent('cc-consent',{detail:v}));}"
+        . "b.addEventListener('click',function(e){var c=e.target.closest('[data-cc-consent-choice]');if(c)set(c.getAttribute('data-cc-consent-choice'));});"
+        . "document.addEventListener('click',function(e){if(e.target.closest('[data-cc-consent-open]')){e.preventDefault();b.hidden=false;}});"
+        . "var v=get();window.ccConsent=v;if(v==='granted')on();else if(!v)b.hidden=false;})();</script>\n";
 }
 ?>

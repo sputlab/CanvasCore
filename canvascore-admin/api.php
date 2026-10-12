@@ -347,7 +347,13 @@ function apply_home($pdo, $primaryId, $val) {
 // A page's address changed: links pointing to it are updated everywhere they can be stored
 // (pages, collection items, header/footer, masters, menu), see cc_relink_node() in config.php.
 function relink_slug_change($pdo, $data_dir, $old_slug, $new_slug) {
+    // The page is published at /new/ now: no redirect may hide it
+    if ($new_slug && !in_array($new_slug, ['index', 'home'], true)) { try { cc_drop_redirect_from($pdo, '/' . $new_slug . '/'); } catch (Exception $e) {} }
     if (!$old_slug || $old_slug === $new_slug) return;
+    // The old address keeps working: it forwards to the new one
+    if (!in_array($old_slug, ['index', 'home'], true)) {
+        try { cc_add_redirect($pdo, '/' . $old_slug . '/', in_array($new_slug, ['index', 'home'], true) ? '/' : '/' . $new_slug . '/'); } catch (Exception $e) {}
+    }
     $args = [$old_slug . '/index.html', $new_slug . '/index.html', '{{BASE_URL}}' . $old_slug . '/', '{{BASE_URL}}' . $new_slug . '/'];
     foreach ([['pages', 'id'], ['collection_items', 'id'], ['site_parts', 'name'], ['master_components', 'id']] as [$table, $key]) {
         try {
@@ -384,6 +390,25 @@ if ($action === 'get_revision') {
     $st->execute([(int)($_GET['id'] ?? 0)]);
     $row = $st->fetch(PDO::FETCH_ASSOC);
     echo json_encode($row ?: ['success' => false, 'message' => 'Version not found.']); exit;
+}
+
+// Redirects (Global Options › Redirects). Everyone can see them, admins change them.
+if ($action === 'get_redirects') {
+    echo json_encode($pdo->query("SELECT from_path, to_path, auto, created_at FROM redirects ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC)); exit;
+}
+if (($action === 'save_redirect' || $action === 'delete_redirect') && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$is_admin) { echo json_encode(['success' => false, 'message' => 'Only admins can change redirects.']); exit; }
+    $d = json_decode(file_get_contents('php://input'), true);
+    if ($action === 'delete_redirect') {
+        $pdo->prepare("DELETE FROM redirects WHERE from_path = ?")->execute([(string)($d['from'] ?? '')]);
+        echo json_encode(['success' => true]); exit;
+    }
+    $from = cc_redirect_path($d['from'] ?? ''); $to = cc_redirect_target($d['to'] ?? '');
+    if (!$from) { echo json_encode(['success' => false, 'message' => 'The old address must look like /old-page/ (letters, numbers, dashes).']); exit; }
+    if (!$to) { echo json_encode(['success' => false, 'message' => 'The new address must be a path like /new-page/ or a full https:// address.']); exit; }
+    if ($from === $to) { echo json_encode(['success' => false, 'message' => 'The two addresses are the same.']); exit; }
+    cc_add_redirect($pdo, $from, $to, 0);
+    echo json_encode(['success' => true, 'message' => 'Redirect saved. It takes effect when you publish the site.']); exit;
 }
 
 if ($action === 'get_pages') {
@@ -428,7 +453,9 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $existing = $cur->fetch(PDO::FETCH_ASSOC);
 
     $cschema = cc_version()['content_schema'];
-    $writeRow = function ($targetId, $status, $isCopy, $parentId) use ($pdo, $title, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $author, $now, $cschema) {
+    $has_noindex = is_array($data) && array_key_exists('noindex', $data);
+    $noindex = !empty($data['noindex']) ? 1 : 0;
+    $writeRow = function ($targetId, $status, $isCopy, $parentId) use ($pdo, $title, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $author, $now, $cschema, $has_noindex, $noindex) {
         $chk = $pdo->prepare("SELECT id FROM pages WHERE id = ?"); $chk->execute([$targetId]);
         if ($chk->fetch()) {
             $pdo->prepare("UPDATE pages SET parent_id=?, title=?, slug=?, clean_slug=?, seo_title=?, seo_description=?, seo_image=?, layout=?, bg_color=?, boxed_width=?, content_json=?, status=?, is_draft_copy=?, content_schema=?, author=?, updated_at=? WHERE id=?")
@@ -437,6 +464,7 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare("INSERT INTO pages (id, parent_id, title, slug, clean_slug, seo_title, seo_description, seo_image, layout, bg_color, boxed_width, content_json, status, is_draft_copy, content_schema, author, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                 ->execute([$targetId, $parentId, $title, $clean, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $status, $isCopy, $cschema, $author, $now]);
         }
+        if ($has_noindex) $pdo->prepare("UPDATE pages SET noindex = ? WHERE id = ?")->execute([$noindex, $targetId]);   // "Hide from search engines"
     };
 
     if ($publish) {
@@ -665,7 +693,7 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL slug \"$slug\" is already used by \"$t\" in this collection. Change it and publish again."]); exit;
         }
     }
-    $chk = $pdo->prepare("SELECT id, archived, content_json FROM collection_items WHERE id = ?"); $chk->execute([$id]);
+    $chk = $pdo->prepare("SELECT id, archived, content_json, slug, status, collection_id FROM collection_items WHERE id = ?"); $chk->execute([$id]);
     $existing_item = $chk->fetch(PDO::FETCH_ASSOC);
     if ($existing_item) {
         // A client that does not send the flag must never reset it: the saved value is kept
@@ -683,6 +711,19 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$is_admin) cc_keep_code_surfaces($b, []);
         $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $now]);
+    }
+    // A published item that changed its address: the old one forwards to the new one
+    if ($status === 'published') {
+        try {
+            $colSlug = $pdo->prepare("SELECT slug FROM collections WHERE id = ?"); $colSlug->execute([$cid]);
+            $cs = (string)$colSlug->fetchColumn();
+            if ($cs !== '') {
+                cc_drop_redirect_from($pdo, '/' . $cs . '/' . $slug . '/');
+                if ($existing_item && ($existing_item['status'] ?? '') === 'published' && ($existing_item['slug'] ?? '') !== '' && $existing_item['slug'] !== $slug && ($existing_item['collection_id'] ?? '') === $cid) {
+                    cc_add_redirect($pdo, '/' . $cs . '/' . $existing_item['slug'] . '/', '/' . $cs . '/' . $slug . '/');
+                }
+            }
+        } catch (Exception $e) {}
     }
     if ($blocks !== null || !$existing_item) {
         $stored = $pdo->prepare("SELECT content_json FROM collection_items WHERE id = ?"); $stored->execute([$id]);

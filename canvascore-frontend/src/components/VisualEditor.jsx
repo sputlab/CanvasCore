@@ -123,6 +123,7 @@ export default function VisualEditor() {
       seo_title: activePage.seo_title, seo_description: activePage.seo_description, seo_image: activePage.seo_image,
       layout: activePage.layout, boxed_width: activePage.boxed_width, bg_color: activePage.bg_color, blocks: blocks,
       is_home: Number(activePage.is_home) ? 1 : 0,
+      noindex: Number(activePage.noindex) ? 1 : 0,
       publish: publish
     };
     try {

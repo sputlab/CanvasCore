@@ -762,6 +762,20 @@
         "width": "100%",
         "padding": "20px 0"
       }
+    },
+    "SEARCH": {
+      "content": {
+        "placeholder": "Search the site\u2026",
+        "buttonText": "Search",
+        "noResults": "No results for",
+        "limit": 10
+      },
+      "styles": {
+        "width": "100%",
+        "maxWidth": "720px",
+        "margin": "0 auto",
+        "padding": "20px 0"
+      }
     }
   }
 }

@@ -85,6 +85,37 @@ try {
     };
 
     $media_meta = cc_media_meta_all();   // optimized image copies (srcset)
+
+    // RSS feeds: one per collection with published items, announced in every page's <head>
+    // (feeds need absolute addresses, so they're made only when Global Options › Site address is set)
+    $feeds = [];
+    if ($site_url) {
+        try {
+            foreach ($pdo->query("SELECT c.id, c.name, c.slug FROM collections c WHERE EXISTS (SELECT 1 FROM collection_items i WHERE i.collection_id = c.id AND i.status = 'published' AND COALESCE(i.archived, 0) = 0)") as $fc) {
+                $feeds[$fc['id']] = ['name' => (string)$fc['name'], 'slug' => cc_safe_slug($fc['slug']), 'items' => []];
+            }
+        } catch (Throwable $e) { $warnings[] = 'Feeds: ' . $e->getMessage(); }
+    }
+    $feed_links = '';
+    foreach ($feeds as $fd) $feed_links .= '<link rel="alternate" type="application/rss+xml" title="' . htmlspecialchars($fd['name'] . ($site_name !== '' ? ' — ' . $site_name : '')) . '" href="' . htmlspecialchars($site_url . '/' . $fd['slug'] . '/feed.xml') . '">' . "\n";
+    $cookie_html = cc_cookie_banner_html($settings['cookieBanner'] ?? null);
+    $search_index = [];
+    // Plain text of a page for the site search (no tags, scripts or styles; collapsed spaces)
+    $plain = function ($html) {
+        $t = preg_replace('#<(script|style)\b[^>]*>.*?</\1>#is', ' ', (string)$html);
+        $t = html_entity_decode(strip_tags(preg_replace('#<(br|/p|/h[1-6]|/li|/div)\b[^>]*>#i', ' ', $t)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return trim(preg_replace('/\s+/u', ' ', $t));
+    };
+    // Every published page and item gets the same finishing touches
+    $finish = function ($html, $canonical, $noindex) use ($feed_links, $cookie_html, $base_url, &$media_meta) {
+        $head = '';
+        if ($canonical !== '') $head .= '<link rel="canonical" href="' . htmlspecialchars($canonical) . '">' . "\n";
+        if ($noindex) $head .= '<meta name="robots" content="noindex">' . "\n";
+        $head .= $feed_links;
+        if ($head !== '') $html = preg_replace('#</head>#i', $head . '</head>', $html, 1);
+        if ($cookie_html !== '') $html = preg_replace('#</body>#i', str_replace('{{BASE_URL}}', $base_url, $cookie_html) . '</body>', $html, 1);
+        return cc_optimize_images($html, $base_url . 'uploads/', $media_meta);
+    };
     $master_file = __DIR__ . '/master.html';
     if (!file_exists($master_file)) die(json_encode(['success' => false, 'message' => 'Error: master.html missing!']));
     $template = file_get_contents($master_file);
@@ -145,7 +176,7 @@ try {
 
         $html = str_replace('</head>', $custom_bg_style . "\n" . $generator . "\n" . $seo_head . "</head>", $html);
 
-        $sitemap_urls[] = $page_abs !== '' ? $page_abs : ($base_url . ltrim($page_path, '/'));
+        if ((int)($page['noindex'] ?? 0) !== 1) $sitemap_urls[] = $page_abs !== '' ? $page_abs : ($base_url . ltrim($page_path, '/'));
         $html = str_replace('{{MAIN_MENU}}', $menu_html, $html);
         $html = str_replace('{{GOOGLE_FONTS}}', $google_fonts_link, $html);
         $html = str_replace('{{BRAND_COLOR}}', $brand_color, $html);
@@ -166,8 +197,14 @@ try {
         if ($writeRoot) $targets[] = __DIR__ . '/../index.html';
         if (!$isRootSlug) $targets[] = __DIR__ . '/../' . $slug . '/index.html';
         if (empty($targets)) $targets[] = __DIR__ . '/../' . $slug . '/index.html'; // slug 'index'/'home' that is not home while another page is the home
-        $html = cc_optimize_images($html, $base_url . 'uploads/', $media_meta);
+        $noindex_pg = (int)($page['noindex'] ?? 0) === 1;
+        $html = $finish($html, $page_abs, $noindex_pg);
         foreach ($targets as $fp) $write($fp, $html);
+        if (!$noindex_pg) {
+            $txt = $plain($content_html);
+            $search_index[] = ['t' => html_entity_decode($title, ENT_QUOTES, 'UTF-8'), 'u' => $base_url . ltrim($page_path, '/'),
+                               'd' => (string)($page['seo_description'] ?? '') !== '' ? (string)$page['seo_description'] : mb_substr($txt, 0, 160), 'x' => mb_substr($txt, 0, 3000)];
+        }
         $count++;
     }
     // --- Collection items: one static page per published item ---
@@ -210,13 +247,60 @@ try {
                 $ihtml = str_replace('{{PAGE_CONTENT}}', $i_full, $ihtml);
                 $ihtml = str_replace('{{BASE_URL}}', $base_url, $ihtml);
 
-                $ihtml = cc_optimize_images($ihtml, $base_url . 'uploads/', $media_meta);
+                $ihtml = $finish($ihtml, $i_abs, false);
                 $write(__DIR__ . '/../' . $col_slug . '/' . $it_slug . '/index.html', $ihtml);
+                if ((int)($it['archived'] ?? 0) !== 1) {
+                    $itxt = $plain($i_content);
+                    $search_index[] = ['t' => (string)($it['title'] ?? ''), 'u' => $base_url . $col_slug . '/' . $it_slug . '/',
+                                       'd' => (string)($it['excerpt'] ?? '') !== '' ? (string)$it['excerpt'] : mb_substr($itxt, 0, 160), 'x' => mb_substr($itxt, 0, 3000)];
+                    if (isset($feeds[$col['id']])) $feeds[$col['id']]['items'][] = $it;
+                }
                 $count++;
                 $sitemap_urls[] = $i_abs !== '' ? $i_abs : ($base_url . $col_slug . '/' . $it_slug . '/');
             }
         }
     } catch (Throwable $e) { $warnings[] = 'Collections: ' . $e->getMessage(); }
+
+    // --- RSS feeds (newest 50 items each) ---
+    foreach ($feeds as $fd) {
+        usort($fd['items'], function ($a, $b) { return strcmp((string)($b['date'] ?: $b['updated_at']), (string)($a['date'] ?: $a['updated_at'])); });
+        $rss = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>' . "\n";
+        $rss .= '<title>' . htmlspecialchars($fd['name'] . ($site_name !== '' ? ' — ' . $site_name : '')) . '</title>' . "\n";
+        $rss .= '<link>' . htmlspecialchars($site_url . '/') . '</link>' . "\n";
+        $rss .= '<description>' . htmlspecialchars($fd['name']) . '</description>' . "\n";
+        $rss .= '<atom:link href="' . htmlspecialchars($site_url . '/' . $fd['slug'] . '/feed.xml') . '" rel="self" type="application/rss+xml"/>' . "\n";
+        foreach (array_slice($fd['items'], 0, 50) as $it) {
+            $link = $site_url . '/' . $fd['slug'] . '/' . cc_safe_slug($it['slug']) . '/';
+            $ts = strtotime((string)($it['date'] ?: $it['updated_at'])) ?: time();
+            $rss .= '<item><title>' . htmlspecialchars((string)$it['title']) . '</title><link>' . htmlspecialchars($link) . '</link><guid isPermaLink="true">' . htmlspecialchars($link) . '</guid>'
+                  . '<pubDate>' . gmdate('D, d M Y H:i:s', $ts) . ' GMT</pubDate>'
+                  . ((string)($it['excerpt'] ?? '') !== '' ? '<description>' . htmlspecialchars((string)$it['excerpt']) . '</description>' : '')
+                  . (!empty($it['cover_image']) ? '<enclosure url="' . htmlspecialchars($abs($it['cover_image'])) . '" type="image/' . (preg_match('/\.png$/i', $it['cover_image']) ? 'png' : (preg_match('/\.webp$/i', $it['cover_image']) ? 'webp' : 'jpeg')) . '" length="0"/>' : '')
+                  . '</item>' . "\n";
+        }
+        $rss .= '</channel></rss>' . "\n";
+        $write(__DIR__ . '/../' . $fd['slug'] . '/feed.xml', $rss);
+    }
+
+    // --- Site search index (used by the Site Search block) ---
+    $write(__DIR__ . '/../search-index.json', json_encode($search_index, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+    // --- Redirects: a small page at each old address (any host), plus real 301s for Apache ---
+    $apache_rules = [];
+    try {
+        $written_now = array_flip($written);
+        foreach ($pdo->query("SELECT from_path, to_path FROM redirects ORDER BY from_path") as $rd) {
+            $rel = trim($rd['from_path'], '/') . '/index.html';
+            if (isset($written_now[$rel])) {   // a published page lives there now: the redirect is gone
+                $pdo->prepare("DELETE FROM redirects WHERE from_path = ?")->execute([$rd['from_path']]);
+                continue;
+            }
+            $to = (string)$rd['to_path'];
+            $href = preg_match('~^https?://~i', $to) ? $to : $base_url . ltrim($to, '/');
+            $write(__DIR__ . '/../' . $rel, cc_redirect_page_html($href));
+            $apache_rules[] = [rtrim($base_url, '/') . $rd['from_path'], preg_match('~^https?://~i', $to) ? $to : rtrim($base_url, '/') . $to];
+        }
+    } catch (Throwable $e) { $warnings[] = 'Redirects: ' . $e->getMessage(); }
 
     // Form recipient registry (per form, server-side: no email addresses in the client)
     $forms = function_exists('cc_form_registry') ? cc_form_registry() : [];
@@ -243,11 +327,14 @@ try {
     $nf = str_replace('{{PAGE_TITLE}}', '404 - Not Found' . $site_suffix, $template);
     $nf = str_replace(['{{META_DESCRIPTION}}', '{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}', '{{BASE_URL}}'],
                       ['', $menu_html, $google_fonts_link, $brand_color, $font_family, $nf_content, $base_url], $nf);
+    $nf = $finish($nf, '', true);
     $write(__DIR__ . '/../404.html', $nf);
 
     // ErrorDocument for Apache (best effort; on Nginx it must be configured by hand)
     $root_ht = __DIR__ . '/../.htaccess';
-    if (!file_exists($root_ht)) @file_put_contents($root_ht, "ErrorDocument 404 " . $base_url . "404.html\n");
+    $ht_old = file_exists($root_ht) ? (string)@file_get_contents($root_ht) : "ErrorDocument 404 " . $base_url . "404.html\n";
+    $ht_new = cc_htaccess_with_redirects($ht_old, $apache_rules);
+    if ($ht_new !== $ht_old || !file_exists($root_ht)) @file_put_contents($root_ht, $ht_new);
 
     // Pages no longer published (deleted, unpublished, renamed slug, deleted collection items) are removed:
     // only files a previous build wrote (manifest), never anything else, and never the root index.html.
@@ -258,7 +345,7 @@ try {
         $keep = array_flip($written);
         foreach ($previous as $rel) {
             if (!is_string($rel) || isset($keep[$rel]) || $rel === 'index.html') continue;
-            if (!preg_match('#^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/index\.html$#', $rel) || strpos($rel, '..') !== false) continue;
+            if (!preg_match('#^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/(index\.html|feed\.xml)$#', $rel) || strpos($rel, '..') !== false) continue;
             $fp = __DIR__ . '/../' . $rel;
             if (is_file($fp) && @unlink($fp)) {
                 $removed++;

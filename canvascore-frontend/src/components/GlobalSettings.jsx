@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useDraftSync } from '../session/hooks';
 import { useStore } from '../store/useStore';
-import { PanelTop, PanelBottom, Edit3, Trash2, Save, Palette, Mail, Search, ShieldCheck, Settings2 } from 'lucide-react';
+import { PanelTop, PanelBottom, Edit3, Trash2, Save, Palette, Mail, Search, ShieldCheck, Settings2, Cookie } from 'lucide-react';
+import RedirectsCard from './RedirectsCard';
 import { Button, Card, Field, Input, Select, Checkbox, PageHeader } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
@@ -11,6 +12,7 @@ const DEFAULT_SETTINGS = { brandColor: '#3b82f6', fontFamily: 'Inter', adminEmai
 export default function GlobalSettings() {
   const { setView, publishSiteAsync, setActivePage, setBlocks, setSelectedBlockId, userRole } = useStore();
   const isAdmin = userRole === 'admin';
+  const pages = useStore((st) => st.pages) || [];
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
   // Saving before the data arrives (or after it failed) would overwrite the site's data with defaults
@@ -72,6 +74,8 @@ export default function GlobalSettings() {
   };
 
   const set = (patch) => setSettings({ ...settings, ...patch });
+  const cookie = settings.cookieBanner && typeof settings.cookieBanner === 'object' ? settings.cookieBanner : {};
+  const setCookie = (patch) => set({ cookieBanner: { ...cookie, ...patch } });
   const FONTS = [['Inter', 'Inter (Clean, Modern)'], ['Roboto', 'Roboto (Google Standard)'], ['Poppins', 'Poppins (Soft, Web)'], ['Open Sans', 'Open Sans (Readable)'],
     ['Montserrat', 'Montserrat (Geometric)'], ['Lato', 'Lato (Elegant)'], ['Oswald', 'Oswald (High Impact)'], ['Playfair Display', 'Playfair Display (Elegant Serif)'],
     ['Raleway', 'Raleway (Thin, Chic)'], ['Ubuntu', 'Ubuntu (Tech)'], ['Lora', 'Lora (Editorial Serif)']];
@@ -110,7 +114,7 @@ export default function GlobalSettings() {
       <Card title="Site identity & SEO" icon={Search} description="How the site appears in browser tabs, search engines and social shares.">
         <div className="ui-grid">
           <Field label="Site name"><Input value={settings.siteName || ''} onChange={e => set({ siteName: e.target.value })} placeholder="My Site" /></Field>
-          <Field label="Site address (for sitemap & social)"><Input value={settings.siteUrl || ''} onChange={e => set({ siteUrl: e.target.value })} placeholder="https://www.example.com" /></Field>
+          <Field label="Site address (for sitemap, social and RSS)" hint="Needed for the RSS feeds of collections (/collection/feed.xml) and for the canonical links."><Input value={settings.siteUrl || ''} onChange={e => set({ siteUrl: e.target.value })} placeholder="https://www.example.com" /></Field>
           <Field label="Page title suffix" hint="Added to every page title in the browser tab. Leave empty for none.">
             <Input value={settings.siteSuffix !== undefined ? settings.siteSuffix : ' | My Site'} onChange={e => set({ siteSuffix: e.target.value })} placeholder=" | My Site" />
           </Field>
@@ -134,6 +138,25 @@ export default function GlobalSettings() {
           ))}
         </div>
       </Card>
+
+      <Card title="Cookie banner" icon={Cookie} description="A notice at the bottom of every page with Accept and Decline. The visitor's choice is remembered.">
+        <Checkbox label="Show the cookie banner" checked={!!cookie.enabled} onChange={e => setCookie({ enabled: e.target.checked })} />
+        {cookie.enabled && <>
+          <Field label="Text"><Input value={cookie.text || ''} onChange={e => setCookie({ text: e.target.value })} placeholder="We use cookies to improve your experience and to understand how the site is used." /></Field>
+          <div className="ui-grid">
+            <Field label="Accept button"><Input value={cookie.acceptLabel || ''} onChange={e => setCookie({ acceptLabel: e.target.value })} placeholder="Accept" /></Field>
+            <Field label="Decline button"><Input value={cookie.declineLabel || ''} onChange={e => setCookie({ declineLabel: e.target.value })} placeholder="Decline" /></Field>
+            <Field label="Privacy policy page"><Select value={cookie.privacyUrl || ''} onChange={e => setCookie({ privacyUrl: e.target.value })}
+              options={[['', '— no link —'], ...pages.filter(p => !Number(p.is_draft_copy)).map(p => [p.clean_slug ? p.clean_slug + '/index.html' : 'index.html', p.title])]} /></Field>
+            <Field label="Link text"><Input value={cookie.privacyLabel || ''} onChange={e => setCookie({ privacyLabel: e.target.value })} placeholder="Privacy policy" /></Field>
+            <Field label="Position"><Select value={cookie.position || 'bottom'} onChange={e => setCookie({ position: e.target.value })}
+              options={[['bottom', 'Bottom, centered'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]} /></Field>
+          </div>
+          <p className="ui-hint">To load a tracking or marketing script only after the visitor accepts, an admin can add it in a Custom HTML block as <code>&lt;script type="text/plain" data-cc-consent&gt;…&lt;/script&gt;</code> (embeds: <code>&lt;iframe data-cc-consent-src="…"&gt;</code>). Any link with <code>data-cc-consent-open</code> shows the banner again.</p>
+        </>}
+      </Card>
+
+      {isAdmin && <RedirectsCard />}
 
       {isAdmin && <>
       <Card title="Form emails" icon={Mail} description="Where messages sent through the site's forms are delivered.">

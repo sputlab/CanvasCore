@@ -852,6 +852,20 @@ export function renderBlock(block, opts = {}) {
     case 'HTML':
       return customCss + `<div id="${innerId}" class="cc-html-block${animClass}${innerClass}"${styleString}>\n${content.code ?? ''}\n</div>\n`;
 
+    case 'SEARCH': {
+      // Site search: the published page's script searches search-index.json (written at publish)
+      const ph = escapeHtml(content.placeholder || 'Search the site…');
+      const btn = escapeHtml(content.buttonText || 'Search');
+      const empty = escapeHtml(content.noResults || 'No results for');
+      const limit = ccInt(content.limit, 10, 1, 50);
+      html = `<div id="${innerId}" class="cc-search${animClass}${innerClass}" style="${styleAttr}" data-index="{{BASE_URL}}search-index.json" data-empty="${empty}" data-limit="${limit}">\n`;
+      html += `<form class="cc-search-form" role="search" style="display:flex; gap:8px; flex-wrap:wrap;">\n`;
+      html += `<input type="search" name="q" aria-label="${ph}" placeholder="${ph}" style="flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:inherit; box-sizing:border-box;">\n`;
+      html += `<button type="submit" style="padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;">${btn}</button>\n`;
+      html += `</form>\n<div class="cc-search-results" aria-live="polite" style="margin-top:16px;"></div>\n</div>\n`;
+      return customCss + html;
+    }
+
     default:
       return `<!-- Unknown element: ${String(t).replace(/[^A-Za-z0-9_]/g, '')} -->\n`;
   }

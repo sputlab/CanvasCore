@@ -11,6 +11,20 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Redirects**: renaming a published page or collection item makes its old address forward to the new one (a page
+  at the old address on any host, plus real `301`s in a marked block of the site's `.htaccess` on Apache). Chains
+  collapse, loops are avoided, a page published at an old address cancels its redirect. Global Options › Redirects
+  (admins) lists them and lets you add your own. DB migration 7 (`redirects`, `pages.noindex`).
+- **SEO**: canonical links on every page; "Hide this page from search engines" (noindex, left out of the sitemap and
+  the site search); character counts for meta title/description; search-result and shared-link previews; the social
+  share image can be picked from the media library.
+- **RSS feeds**: `/collection/feed.xml` for each collection with published items (newest 50), announced in every
+  page's head; needs Global Options › Site address.
+- **Site Search block**: a search box with instant results from `search-index.json`, rebuilt at each publish (titles,
+  descriptions and text of published pages and items); `?q=` opens it with results.
+- **Cookie banner** (Global Options): text, Accept/Decline labels, privacy page link, position; remembers the choice.
+  Scripts written as `<script type="text/plain" data-cc-consent>` (and `<iframe data-cc-consent-src>`) run only after
+  Accept; `data-cc-consent-open` reopens the banner.
 - **Faster images**: every uploaded photo gets smaller WebP copies (480, 960, 1600 px wide; never enlarged; phone
   photos turned upright) in `uploads/_cc/`. Published pages give each uploaded image a `srcset` of those copies, so
   phones download a fraction of the size; images load lazily except the first one, which loads with priority.

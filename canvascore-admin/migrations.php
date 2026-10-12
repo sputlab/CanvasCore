@@ -163,6 +163,17 @@ function cc_db_migrations() {
             )");
             $pdo->exec("CREATE INDEX IF NOT EXISTS idx_page_revisions_owner ON page_revisions(owner, id)");
         },
+
+        // v7 — redirects of old addresses (renamed pages/items, or added by hand) and "hide from search engines"
+        7 => function ($pdo) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS redirects (
+                from_path TEXT PRIMARY KEY,
+                to_path TEXT NOT NULL,
+                auto INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )");
+            cc_add_col($pdo, 'pages', 'noindex', "INTEGER DEFAULT 0");
+        },
     ];
 }
 

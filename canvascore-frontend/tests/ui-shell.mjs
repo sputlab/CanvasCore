@@ -101,7 +101,7 @@ try {
   check('the current section is marked (aria-current)', btn('Pages', nav).getAttribute('aria-current') === 'page');
   click(btn('Media', nav));
   check('clicking a section opens it', st().currentView === 'media');
-  check('user, logout and version in the sidebar', /ann/.test($('.ui-sidebar__foot').textContent) && !!btnHas('Logout') && /CanvasCore v/.test($('.ui-sidebar__foot').textContent));
+  check('user, logout and version in the sidebar', /ann/.test($('.ui-sidebar__foot').textContent) && !!$('[aria-label="Log out"]') && !!$('[aria-label="Change your password"]') && /CanvasCore v/.test($('.ui-sidebar__foot').textContent));
   useStore.setState({ userRole: 'editor' });
   await sleep(30);
   check('editors do not see the administration group', !btn('Accounts', $('nav.ui-nav')) && !btn('Backup', $('nav.ui-nav')));
@@ -387,6 +387,27 @@ try {
     if (item) click(item);
     await sleep(40);
     check('…and picking an image also fills the empty alt text', st().blocks[0].content.src === '/uploads/sky.jpg' && st().blocks[0].content.alt === 'Blue sky', JSON.stringify(st().blocks[0].content));
+  }
+
+  console.log('\nSEO & SITE FEATURES');
+  {
+    const { CONTENT_PANELS: CP } = await vite.ssrLoadModule('/src/components/panel/blocks/index.js');
+    check('Site Search is in the Add catalog and has a settings panel', BLOCKS.some((b) => b.type === 'SEARCH') && !!CP.SEARCH);
+    useStore.setState({ selectedBlockId: null, activePage: { ...PAGES[1], seo_title: 'About us — the team', seo_description: '' }, userRole: 'admin' });
+    mount(React.createElement(PropertyPanel)); await sleep(50);
+    await openSec('SEO & Meta Data');
+    check('SEO: character counts and search/share previews', /19 \/ 60/.test(doc.body.textContent) && !!$('[aria-label="Search result preview"]') && !!$('[aria-label="Shared link preview"]'));
+    const hide = $$('label').find((l) => /Hide this page from search engines/.test(l.textContent)).querySelector('input');
+    click(hide); await sleep(30);
+    check('"Hide this page from search engines" is stored on the page', Number(st().activePage.noindex) === 1);
+    useStore.setState({ currentView: 'settings', pages: PAGES });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/GlobalSettings.jsx')).default)));
+    await waitFor(() => btnHas('Save & Publish') && !btnHas('Save & Publish').disabled, 3000);
+    const cookieBox = $$('label').find((l) => /Show the cookie banner/.test(l.textContent));
+    check('Global Options has a Cookie banner card', !!cookieBox);
+    if (cookieBox) { click(cookieBox.querySelector('input')); await sleep(30); }
+    check('…with text, buttons, privacy page and position once enabled', ['Accept button', 'Decline button', 'Privacy policy page', 'Position'].every((t) => $$('label').some((l) => l.textContent.trim() === t)));
+    check('admins see the Redirects card', /Redirects/.test(doc.body.textContent) && !!btnHas('Add redirect'));
   }
 
   console.log('\nSTORE & SAVING');

@@ -264,6 +264,62 @@ function cc_add_revision($pdo, $owner, $title, $content_json, $kind) {
     } catch (Exception $e) { /* history must never block a save */ }
 }
 
+// ---------------------------------------------------------------------------
+// Redirects: old addresses of renamed pages/items (and ones added by hand) keep working.
+// Paths are site paths like "/old-page/" or "/blog/old-post/" (no domain, with the trailing slash).
+// ---------------------------------------------------------------------------
+function cc_redirect_path($p) {
+    $p = trim((string)$p);
+    if ($p === '' || $p[0] !== '/') return null;
+    $p = '/' . trim($p, '/') . '/';
+    if ($p === '//') return null;                                   // the home page can't be redirected
+    return preg_match('#^(/[a-z0-9][a-z0-9._-]*)+/$#i', $p) ? strtolower($p) : null;
+}
+// Target: a site path, or a full http(s) address
+function cc_redirect_target($t) {
+    $t = trim((string)$t);
+    if (preg_match('#^https?://[^\s"<>]+$#i', $t)) return $t;
+    if ($t === '/') return '/';
+    return cc_redirect_path($t);
+}
+function cc_add_redirect($pdo, $from, $to, $auto = 1) {
+    $from = cc_redirect_path($from); $to = cc_redirect_target($to);
+    if (!$from || !$to || $from === $to) return false;
+    $pdo->prepare("UPDATE redirects SET to_path = ? WHERE to_path = ?")->execute([$to, $from]);   // chains: A→B, B→C ⇒ A→C
+    $pdo->prepare("DELETE FROM redirects WHERE from_path = ?")->execute([$to]);                   // something lives at $to now
+    $pdo->prepare("DELETE FROM redirects WHERE from_path = to_path")->execute();
+    $pdo->prepare("INSERT INTO redirects (from_path, to_path, auto, created_at) VALUES (?,?,?,?)
+                   ON CONFLICT(from_path) DO UPDATE SET to_path = excluded.to_path, auto = excluded.auto, created_at = excluded.created_at")
+        ->execute([$from, $to, $auto ? 1 : 0, date('Y-m-d H:i:s')]);
+    return true;
+}
+// A published page now owns this address: a redirect from it would hide the page
+function cc_drop_redirect_from($pdo, $path) {
+    $path = cc_redirect_path($path);
+    if ($path) $pdo->prepare("DELETE FROM redirects WHERE from_path = ?")->execute([$path]);
+}
+// Static redirect page written at the old address (works on any host); $href = where to go
+function cc_redirect_page_html($href) {
+    $h = htmlspecialchars($href, ENT_QUOTES);
+    $j = json_encode($href, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    return "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"UTF-8\"><title>Moved</title>"
+         . "<meta name=\"robots\" content=\"noindex\"><link rel=\"canonical\" href=\"$h\">"
+         . "<meta http-equiv=\"refresh\" content=\"0; url=$h\">"
+         . "<script>location.replace($j + location.search + location.hash);</script></head>"
+         . "<body><p>This page has moved: <a href=\"$h\">$h</a></p></body></html>\n";
+}
+// Apache: the redirects as real 301s, in a marked block of the site's .htaccess (the rest is left as it is)
+function cc_htaccess_with_redirects($existing, $rules) {
+    $begin = '# BEGIN CanvasCore redirects'; $end = '# END CanvasCore redirects';
+    $existing = preg_replace('#\n?' . preg_quote($begin, '#') . '.*?' . preg_quote($end, '#') . '\n?#s', "\n", (string)$existing);
+    $existing = rtrim($existing) . "\n";
+    if (!$rules) return ltrim($existing);
+    $block = $begin . "\n<IfModule mod_alias.c>\n";
+    foreach ($rules as [$from, $to]) $block .= 'Redirect 301 ' . $from . ' ' . $to . "\n";
+    $block .= "</IfModule>\n" . $end . "\n";
+    return ltrim($existing . $block);
+}
+
 // An uploaded SVG is a document that can carry scripts: accept it only without any active content
 // (scripts, event handlers, javascript: links, embedded HTML, external entities).
 function cc_svg_is_safe($path) {

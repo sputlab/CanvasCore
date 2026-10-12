@@ -76,7 +76,7 @@ export default function AdminLayout({ children, wide }) {
                 <div className="ui-user__role" style={{ color: userRole === 'admin' ? '#38bdf8' : '#a78bfa' }}>{userRole}</div>
               </span>
               <Button variant="ghost" size="sm" icon={KeyRound} onClick={() => setPwOpen(true)} title="Change your password" aria-label="Change your password" />
-              <Button variant="ghost" size="sm" icon={LogOut} onClick={logout} title="Log out">Logout</Button>
+              <Button variant="ghost" size="sm" icon={LogOut} onClick={logout} title="Log out" aria-label="Log out" />
             </div>
           )}
           <div className="ui-version">CanvasCore v{version}{build ? ` · build ${build}` : ''}</div>
