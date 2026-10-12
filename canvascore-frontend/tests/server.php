@@ -122,5 +122,29 @@ check('cookie banner: escaped text, privacy link, Accept/Decline, consent gating
 $sb = render_block(['id' => 'sr', 'type' => 'SEARCH', 'styles' => [], 'content' => ['placeholder' => 'Find "it"', 'limit' => 999]]);
 check('Site Search block: escaped placeholder, index address, limit capped at 50, its script', strpos($sb, 'placeholder="Find &quot;it&quot;"') !== false && strpos($sb, 'data-index="{{BASE_URL}}search-index.json"') !== false && strpos($sb, 'data-limit="50"') !== false && strpos($sb, "getElementById('sr')") !== false);
 
+echo "\nMEDIA FOLDERS\n";
+$mf = sys_get_temp_dir() . '/cc_mf_' . getmypid();
+$GLOBALS['CC_MEDIA_META_FILE'] = $mf . '-meta.json'; $GLOBALS['CC_MEDIA_FOLDERS_FILE'] = $mf . '-folders.json';
+@unlink($GLOBALS['CC_MEDIA_META_FILE']); @unlink($GLOBALS['CC_MEDIA_FOLDERS_FILE']);
+check('folder names are cleaned and validated', cc_media_folder_path(' Products / Shoes ') === 'Products/Shoes' && cc_media_folder_path('a/../b') === null && cc_media_folder_path('x<y') === null && cc_media_folder_path('') === '' && cc_media_folder_path('Città') === 'Città');
+cc_media_folder_create('Products/Shoes');
+check('creating a sub-folder also lists its parent', cc_media_folders() === ['Products', 'Products/Shoes']);
+cc_media_move(['a.jpg', 'b.jpg'], 'Products/Shoes'); cc_media_move(['c.jpg'], 'Products');
+$fm = cc_media_meta_all();
+check('moving sets the images\' folder (files stay where they are)', $fm['a.jpg']['folder'] === 'Products/Shoes' && $fm['c.jpg']['folder'] === 'Products');
+check('renaming a folder moves its sub-folders and images along', cc_media_folder_rename('Products', 'Catalog') && cc_media_folders() === ['Catalog', 'Catalog/Shoes'] && cc_media_meta_all()['a.jpg']['folder'] === 'Catalog/Shoes');
+check('a folder can\'t be renamed into itself or onto an existing one', !cc_media_folder_rename('Catalog', 'Catalog/Shoes/X') && !cc_media_folder_rename('Catalog/Shoes', 'Catalog'));
+cc_media_folder_delete('Catalog');
+$fm = cc_media_meta_all();
+check('deleting a folder deletes no image: they go to the parent (here: no folder)', cc_media_folders() === [] && $fm['a.jpg']['folder'] === '' && $fm['c.jpg']['folder'] === '');
+$udb = new PDO('sqlite::memory:'); $udb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$udb->exec("CREATE TABLE pages (id TEXT, title TEXT, content_json TEXT, seo_image TEXT, is_draft_copy INT, parent_id TEXT)");
+$udb->exec("CREATE TABLE collection_items (title TEXT, content_json TEXT, cover_image TEXT)");
+$udb->prepare("INSERT INTO pages VALUES ('p1','Home',?,'',0,NULL)")->execute([json_encode([['type' => 'IMAGE', 'content' => ['src' => '/uploads/a.jpg']]])]);
+$udb->prepare("INSERT INTO collection_items VALUES ('Post', '[]', '/uploads/c.jpg')")->execute();
+$u = cc_media_usage($udb, ['a.jpg', 'b.jpg', 'c.jpg']);
+check('usage: where each image is used (pages, item covers…) before deleting', $u['a.jpg'] === ['Page: Home'] && $u['b.jpg'] === [] && $u['c.jpg'] === ['Item: Post'], json_encode($u));
+@unlink($GLOBALS['CC_MEDIA_META_FILE']); @unlink($GLOBALS['CC_MEDIA_FOLDERS_FILE']);
+
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);
