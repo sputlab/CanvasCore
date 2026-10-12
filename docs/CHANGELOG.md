@@ -11,6 +11,10 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Manuals** in `docs/manuals/`: a User Guide (editors), a Block Reference (every block and its settings),
+  an Administrator Guide (installation, web server, updates, accounts, publishing, backups, forms, security,
+  troubleshooting) and a Developer Guide (architecture, local setup, data model, rendering and parity, adding a
+  block, saving and sessions, conventions, releases). Linked from the README.
 - **In-app confirmation dialogs** replace the browser's confirm()/prompt() pop-ups everywhere (deleting pages,
   blocks, images, collections, accounts, templates, masters, submissions; discarding drafts; importing a backup;
   leaving with unsaved changes; naming a template or a master). Each says what will happen, deletions have a red
@@ -108,6 +112,9 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- README: the admin folder must keep the name `canvascore-admin` (published forms post to it); the dev server
+  note points to the Developer Guide. `docs/VERSIONING.md` gave the wrong changelog location; the PHASE notes are
+  marked as historical. `npm run lint` now enforces zero warnings.
 - **Collections looked empty on the first visit**: the list showed "No collections yet" while it was still
   loading, and the request could wait behind a slower one (PHP keeps one request per session at a time).
   Read-only requests and publishing now release the session right away; the screen shows "Loading…",

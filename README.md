@@ -3,11 +3,18 @@
 Block-based CMS that generates **static HTML** sites: a React visual editor (drag & drop)
 and a PHP + SQLite backend that compiles pages into `.html` files ready to serve.
 
+## Manuals
+
+- [User Guide](docs/manuals/USER-GUIDE.md): building and editing the site
+- [Block Reference](docs/manuals/BLOCK-REFERENCE.md): every block and its settings
+- [Administrator Guide](docs/manuals/ADMIN-GUIDE.md): installing, hosting, accounts, backups, security
+- [Developer Guide](docs/manuals/DEVELOPER-GUIDE.md): architecture, local setup, adding blocks, tests
+
 ## Structure
 
 ```
 .
-├── docs/                  Changelog, release notes (RELEASE-NOTES-x.y.z.md) and phase notes (PHASE-*.md)
+├── docs/                  Manuals (docs/manuals/), changelog, release notes and phase notes (PHASE-*.md)
 ├── canvascore-admin/      PHP backend (runs on the server, in the site's admin folder)
 │   ├── api.php            Editor JSON API (auth, pages, media, menu, users…)
 │   ├── compiler.php       PHP block renderer → HTML
@@ -36,7 +43,7 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 ```bash
 cd canvascore-frontend
 npm install
-npm run dev        # editor in development (calls to api.php need a PHP server)
+npm run dev        # editor in development (needs a PHP server for api.php: see the Developer Guide)
 npm run lint       # oxlint
 npm test           # JS↔PHP parity, blocks, content, session, UI
 npm run build      # build into dist/ (increments the build in canvascore-admin/version.json)
@@ -45,9 +52,10 @@ npm run build      # build into dist/ (increments the build in canvascore-admin/
 ## Deploy
 
 1. `npm run build` in `canvascore-frontend/`.
-2. Upload `canvascore-admin/` to the server, inside the site's web root (e.g. `/admin/`).
+2. Upload `canvascore-admin/` to the server, inside the site's web root, **keeping the folder name**
+   `canvascore-admin` (published forms post to `canvascore-admin/submit_form.php`).
 3. Copy the contents of `canvascore-frontend/dist/` into that folder.
-4. Open `install.php` in the browser (e.g. `https://www.example.com/admin/install.php`): it checks the
+4. Open `install.php` in the browser (e.g. `https://www.example.com/canvascore-admin/install.php`): it checks the
    server requirements and creates the database, the administrator account (replacing the default
    `admin` / `admin`), the base settings and, if you like, a homepage from a starter. It leaves you
    signed in to the editor.
