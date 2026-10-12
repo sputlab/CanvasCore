@@ -35,7 +35,7 @@ globalThis.matchMedia = () => ({ matches: false, addListener() {}, removeListene
 globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 globalThis.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} };
 globalThis.innerWidth = 1280; globalThis.innerHeight = 800;
-globalThis.alert = () => {}; globalThis.confirm = () => true;
+globalThis.alert = () => {}; globalThis.confirm = () => { throw new Error('native confirm() used'); }; globalThis.prompt = () => { throw new Error('native prompt() used'); };
 globalThis.IS_REACT_ACT_ENVIRONMENT = false;
 const calls = [];
 globalThis.fetch = async (url, init = {}) => {
@@ -71,12 +71,13 @@ const PageManager = (await vite.ssrLoadModule('/src/components/PageManager.jsx')
 const VisualEditor = (await vite.ssrLoadModule('/src/components/VisualEditor.jsx')).default;
 const PropertyPanel = (await vite.ssrLoadModule('/src/components/PropertyPanel.jsx')).default;
 const { Toaster } = await vite.ssrLoadModule('/src/ui/toast.jsx');
+const { DialogHost } = await vite.ssrLoadModule('/src/ui/dialogHost.jsx');
 const { BLOCKS } = await vite.ssrLoadModule('/src/editor/blockCatalog.js');
 const { CONTENT_PANELS } = await vite.ssrLoadModule('/src/components/panel/blocks/index.js');
 const { createRoot } = await import('react-dom/client');
 const React = await import('react');
 let root = null;
-const mount = (el) => { if (root) root.unmount(); doc.getElementById('root').innerHTML = ''; root = createRoot(doc.getElementById('root')); root.render(React.createElement(React.Fragment, null, el, React.createElement(Toaster))); };
+const mount = (el) => { if (root) root.unmount(); doc.getElementById('root').innerHTML = ''; root = createRoot(doc.getElementById('root')); root.render(React.createElement(React.Fragment, null, el, React.createElement(Toaster), React.createElement(DialogHost))); };
 const st = () => useStore.getState();
 
 let failedRun = false;
@@ -233,6 +234,46 @@ try {
   mount(React.createElement(LayerNavigator)); await sleep(40);
   const countAll = (list) => list.reduce((n, b) => n + 1 + countAll(b.children || []), 0);
   check('layers list every block with a drag handle, rows keep their size (no transforms)', $$('[role="treeitem"]').length === countAll(st().blocks) && $$('[aria-label^="Move "]').length === countAll(st().blocks) && !$$('[role="treeitem"]').some((r) => /scale/.test(r.parentElement.getAttribute('style') || '')));
+
+  console.log('\nDIALOGS');
+  {
+    const key = (el, k, extra = {}) => el.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+    useStore.setState({ currentView: 'manager', userRole: 'admin', pages: PAGES.map((p) => ({ ...p })) });
+    mount(React.createElement(AdminLayout, null, React.createElement(PageManager))); await sleep(60);
+    const delBtn = () => $('[aria-label="Delete Contact"]');
+    click(delBtn());
+    let dlg = await waitFor(() => $('[role="alertdialog"]'));
+    check('deleting a page asks in an in-app dialog (no browser confirm)', !!dlg && /Delete the page "Contact"\?/.test(dlg.textContent) && dlg.getAttribute('aria-modal') === 'true');
+    check('destructive action: red button with a clear label, focus starts on Cancel', !!btn('Delete page', dlg) && btn('Delete page', dlg).className.includes('danger') && doc.activeElement === btn('Cancel', dlg));
+    key(doc.activeElement, 'Tab'); key(doc.activeElement, 'Tab');
+    check('Tab stays inside the dialog', dlg.contains(doc.activeElement));
+    click(btn('Cancel', dlg)); await sleep(40);
+    check('Cancel closes it and nothing is deleted', !$('[role="alertdialog"]') && st().pages.some((p) => p.id === 'p3'));
+    click(delBtn()); dlg = await waitFor(() => $('[role="alertdialog"]'));
+    key(dlg, 'Escape'); await sleep(40);
+    check('Esc cancels too', !$('[role="alertdialog"]') && st().pages.some((p) => p.id === 'p3'));
+    click(delBtn()); dlg = await waitFor(() => $('[role="alertdialog"]'));
+    click(btn('Delete page', dlg)); await sleep(60);
+    check('Confirm deletes the page', !$('[role="alertdialog"]') && !st().pages.some((p) => p.id === 'p3'));
+
+    const { promptDialog, confirmDialog } = await vite.ssrLoadModule('/src/ui/dialog.js');
+    let answer = 'unset';
+    promptDialog({ title: 'Save as template', label: 'Template name' }).then((v) => { answer = v; });
+    const pd = await waitFor(() => $('[role="dialog"].ui-dialog'));
+    const input = pd && pd.querySelector('input');
+    check('prompt dialog: the text field has the focus, OK is disabled while empty', doc.activeElement === input && btn('OK', pd).disabled);
+    typeIn(input, '  Hero block  '); await sleep(20);
+    key(input, 'Enter'); await sleep(30);
+    check('Enter confirms and gives back the trimmed text', answer === 'Hero block');
+    const order = [];
+    confirmDialog({ title: 'First?' }).then((v) => order.push('1:' + v));
+    confirmDialog({ title: 'Second?' }).then((v) => order.push('2:' + v));
+    await sleep(30);
+    check('dialogs asked together are shown one at a time', $$('.ui-dialog').length === 1 && /First\?/.test($('.ui-dialog').textContent));
+    click(btn('OK', $('.ui-dialog'))); await sleep(30);
+    click(btn('Cancel', $('.ui-dialog'))); await sleep(30);
+    check('…in order, each with its own answer', order.join(',') === '1:true,2:false', order.join(','));
+  }
 
   console.log('\nSTORE & SAVING');
   {

@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import { UserPlus, Users, Trash2, KeyRound } from 'lucide-react';
 import { Button, Card, Field, Input, Select, PageHeader, Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
+import { confirmDialog } from '../ui/dialog';
 
 export default function UserManager() {
   const me = useStore((st) => st.username);
@@ -48,7 +49,7 @@ export default function UserManager() {
   };
 
   const handleDeleteUser = async (id, username) => {
-    if (!window.confirm(`Are you sure you want to delete user "${username}"?`)) return;
+    if (!(await confirmDialog({ title: `Delete the account "${username}"?`, message: 'They will no longer be able to sign in. Their pages stay.', confirmLabel: 'Delete account', danger: true }))) return;
     try {
       const res = await fetch('api.php?action=delete_user', { method: 'POST', body: JSON.stringify({ id }) });
       const data = await res.json();

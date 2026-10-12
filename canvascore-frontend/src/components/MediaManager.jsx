@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Image as ImageIcon, Trash2, Upload, Copy } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, SearchInput } from '../ui/kit';
 import { notify } from '../ui/notify';
+import { confirmDialog, promptDialog } from '../ui/dialog';
 
 // Media library: upload (button or drag & drop, several files at once), search, copy the address, delete.
 export default function MediaManager() {
@@ -40,7 +41,7 @@ export default function MediaManager() {
   };
 
   const handleDelete = async (filename) => {
-    if (!window.confirm(`Delete "${filename}"? Pages that use it will show a broken image. This cannot be undone.`)) return;
+    if (!(await confirmDialog({ title: `Delete "${filename}"?`, message: 'Pages that use it will show a broken image. This cannot be undone.', confirmLabel: 'Delete image', danger: true }))) return;
     try {
       await fetch('api.php?action=delete_media', { method: 'POST', body: JSON.stringify({ name: filename }) });
       notify('Image deleted.');
@@ -49,7 +50,7 @@ export default function MediaManager() {
   };
 
   const copyUrl = async (url) => {
-    try { await navigator.clipboard.writeText(url); notify('Address copied.'); } catch { window.prompt('Copy the image address:', url); }
+    try { await navigator.clipboard.writeText(url); notify('Address copied.'); } catch { await promptDialog({ title: 'Copy the image address', message: 'Copying is blocked here: select the address and copy it (Ctrl/Cmd+C).', defaultValue: url, readOnly: true, confirmLabel: 'Done', hideCancel: true }); }
   };
 
   const shown = images.filter((img) => !query || String(img.name).toLowerCase().includes(query.toLowerCase()));

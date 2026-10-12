@@ -11,6 +11,11 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **In-app confirmation dialogs** replace the browser's confirm()/prompt() pop-ups everywhere (deleting pages,
+  blocks, images, collections, accounts, templates, masters, submissions; discarding drafts; importing a backup;
+  leaving with unsaved changes; naming a template or a master). Each says what will happen, deletions have a red
+  button with a clear label and start on Cancel, Esc cancels, Enter confirms, focus stays inside the dialog.
+  For code: `confirmDialog()` / `promptDialog()` in `src/ui/dialog.js`.
 - **Effects in the Advanced tab** of every block: 12 entrance animations (fade, slide in from left/right,
   zoom in/out, flip, rotate, blur, bounce…) with speed and delay, **hover effects** (lift, grow, shrink,
   shadow, glow, tilt, brighten, black & white → color) and **looping motion** (float, pulse, bounce, swing,

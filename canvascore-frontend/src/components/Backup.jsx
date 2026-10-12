@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import { DatabaseBackup, Upload, Download, AlertTriangle } from 'lucide-react';
 import { Button, Card, PageHeader } from '../ui/kit';
 import { notify } from '../ui/notify';
+import { confirmDialog } from '../ui/dialog';
 
 // Whole-site backup (admin): export to a file, import from a file (replaces the content, keeps the accounts).
 export default function Backup() {
@@ -30,7 +31,7 @@ export default function Backup() {
 
   const importSite = async (file) => {
     if (!file) return;
-    if (!window.confirm(`Import "${file.name}"?\n\nThis REPLACES all current pages, menu, settings, masters and templates (user accounts are kept). It cannot be undone: export a backup first if you may need the current site.`)) return;
+    if (!(await confirmDialog({ title: `Import "${file.name}"?`, message: 'This REPLACES all current pages, menu, settings, masters and templates (user accounts are kept).\n\nIt cannot be undone: export a backup first if you may need the current site.', confirmLabel: 'Replace the site', danger: true }))) return;
     setBusy(true);
     try {
       const text = await file.text();

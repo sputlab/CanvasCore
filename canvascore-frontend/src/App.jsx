@@ -19,6 +19,7 @@ import DraftRestorePrompt from './components/DraftRestorePrompt';
 import AdminLayout from './components/AdminLayout';
 import Backup from './components/Backup';
 import { Toaster } from './ui/toast';
+import { DialogHost } from './ui/dialogHost';
 
 export default function App() {
   const { currentView, isAuthenticated, checkAuth, userRole, mustChangePw, fetchVersion, sessionExpired, sessionWarning } = useStore();
@@ -67,6 +68,7 @@ export default function App() {
       {sessionExpired && <SessionExpiredOverlay />}
       <DraftRestorePrompt />
       <Toaster />
+      <DialogHost />
     </>
   );
 }

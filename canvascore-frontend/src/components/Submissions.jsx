@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Inbox, Download, Trash2, RefreshCw } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, Badge, SearchInput } from '../ui/kit';
 import { notify } from '../ui/notify';
+import { confirmDialog } from '../ui/dialog';
 
 export default function Submissions() {
   const [rows, setRows] = useState([]);
@@ -30,7 +31,7 @@ export default function Submissions() {
   };
 
   const deleteOne = async (id) => {
-    if (!window.confirm('Delete this submission?')) return;
+    if (!(await confirmDialog({ title: 'Delete this submission?', message: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return;
     try {
       const data = await (await fetch('api.php?action=delete_submission', { method: 'POST', body: JSON.stringify({ id }) })).json();
       if (!data || data.success === false) { notify((data && data.message) || 'Could not delete the submission.', 'error'); return; }
@@ -39,7 +40,7 @@ export default function Submissions() {
   };
 
   const clearAll = async () => {
-    if (!window.confirm('Delete ALL submissions? This cannot be undone.')) return;
+    if (!(await confirmDialog({ title: 'Delete ALL submissions?', message: 'Every form submission is deleted. Export them first if you may need them. This cannot be undone.', confirmLabel: 'Delete all', danger: true }))) return;
     try {
       const data = await (await fetch('api.php?action=clear_submissions', { method: 'POST', body: '{}' })).json();
       if (!data || data.success === false) { notify((data && data.message) || 'Could not delete the submissions.', 'error'); return; }

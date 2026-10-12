@@ -15,6 +15,7 @@ import {
 import { Button, IconButton, Segmented, Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { CONTAINER_TYPES } from '../editor/blockCatalog';
+import { confirmDialog } from '../ui/dialog';
 
 // Remembered per browser: which side panels are open
 const readPanels = () => { try { return JSON.parse(localStorage.getItem('cc_editor_panels') || '{}'); } catch { return {}; } };
@@ -47,6 +48,7 @@ export default function VisualEditor() {
     fetchMasters();
     const handleKeyDown = (e) => {
       if (useStore.getState().sessionExpired) return;   // with the login on top, the editor "behind" must not be modified
+      if (document.querySelector('.ui-dialog')) return;  // a dialog is open: its keys (Esc, Enter, Tab) are its own
       const t = e.target;
       const typing = !!(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)));
       if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
@@ -164,7 +166,7 @@ export default function VisualEditor() {
   };
 
   const discardChanges = async () => {
-    if (!window.confirm("Are you sure you want to discard all draft changes? This will restore the live published version.")) return;
+    if (!(await confirmDialog({ title: 'Discard the draft?', message: 'All draft changes are thrown away and the page goes back to the version that is online.', confirmLabel: 'Discard draft', danger: true }))) return;
     try {
       await fetch('api.php?action=discard_draft', { method: 'POST', body: JSON.stringify({ id: activePage.parent_id }) });
       fetch('api.php?action=get_pages').then(r => r.json()).then(d => setPages(d));
@@ -202,8 +204,8 @@ export default function VisualEditor() {
   });
   useEffect(() => { saveDraftRef.current = isEditingMaster ? null : saveDraft; });
 
-  const leave = () => {
-    if (useStore.getState().editorDirty && !window.confirm('You have unsaved changes.\n\nThey stay backed up on this device and will be offered for restore next time, but they are NOT saved to the site.\n\nLeave the editor anyway?')) return;
+  const leave = async () => {
+    if (useStore.getState().editorDirty && !(await confirmDialog({ title: 'Leave with unsaved changes?', message: 'They stay backed up on this device and will be offered next time you open the page, but they are NOT saved to the site.', confirmLabel: 'Leave anyway', cancelLabel: 'Stay' }))) return;
     setSelectedBlockId(null);
     setView(activePage?.__item ? 'collections' : activePage?.__part ? 'settings' : 'manager');
   };
@@ -291,8 +293,8 @@ export default function VisualEditor() {
       {editorRestored && (
         <div role="status" className="cc-ed-restored">
           <span><strong>Restored unsaved changes</strong> from your previous session. They are <strong>not saved to the site yet</strong>: use Save Draft or Publish to keep them.</span>
-          <Button size="sm" variant="ghost" onClick={() => {
-            if (!window.confirm('Discard the restored changes? The page goes back to its last saved version.')) return;
+          <Button size="sm" variant="ghost" onClick={async () => {
+            if (!(await confirmDialog({ title: 'Discard the restored changes?', message: 'The page goes back to its last saved version.', confirmLabel: 'Discard changes', danger: true }))) return;
             clearDraft(editorScope(useStore.getState()));
             draft.discard();
             setSelectedBlockId(null); setView('manager');
