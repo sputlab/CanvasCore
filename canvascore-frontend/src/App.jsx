@@ -20,9 +20,11 @@ import AdminLayout from './components/AdminLayout';
 import Backup from './components/Backup';
 import { Toaster } from './ui/toast';
 import { DialogHost } from './ui/dialogHost';
+import { useBrandingHead } from './ui/branding';
 
 export default function App() {
-  const { currentView, isAuthenticated, checkAuth, userRole, mustChangePw, fetchVersion, sessionExpired, sessionWarning } = useStore();
+  const { currentView, isAuthenticated, checkAuth, userRole, mustChangePw, fetchVersion, fetchBranding, sessionExpired, sessionWarning } = useStore();
+  useBrandingHead();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,8 +34,9 @@ export default function App() {
     document.body.style.backgroundColor = '#0f172a';
 
     fetchVersion();
-    checkAuth().then(() => setLoading(false));
-  }, [checkAuth, fetchVersion]);
+    // Wait for the site name and icon too, so the sign-in screen doesn't change after it appears
+    Promise.all([checkAuth(), fetchBranding()]).then(() => setLoading(false));
+  }, [checkAuth, fetchVersion, fetchBranding]);
 
   // The session manager runs while authenticated (even with the login overlay shown).
   useEffect(() => {

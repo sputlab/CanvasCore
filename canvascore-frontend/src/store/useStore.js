@@ -160,6 +160,7 @@ export const useStore = create((set, get) => ({
   appVersion: (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''),
   appBuild: (typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 0),
   serverVersion: null,
+  branding: { siteName: '', faviconUrl: '' },   // site name + favicon (Global Options) for the login and the sidebar
 
   // ---- session (see src/session/) ----
   sessionExpired: false,        // true: login shown ON TOP of the app (which stays mounted with all its state)
@@ -182,6 +183,15 @@ export const useStore = create((set, get) => ({
       set({ serverVersion: data });
     } catch { /* noop */ }
   },
+
+  fetchBranding: async () => {
+    try {
+      const res = await fetch('api.php?action=branding');
+      const data = await res.json();
+      if (data && typeof data === 'object') get().setBranding(data);
+    } catch { /* noop: the default name and icon stay */ }
+  },
+  setBranding: (b) => set({ branding: { siteName: String((b && b.siteName) || '').trim(), faviconUrl: String((b && b.faviconUrl) || '').trim() } }),
 
   checkAuth: async () => {
     try {

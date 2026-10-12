@@ -3,6 +3,7 @@ import { useDraftSync } from '../session/hooks';
 import { useStore } from '../store/useStore';
 import { PanelTop, PanelBottom, Edit3, Trash2, Save, Palette, Mail, Search, ShieldCheck, Settings2, Cookie } from 'lucide-react';
 import RedirectsCard from './RedirectsCard';
+import ImageUrlField from './ImageUrlField';
 import { Button, Card, Field, Input, Select, Checkbox, PageHeader } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
@@ -47,6 +48,7 @@ export default function GlobalSettings() {
       }
       draft.saved(settings);
       setRestoredAt(null);
+      useStore.getState().setBranding(settings);   // new site name / favicon in the sidebar right away
       const pub = await publishSiteAsync();
       if (pub && pub.success) notify('Global options saved and site updated.');
       else notify('Global options saved, but publishing the site had an issue.', 'error');
@@ -118,8 +120,12 @@ export default function GlobalSettings() {
           <Field label="Page title suffix" hint="Added to every page title in the browser tab. Leave empty for none.">
             <Input value={settings.siteSuffix !== undefined ? settings.siteSuffix : ' | My Site'} onChange={e => set({ siteSuffix: e.target.value })} placeholder=" | My Site" />
           </Field>
-          <Field label="Favicon address"><Input value={settings.faviconUrl || ''} onChange={e => set({ faviconUrl: e.target.value })} placeholder="/uploads/favicon.png" /></Field>
-          <Field label="Default social image (OG)"><Input value={settings.defaultOgImage || ''} onChange={e => set({ defaultOgImage: e.target.value })} placeholder="/uploads/og-default.png" /></Field>
+          <Field label="Favicon" hint="A square image (PNG, SVG or ICO, at least 64×64). Also used as the logo of this admin.">
+            <ImageUrlField label="Favicon" value={settings.faviconUrl} onChange={(v) => set({ faviconUrl: v })} placeholder="/uploads/favicon.png" accept="image/png,image/svg+xml,image/x-icon,image/vnd.microsoft.icon,.ico,image/webp,image/gif,image/jpeg" />
+          </Field>
+          <Field label="Default social image (OG)" hint="Shown when a page is shared on social networks. 1200×630 works best.">
+            <ImageUrlField label="Default social image" value={settings.defaultOgImage} onChange={(v) => set({ defaultOgImage: v })} placeholder="/uploads/og-default.png" />
+          </Field>
         </div>
         <Checkbox label="Allow search engines to index the site (robots.txt)" checked={settings.robotsAllow !== false} onChange={e => set({ robotsAllow: e.target.checked })} />
       </Card>

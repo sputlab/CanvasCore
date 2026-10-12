@@ -47,7 +47,8 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('media_move')) { const b = JSON.parse(init.body); MEDIA.forEach((m) => { if (b.names.includes(m.name)) m.folder = b.folder; }); return new Response(JSON.stringify({ success: true, moved: b.names.length, folders: MEDIA_FOLDERS })); }
   if (u.includes('media_usage')) return new Response(JSON.stringify({ success: true, usage: { 'sky.jpg': ['Page: Home'] } }));
   if (u.includes('delete_media')) { const b = JSON.parse(init.body); return new Response(JSON.stringify({ success: true, deleted: b.names.length, message: `${b.names.length} images deleted.` })); }
-  if (u.includes('upload_media')) return new Response(JSON.stringify({ success: true }));
+  if (u.includes('upload_media')) return new Response(JSON.stringify({ success: true, url: '/uploads/123_new-icon.png' }));
+  if (u.includes('action=branding')) return new Response(JSON.stringify({ siteName: 'Acme Bakery', faviconUrl: '/uploads/fav.png' }));
   if (u.includes('optimize_media')) return new Response(JSON.stringify({ success: true, done: 1, remaining: 0 }));
   if (u.includes('save_media_meta')) return new Response(JSON.stringify({ success: true }));
   if (u.includes('get_revisions')) return new Response(JSON.stringify([{ id: 2, title: 'P', kind: 'published', author: 'ann', created_at: '2026-10-12 10:00:00' }, { id: 1, title: 'P', kind: 'draft', author: 'bob', created_at: '2026-10-11 09:00:00' }]));
@@ -469,6 +470,60 @@ try {
     if (cookieBox) { click(cookieBox.querySelector('input')); await sleep(30); }
     check('…with text, buttons, privacy page and position once enabled', ['Accept button', 'Decline button', 'Privacy policy page', 'Position'].every((t) => $$('label').some((l) => l.textContent.trim() === t)));
     check('admins see the Redirects card', /Redirects/.test(doc.body.textContent) && !!btnHas('Add redirect'));
+  }
+
+  console.log('\nSITE BRANDING & ABOUT');
+  {
+    await st().fetchBranding();
+    check('the store loads the site name and favicon (public "branding" action)', st().branding.siteName === 'Acme Bakery' && st().branding.faviconUrl === '/uploads/fav.png');
+    useStore.setState({ currentView: 'manager', userRole: 'admin', username: 'ann' });
+    mount(React.createElement(AdminLayout, null, React.createElement('p', null, 'child')));
+    await waitFor(() => $('.ui-brand'));
+    check('sidebar shows the site name instead of "CanvasCore"', /Acme Bakery/.test($('.ui-brand').textContent) && !/CanvasCore/.test($('.ui-brand').textContent));
+    check('…with the site favicon as its logo', $('.ui-brand img')?.getAttribute('src') === '/uploads/fav.png');
+    check('"CanvasCore" stays in the footer next to the version', /CanvasCore v/.test($('.ui-sidebar__foot').textContent));
+    click($('[aria-label="About CanvasCore"]'));
+    const about = await waitFor(() => $('[role="dialog"][aria-labelledby="cc-about-title"]'));
+    const hrefs = about ? $$('a', about).map((a) => a.getAttribute('href')) : [];
+    check('the ⓘ next to the version opens "About CanvasCore"', !!about && /Version /.test(about.textContent));
+    check('…with links to sputlab.com, Discord, the bug email and donations', ['https://www.sputlab.com', 'https://discord.gg/sD8KMc2kN', 'https://www.sputlab.com/donate'].every((h) => hrefs.includes(h)) && hrefs.some((h) => h.startsWith('mailto:bug@sputlab.com')) && /bug@sputlab\.com/.test(about.textContent));
+    check('…external links open in a new tab safely', $$('a[target="_blank"]', about).every((a) => /noopener/.test(a.getAttribute('rel'))));
+    about.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(30);
+    check('…and Escape closes it', !$('[aria-labelledby="cc-about-title"]'));
+
+    const Login = (await vite.ssrLoadModule('/src/components/Login.jsx')).default;
+    mount(React.createElement(Login)); await sleep(30);
+    check('sign-in screen shows the site name and favicon', $('h1')?.textContent === 'Acme Bakery' && $('main img')?.getAttribute('src') === '/uploads/fav.png');
+    const { useBrandingHead, brandIconUrl } = await vite.ssrLoadModule('/src/ui/branding.js');
+    mount(React.createElement(() => { useBrandingHead(); return null; })); await sleep(30);
+    check('browser tab: site name and favicon', doc.title === 'Acme Bakery · Admin' && doc.querySelector('link[rel="icon"]')?.getAttribute('href') === '/uploads/fav.png');
+    check('favicon addresses: relative ones are resolved from the admin, unsafe ones dropped', brandIconUrl('uploads/a.png') === '../uploads/a.png' && brandIconUrl('javascript:alert(1)') === '' && brandIconUrl('https://x.test/f.ico') === 'https://x.test/f.ico' && brandIconUrl('//evil.test/x.png') === '');
+    useStore.setState({ branding: { siteName: 'Acme Bakery', faviconUrl: '' } });
+    mount(React.createElement(AdminLayout, null, 'x')); await sleep(30);
+    check('no favicon set → the default app icon', !$('.ui-brand img') && !!$('.ui-brand svg'));
+
+    useStore.setState({ currentView: 'settings', pages: PAGES });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/GlobalSettings.jsx')).default)));
+    await waitFor(() => btnHas('Save & Publish') && !btnHas('Save & Publish').disabled, 3000);
+    check('Favicon and social image fields have "Upload image" and "Library"', !!$('[aria-label="Upload image: Favicon"]') && !!$('[aria-label="Upload image: Default social image"]') && $$('button').filter((b) => b.textContent.trim() === 'Library').length === 2);
+    const favLabel = $$('label').find((l) => l.textContent.trim() === 'Favicon');
+    const favInput = favLabel && doc.getElementById(favLabel.getAttribute('for'));
+    const fileInput = $('[aria-label="Upload image: Favicon"]').parentElement.querySelector('input[type="file"]');
+    const F = globalThis.File || w.File;
+    Object.defineProperty(fileInput, 'files', { configurable: true, value: [new F(['x'], 'icon.png', { type: 'image/png' })] });
+    fileInput.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await waitFor(() => favInput && favInput.value === '/uploads/123_new-icon.png', 2000);
+    check('uploading a favicon fills its address (and the label still points at the field)', !!favInput && favInput.value === '/uploads/123_new-icon.png' && calls.some((c) => c.u.includes('upload_media')));
+    click($('[aria-label="Choose from the media library: Default social image"]'));
+    const pick = await waitFor(() => $('[aria-label="Choose Blue sky"]'));
+    if (pick) click(pick);
+    await sleep(30);
+    const ogLabel = $$('label').find((l) => l.textContent.trim() === 'Default social image (OG)');
+    check('"Library" picks an image from the media library', doc.getElementById(ogLabel.getAttribute('for'))?.value === '/uploads/sky.jpg');
+
+    const css = readFileSync(path.join(PROJECT, 'src/ui/kit.css'), 'utf8');
+    check('media selection bar has a solid background (readable text)', /\.cc-media-selbar \{[^}]*background: #1e293b/.test(css));
   }
 
   console.log('\nSTORE & SAVING');

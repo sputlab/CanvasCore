@@ -11,6 +11,14 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Site branding in the admin**: the sign-in screen, the sidebar and the browser tab show the site name (set at
+  installation, editable in Global Options) and the site's favicon instead of "CanvasCore" and the default icon
+  (falls back to the default icon when there is no favicon or it can't be loaded). "CanvasCore" stays in the
+  sidebar footer next to the version. New public `api.php?action=branding` returns only the site name and favicon.
+- **About CanvasCore**: an ⓘ next to the version opens a dialog with the version, a link to sputlab.com, the
+  Discord server, the bug/suggestion email (bug@sputlab.com) and the donation page.
+- **Global Options › Favicon / Default social image**: "Upload image" (with progress) and "Library" buttons next to
+  the address, plus a preview.
 - **Media library folders**: create, rename and delete folders (nested), see counts, open a folder to see its images
   and sub-folders; drag images onto a folder to move them. Folders are labels (`media-folders.json` + `folder` in
   `media.json`): files never move, so image addresses and pages that use them don't change. Deleting a folder deletes
@@ -162,6 +170,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- Media library: the bar shown when images are selected has a solid background, so its text is readable over the
+  images scrolling under it.
 - **Media library: long file names pushed the copy/delete buttons out of the card**: names are now cut with "…" (full
   name on hover) and the buttons always stay visible.
 - Images the server can't process (GD without WebP, memory) stay "not optimized" and are retried; Media says how many
