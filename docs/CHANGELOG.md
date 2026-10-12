@@ -11,6 +11,14 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Faster images**: every uploaded photo gets smaller WebP copies (480, 960, 1600 px wide; never enlarged; phone
+  photos turned upright) in `uploads/_cc/`. Published pages give each uploaded image a `srcset` of those copies, so
+  phones download a fraction of the size; images load lazily except the first one, which loads with priority.
+  "Optimize N older images" in Media makes the copies for images uploaded before. New `canvascore-admin/media.php`.
+- **Media library**: each image shows its size in pixels and file size, an "Optimized" badge, and a description
+  (alt text) field. Picking an image for a block fills the block's empty alt text with that description.
+- **Image picker**: same look as the admin, search by name or description, sizes shown, several uploads at once,
+  Esc closes it; the "choose from the media library" buttons have accessible labels.
 - **Version history** (History button in the editor's top bar): every Save Draft or Publish that changes a page or
   collection item keeps a version (the newest 40). Preview any version and restore it into the editor as an unsaved
   change (Ctrl/Cmd+Z undoes it). DB migration 6 (`page_revisions`).

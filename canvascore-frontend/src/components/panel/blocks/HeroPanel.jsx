@@ -30,7 +30,7 @@ export default function HeroPanel({ ctx }) {
         <label style={labelStyle}>Hero Background Image</label>
         <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
           <input type="text" style={{...inputStyle, flex: 1}} value={selectedBlock.content.bgImage || ''} onChange={e => handleContentChange('bgImage', e.target.value)} />
-          <button onClick={() => setMediaPickerTarget('bgImage')} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 12px', cursor: 'pointer' }}><ImageIcon size={16}/></button>
+          <button type="button" title="Choose from the media library" aria-label="Choose from the media library" onClick={() => setMediaPickerTarget('bgImage')} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 12px', cursor: 'pointer' }}><ImageIcon size={16}/></button>
         </div>
         <label style={labelStyle}>Main Title</label>
         <RichTextField label="Main title" variant="basic" value={selectedBlock.content.title || ''} onChange={(val) => handleContentChange('title', val)} />

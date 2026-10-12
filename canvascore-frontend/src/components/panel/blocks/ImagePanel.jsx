@@ -11,7 +11,7 @@ export default function ImagePanel({ ctx }) {
       <label style={labelStyle}>Image URL</label>
       <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
         <input type="text" style={{...inputStyle, flex: 1}} value={selectedBlock.content.src || ''} onChange={e => handleContentChange('src', e.target.value)} />
-        <button onClick={() => setMediaPickerTarget('src')} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 12px', cursor: 'pointer' }}><ImageIcon size={16}/></button>
+        <button type="button" title="Choose from the media library" aria-label="Choose from the media library" onClick={() => setMediaPickerTarget('src')} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 12px', cursor: 'pointer' }}><ImageIcon size={16}/></button>
       </div>
       <label style={labelStyle}>Alt Text (SEO)</label>
       <input type="text" style={inputStyle} value={selectedBlock.content.alt || ''} onChange={e => handleContentChange('alt', e.target.value)} />

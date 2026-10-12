@@ -14,6 +14,7 @@ cc_session_touch();
 session_write_close(); // the rebuild can take a while: don't hold the other screens' requests
 
 require_once __DIR__ . '/compiler.php';
+require_once __DIR__ . '/media.php';
 
 $data_dir = cc_data_dir();
 $db_file = $data_dir . '/canvascore.sqlite';
@@ -83,6 +84,7 @@ try {
         if ($real && $site_root && strpos($real, $site_root . DIRECTORY_SEPARATOR) === 0) $written[] = str_replace(DIRECTORY_SEPARATOR, '/', substr($real, strlen($site_root) + 1));
     };
 
+    $media_meta = cc_media_meta_all();   // optimized image copies (srcset)
     $master_file = __DIR__ . '/master.html';
     if (!file_exists($master_file)) die(json_encode(['success' => false, 'message' => 'Error: master.html missing!']));
     $template = file_get_contents($master_file);
@@ -164,6 +166,7 @@ try {
         if ($writeRoot) $targets[] = __DIR__ . '/../index.html';
         if (!$isRootSlug) $targets[] = __DIR__ . '/../' . $slug . '/index.html';
         if (empty($targets)) $targets[] = __DIR__ . '/../' . $slug . '/index.html'; // slug 'index'/'home' that is not home while another page is the home
+        $html = cc_optimize_images($html, $base_url . 'uploads/', $media_meta);
         foreach ($targets as $fp) $write($fp, $html);
         $count++;
     }
@@ -207,6 +210,7 @@ try {
                 $ihtml = str_replace('{{PAGE_CONTENT}}', $i_full, $ihtml);
                 $ihtml = str_replace('{{BASE_URL}}', $base_url, $ihtml);
 
+                $ihtml = cc_optimize_images($ihtml, $base_url . 'uploads/', $media_meta);
                 $write(__DIR__ . '/../' . $col_slug . '/' . $it_slug . '/index.html', $ihtml);
                 $count++;
                 $sitemap_urls[] = $i_abs !== '' ? $i_abs : ($base_url . $col_slug . '/' . $it_slug . '/');

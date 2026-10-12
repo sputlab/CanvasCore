@@ -83,26 +83,32 @@ export default function PropertyPanel() {
 
   const renderMediaPicker = () => {
     if (!mediaPickerTarget) return null;
-    return <MediaPickerModal onClose={() => setMediaPickerTarget(null)} onSelect={(url) => {
-      if (typeof mediaPickerTarget === 'string') {
-        handleContentChange(mediaPickerTarget, url);
-      } else if (mediaPickerTarget.type === 'grid_item') {
-        handleContentChange('items', lstOf('items').map((it, i) => (i === mediaPickerTarget.index ? it + `<img src="${url}" style="max-width:100%; border-radius:8px; display:block; margin: 10px 0;" />` : it)));
-      } else if (mediaPickerTarget.type === 'slider_img') {
-        lstPatch('images', mediaPickerTarget.index, { src: url });
-      } else if (mediaPickerTarget.type === 'gallery_img') {
-        handleContentChange('images', (selectedBlock.content.images || []).map((im, i) => (i === mediaPickerTarget.index ? { ...im, src: url } : im)));
-      } else if (mediaPickerTarget.type === 'gallery_add') {
-        handleContentChange('images', [...(selectedBlock.content.images || []), { src: url, alt: '', caption: '' }]);
-      } else if (mediaPickerTarget.type === 'logo_img') {
-        handleContentChange('logos', (selectedBlock.content.logos || []).map((x, i) => (i === mediaPickerTarget.index ? { ...x, src: url } : x)));
-      } else if (mediaPickerTarget.type === 'logo_add') {
-        handleContentChange('logos', [...(selectedBlock.content.logos || []), { src: url, alt: '', href: '' }]);
-      } else if (mediaPickerTarget.type === 'team_photo') {
-        handleContentChange('members', (selectedBlock.content.members || []).map((x, i) => (i === mediaPickerTarget.index ? { ...x, photo: url } : x)));
-      } else if (mediaPickerTarget.type === 'ba_before' || mediaPickerTarget.type === 'ba_after') {
-        const k = mediaPickerTarget.type === 'ba_before' ? 'before' : 'after';
-        handleContentChange(k, { ...(selectedBlock.content[k] || {}), src: url });
+    // The image's alt text from the library fills the block's alt field when that is still empty
+    return <MediaPickerModal onClose={() => setMediaPickerTarget(null)} onSelect={(url, alt = '') => {
+      const t = mediaPickerTarget;
+      const withAlt = (item, key = 'alt') => (alt && !(item && item[key]) ? { [key]: alt } : {});
+      const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      if (typeof t === 'string') {
+        if (t === 'src') patchContent({ src: url, ...withAlt(liveContent()) });
+        else handleContentChange(t, url);
+      } else if (t.type === 'grid_item') {
+        handleContentChange('items', lstOf('items').map((it, i) => (i === t.index ? it + `<img src="${esc(url)}" alt="${esc(alt)}" style="max-width:100%; border-radius:8px; display:block; margin: 10px 0;" />` : it)));
+      } else if (t.type === 'slider_img') {
+        lstPatch('images', t.index, { src: url, ...withAlt(lstOf('images')[t.index]) });
+      } else if (t.type === 'gallery_img') {
+        lstPatch('images', t.index, { src: url, ...withAlt(lstOf('images')[t.index]) });
+      } else if (t.type === 'gallery_add') {
+        lstAdd('images', { src: url, alt, caption: '' });
+      } else if (t.type === 'logo_img') {
+        lstPatch('logos', t.index, { src: url, ...withAlt(lstOf('logos')[t.index]) });
+      } else if (t.type === 'logo_add') {
+        lstAdd('logos', { src: url, alt, href: '' });
+      } else if (t.type === 'team_photo') {
+        lstPatch('members', t.index, { photo: url });
+      } else if (t.type === 'ba_before' || t.type === 'ba_after') {
+        const k = t.type === 'ba_before' ? 'before' : 'after';
+        const cur = liveContent()[k] || {};
+        handleContentChange(k, { ...cur, src: url, ...withAlt(cur) });
       }
       setMediaPickerTarget(null);
     }} />;

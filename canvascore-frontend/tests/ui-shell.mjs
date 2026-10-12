@@ -42,6 +42,9 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url); calls.push({ u, body: init.body });
   if (u.includes('save_page')) return new Response(JSON.stringify({ success: true }));
   if (u.includes('get_pages')) return new Response(JSON.stringify(PAGES));
+  if (u.includes('get_media')) return new Response(JSON.stringify([{ name: 'sky.jpg', url: '/uploads/sky.jpg', alt: 'Blue sky', w: 2000, h: 1000, bytes: 345000, optimized: true, variants: [480, 960, 1600] }, { name: 'old.png', url: '/uploads/old.png', alt: '', w: 0, h: 0, bytes: 1200, optimized: false, variants: [] }]));
+  if (u.includes('optimize_media')) return new Response(JSON.stringify({ success: true, done: 1, remaining: 0 }));
+  if (u.includes('save_media_meta')) return new Response(JSON.stringify({ success: true }));
   if (u.includes('get_revisions')) return new Response(JSON.stringify([{ id: 2, title: 'P', kind: 'published', author: 'ann', created_at: '2026-10-12 10:00:00' }, { id: 1, title: 'P', kind: 'draft', author: 'bob', created_at: '2026-10-11 09:00:00' }]));
   if (u.includes('get_revision&')) return new Response(JSON.stringify({ id: 1, content_json: JSON.stringify([{ id: 'old1', type: 'TEXT', styles: {}, content: { text: '<p>Old version text</p>' } }]) }));
   return new Response(JSON.stringify([]));
@@ -357,6 +360,33 @@ try {
     check('…Restore puts it in the editor as an unsaved change (one undo step)', st().blocks.length === 1 && st().blocks[0].content.text === '<p>Old version text</p>' && !$('.cc-history'));
     st().undo();
     check('…and Ctrl+Z undoes the restore', st().blocks.length === 2);
+  }
+
+  console.log('\nIMAGES');
+  {
+    const MediaManager = (await vite.ssrLoadModule('/src/components/MediaManager.jsx')).default;
+    mount(React.createElement(MediaManager));
+    await waitFor(() => $$('figure').length === 2);
+    const cards = $$('figure');
+    check('the library shows size, file size and "Optimized"', /2000×1000/.test(cards[0].textContent) && /337 KB/.test(cards[0].textContent) && /Optimized/.test(cards[0].textContent) && !/Optimized/.test(cards[1].textContent));
+    const altIn = cards[1].querySelector('input[aria-label^="Description"]');
+    typeIn(altIn, 'Old logo'); altIn.dispatchEvent(new w.FocusEvent('blur', { bubbles: false })); altIn.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true })); await sleep(40);
+    const saved = calls.filter((c) => c.u.includes('save_media_meta')).pop();
+    check('an image description is saved when you leave the field', !!saved && JSON.parse(saved.body).alt === 'Old logo' && JSON.parse(saved.body).name === 'old.png');
+    const opt = btnHas('Optimize 1 older image');
+    check('"Optimize older images" appears when some aren\'t optimized', !!opt);
+    click(opt); await waitFor(() => calls.some((c) => c.u.includes('optimize_media'))); await sleep(60);
+    check('…and runs the optimization on the server', calls.some((c) => c.u.includes('optimize_media')));
+
+    // picking an image fills the block's alt text when it is empty
+    useStore.setState({ blocks: [{ id: 'im1', type: 'IMAGE', styles: {}, content: { src: '', alt: '' } }], selectedBlockId: 'im1' });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    click($('[aria-label="Choose from the media library"]'));
+    const item = await waitFor(() => $('.cc-picker__item'));
+    check('the picker shows the library with sizes and a search box', !!item && /2000×1000/.test($('.cc-picker').textContent) && !!$('.cc-picker input[type="search"], .cc-picker .ui-search input'));
+    if (item) click(item);
+    await sleep(40);
+    check('…and picking an image also fills the empty alt text', st().blocks[0].content.src === '/uploads/sky.jpg' && st().blocks[0].content.alt === 'Blue sky', JSON.stringify(st().blocks[0].content));
   }
 
   console.log('\nSTORE & SAVING');

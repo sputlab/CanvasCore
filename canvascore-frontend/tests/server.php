@@ -70,5 +70,30 @@ check('only the newest 40 versions are kept', (int)$db->query("SELECT COUNT(*) F
 $newest = $db->query("SELECT content_json, author FROM page_revisions ORDER BY id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 check('…the latest one included, with its author', $newest['content_json'] === '[45]' && $newest['author'] === 'ann');
 
+echo "\nIMAGES\n";
+require_once __DIR__ . '/../../canvascore-admin/media.php';
+$up = sys_get_temp_dir() . '/cc_up_' . getmypid(); @mkdir($up);
+$GLOBALS['CC_MEDIA_META_FILE'] = $up . '/media-meta.json';
+$im = imagecreatetruecolor(2000, 1000); imagefilledrectangle($im, 0, 0, 1999, 999, imagecolorallocate($im, 30, 120, 200));
+imagejpeg($im, $up . '/photo.jpg', 85);
+$small = imagecreatetruecolor(300, 200); imagepng($small, $up . '/icon.png');
+$meta = cc_media_process($up, 'photo.jpg');
+check('a large photo gets WebP copies at 480, 960 and 1600 px', $meta['variants'] === [480, 960, 1600] && is_file("$up/_cc/photo-960.webp"), json_encode($meta['variants']));
+$v = getimagesize("$up/_cc/photo-480.webp");
+check('…with the right proportions', $v && $v[0] === 480 && $v[1] === 240);
+$m2 = cc_media_process($up, 'icon.png');
+check('a small image is never enlarged (no copies) but is marked as processed', $m2['variants'] === [] && $m2['optimized'] === true && $m2['w'] === 300);
+cc_media_meta_update(function (&$all) { $all['photo.jpg']['alt'] = 'Blue sky'; });
+$meta2 = cc_media_process($up, 'photo.jpg');
+check('processing again keeps the alt text', cc_media_meta_all()['photo.jpg']['alt'] === 'Blue sky');
+$page = '<img src="/uploads/photo.jpg" alt="a" loading="lazy"><p>x</p><img src="/uploads/icon.png" alt="b"><img src="https://ext.com/x.jpg" alt="c" loading="eager">';
+$out = cc_optimize_images($page, '/uploads/');
+check('published pages get a srcset of the copies (and the original at its width)', strpos($out, 'srcset="/uploads/_cc/photo-480.webp 480w, /uploads/_cc/photo-960.webp 960w, /uploads/_cc/photo-1600.webp 1600w, /uploads/photo.jpg 2000w"') !== false, $out);
+check('the first image loads with priority (even if a block marked it lazy), the next ones lazily', preg_match('#<img[^>]*fetchpriority="high"[^>]*src="/uploads/photo.jpg"#', $out) && !preg_match('#src="/uploads/photo.jpg"[^>]*loading="lazy"#', $out) && preg_match('#<img[^>]*loading="lazy"[^>]*src="/uploads/icon.png"#', $out));
+check('an image that already says how to load keeps it; others decode async', strpos($out, 'loading="eager"') !== false && substr_count($out, 'decoding="async"') === 3);
+cc_media_forget($up, 'photo.jpg');
+check('deleting an image removes its copies and its description', !is_file("$up/_cc/photo-480.webp") && !isset(cc_media_meta_all()['photo.jpg']));
+array_map('unlink', glob("$up/_cc/*") ?: []); @rmdir("$up/_cc"); array_map('unlink', glob("$up/*") ?: []); @rmdir($up);
+
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);

@@ -3,6 +3,7 @@
 // CanvasCore — API backend (Phase 1: CSRF, hardened session, data outside the web root, hardening)
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
+require_once __DIR__ . '/media.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
 // PHP notices/warnings must never be printed into a JSON answer (the client could not read it): log them
@@ -219,7 +220,8 @@ if ($action === 'upload_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (move_uploaded_file($_FILES['file']['tmp_name'], $target)) {
             $base_dir = dirname($_SERVER['SCRIPT_NAME'], 2);
             if ($base_dir === '\\' || $base_dir === '/') $base_dir = '';
-            echo json_encode(['success' => true, 'message' => 'Uploaded successfully.', 'url' => $base_dir . '/uploads/' . $fname, 'filename' => $fname]);
+            $meta = cc_media_process($uploads_dir, $fname);   // smaller WebP copies + size info
+            echo json_encode(['success' => true, 'message' => 'Uploaded successfully.', 'url' => $base_dir . '/uploads/' . $fname, 'filename' => $fname, 'meta' => $meta]);
         } else { echo json_encode(['success' => false, 'message' => 'Cannot move the uploaded file.']); }
     } else { echo json_encode(['success' => false, 'message' => 'No file received or upload error.']); }
     exit;
@@ -230,14 +232,49 @@ if ($action === 'get_media') {
     if ($base_dir === '\\' || $base_dir === '/') $base_dir = '';
     $base_url = $base_dir . '/uploads/';
     $files = array_diff(scandir($uploads_dir), array('.', '..', '.htaccess'));
+    $meta = cc_media_meta_all();
     $media = [];
-    foreach ($files as $f) if (is_file($uploads_dir . '/' . $f)) $media[] = ['name' => $f, 'url' => $base_url . $f];
+    foreach ($files as $f) {
+        if (!is_file($uploads_dir . '/' . $f)) continue;   // the _cc folder of optimized copies is not listed
+        $m = is_array($meta[$f] ?? null) ? $meta[$f] : [];
+        $media[] = ['name' => $f, 'url' => $base_url . $f, 'alt' => (string)($m['alt'] ?? ''), 'w' => (int)($m['w'] ?? 0), 'h' => (int)($m['h'] ?? 0),
+                    'bytes' => (int)($m['bytes'] ?? @filesize($uploads_dir . '/' . $f)), 'optimized' => !empty($m['optimized']), 'variants' => array_values($m['variants'] ?? [])];
+    }
     echo json_encode($media); exit;
+}
+// Alt text of a library image: offered automatically when the image is picked for a block
+if ($action === 'save_media_meta' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $name = basename((string)($data['name'] ?? ''));
+    if ($name === '' || !is_file($uploads_dir . '/' . $name)) { echo json_encode(['success' => false, 'message' => 'Image not found.']); exit; }
+    $alt = trim(mb_substr((string)($data['alt'] ?? ''), 0, 300));
+    cc_media_meta_update(function (&$all) use ($name, $alt) { $all[$name] = array_merge(is_array($all[$name] ?? null) ? $all[$name] : [], ['alt' => $alt]); });
+    echo json_encode(['success' => true]); exit;
+}
+// Makes the optimized copies of images uploaded before (a batch at a time: call again while "remaining" > 0)
+if ($action === 'optimize_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    @set_time_limit(60);
+    $start = microtime(true);
+    $meta = cc_media_meta_all();
+    $todo = [];
+    foreach (array_diff(scandir($uploads_dir) ?: [], ['.', '..', '.htaccess']) as $f) {
+        if (is_file($uploads_dir . '/' . $f) && empty($meta[$f]['optimized'])) $todo[] = $f;
+    }
+    $done = 0;
+    foreach ($todo as $f) {
+        if (microtime(true) - $start > 20) break;   // keep each request short
+        cc_media_process($uploads_dir, $f);
+        $done++;
+    }
+    echo json_encode(['success' => true, 'done' => $done, 'remaining' => count($todo) - $done]); exit;
 }
 if ($action === 'delete_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $filename = basename($data['name'] ?? '');
-    if ($filename && $filename !== '.htaccess' && file_exists($uploads_dir . '/' . $filename)) unlink($uploads_dir . '/' . $filename);
+    if ($filename && $filename !== '.htaccess' && is_file($uploads_dir . '/' . $filename)) {
+        unlink($uploads_dir . '/' . $filename);
+        cc_media_forget($uploads_dir, $filename);   // its optimized copies and alt text
+    }
     echo json_encode(['success' => true, 'message' => 'Image deleted.']); exit;
 }
 
