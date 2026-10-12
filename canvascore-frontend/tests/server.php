@@ -57,5 +57,18 @@ $f = render_block(['id' => 'f', 'type' => 'FORM', 'styles' => [], 'content' => [
 check('an emptied button text falls back to "Send Message", the message to "Sent!"', strpos($f, '>Send Message</button>') !== false && strpos($f, 'value="Sent!"') !== false);
 check('phone fields are real tel inputs', strpos($f, 'type="tel"') !== false);
 
+echo "\nREVISION HISTORY\n";
+$_SESSION['username'] = 'ann';
+$db = new PDO('sqlite::memory:'); $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+require_once __DIR__ . '/../../canvascore-admin/migrations.php';
+foreach (cc_db_migrations() as $v => $m) if ($v >= 6) $m($db);
+cc_add_revision($db, 'p1', 'Home', '[1]', 'draft');
+cc_add_revision($db, 'p1', 'Home', '[1]', 'draft');
+check('a save without changes adds no version', (int)$db->query("SELECT COUNT(*) FROM page_revisions")->fetchColumn() === 1);
+for ($i = 2; $i <= 45; $i++) cc_add_revision($db, 'p1', 'Home', "[$i]", $i % 2 ? 'draft' : 'published');
+check('only the newest 40 versions are kept', (int)$db->query("SELECT COUNT(*) FROM page_revisions WHERE owner='p1'")->fetchColumn() === 40);
+$newest = $db->query("SELECT content_json, author FROM page_revisions ORDER BY id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+check('…the latest one included, with its author', $newest['content_json'] === '[45]' && $newest['author'] === 'ann');
+
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);

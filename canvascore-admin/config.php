@@ -247,6 +247,23 @@ function cc_relink_node(&$node, $oldUrl, $newUrl, $oldBase, $newBase) {
     return $changed;
 }
 
+// Revision history: one row per save (draft or publish) whose content differs from the last one;
+// the newest CC_REVISIONS_KEEP per page/item are kept. $owner = live page id, or "item:<id>".
+const CC_REVISIONS_KEEP = 40;
+function cc_add_revision($pdo, $owner, $title, $content_json, $kind) {
+    if (!$owner) return;
+    try {
+        $last = $pdo->prepare("SELECT content_json, title FROM page_revisions WHERE owner = ? ORDER BY id DESC LIMIT 1");
+        $last->execute([$owner]);
+        $l = $last->fetch(PDO::FETCH_ASSOC);
+        if ($l && $l['content_json'] === $content_json && $l['title'] === $title) return;   // nothing changed
+        $pdo->prepare("INSERT INTO page_revisions (owner, title, content_json, kind, author, created_at) VALUES (?,?,?,?,?,?)")
+            ->execute([$owner, $title, $content_json, $kind, $_SESSION['username'] ?? '', date('Y-m-d H:i:s')]);
+        $pdo->prepare("DELETE FROM page_revisions WHERE owner = ? AND id NOT IN (SELECT id FROM page_revisions WHERE owner = ? ORDER BY id DESC LIMIT " . (int)CC_REVISIONS_KEEP . ")")
+            ->execute([$owner, $owner]);
+    } catch (Exception $e) { /* history must never block a save */ }
+}
+
 // An uploaded SVG is a document that can carry scripts: accept it only without any active content
 // (scripts, event handlers, javascript: links, embedded HTML, external entities).
 function cc_svg_is_safe($path) {

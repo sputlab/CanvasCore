@@ -149,6 +149,20 @@ function cc_db_migrations() {
         5 => function ($pdo) {
             cc_add_col($pdo, 'collection_items', 'archived', "INTEGER DEFAULT 0");
         },
+
+        // v6 — revision history of pages and collection items (owner = page id, or "item:<id>")
+        6 => function ($pdo) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS page_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner TEXT NOT NULL,
+                title TEXT,
+                content_json TEXT,
+                kind TEXT,
+                author TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )");
+            $pdo->exec("CREATE INDEX IF NOT EXISTS idx_page_revisions_owner ON page_revisions(owner, id)");
+        },
     ];
 }
 

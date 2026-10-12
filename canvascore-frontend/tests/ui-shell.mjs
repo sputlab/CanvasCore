@@ -42,6 +42,8 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url); calls.push({ u, body: init.body });
   if (u.includes('save_page')) return new Response(JSON.stringify({ success: true }));
   if (u.includes('get_pages')) return new Response(JSON.stringify(PAGES));
+  if (u.includes('get_revisions')) return new Response(JSON.stringify([{ id: 2, title: 'P', kind: 'published', author: 'ann', created_at: '2026-10-12 10:00:00' }, { id: 1, title: 'P', kind: 'draft', author: 'bob', created_at: '2026-10-11 09:00:00' }]));
+  if (u.includes('get_revision&')) return new Response(JSON.stringify({ id: 1, content_json: JSON.stringify([{ id: 'old1', type: 'TEXT', styles: {}, content: { text: '<p>Old version text</p>' } }]) }));
   return new Response(JSON.stringify([]));
 };
 
@@ -312,6 +314,49 @@ try {
     check('…too short is explained', /At least 8 characters/.test($('.ui-dialog').textContent));
     typeIn(pw[1], 'newpass123'); typeIn(pw[2], 'newpass123'); await sleep(20);
     check('…valid → can submit', !btn('Change password').disabled && !closed);
+  }
+
+  console.log('\nEDITOR PRODUCTIVITY');
+  {
+    const key = (k, extra = {}) => w.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+    const ids = () => st().blocks.map((b) => b.id);
+    const sec = { id: 'sx1', type: 'SECTION', styles: {}, content: {}, children: [{ id: 'in1', type: 'TEXT', styles: {}, content: { text: '<p>in</p>' } }] };
+    const hero = { id: 'h9', type: 'HERO', styles: {}, content: { title: '<h1>H</h1>', buttons: [{ id: 'bb1', text: 'Go', url: '#' }] } };
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, blocks: [hero, sec, { id: 't9', type: 'TEXT', styles: {}, content: { text: '<p>t</p>' } }], selectedBlockId: 'sx1', pastBlocks: [], futureBlocks: [], isEditingMaster: false, userRole: 'admin' });
+    try { localStorage.removeItem('cc_block_clipboard'); } catch { /* */ }
+    mount(React.createElement(VisualEditor)); await waitFor(() => $('[aria-label="Version history"]')); await sleep(150);
+    key('d', { ctrlKey: true }); await sleep(30);
+    const dup = st().blocks[2];
+    check('Ctrl+D duplicates the selected block right after it, with new ids inside too', ids().length === 4 && dup.type === 'SECTION' && dup.id !== 'sx1' && dup.children[0].id !== 'in1' && st().selectedBlockId === dup.id);
+    key('ArrowUp', { altKey: true }); await sleep(30);
+    check('Alt+↑ moves it up among its siblings', st().blocks[1].id === dup.id);
+    key('Delete'); await sleep(30);
+    check('Delete removes the selected block (undoable)', !ids().includes(dup.id) && ids().length === 3);
+    key('z', { ctrlKey: true }); await sleep(30);
+    check('…Ctrl+Z brings it back', ids().includes(dup.id));
+    useStore.setState({ selectedBlockId: 'h9' }); await sleep(20);
+    key('c', { ctrlKey: true }); await sleep(30);
+    check('Ctrl+C copies the block to a clipboard that survives page changes', !!JSON.parse(localStorage.getItem('cc_block_clipboard') || 'null'));
+    useStore.setState({ activePage: { ...PAGES[1] }, blocks: [{ id: 'q1', type: 'TEXT', styles: {}, content: {} }], selectedBlockId: 'q1', pastBlocks: [] }); await sleep(40);
+    click($('.ui-tab[aria-selected]') && $$('.ui-tab').find((b) => /Add/.test(b.textContent))); await sleep(30);
+    check('the Add tab offers "Paste copied Hero"', !!btnHas('Paste copied Hero'));
+    key('v', { ctrlKey: true }); await sleep(30);
+    const pasted = st().blocks[1];
+    check('Ctrl+V pastes it after the selected block on another page, with fresh ids', !!pasted && pasted.type === 'HERO' && pasted.id !== 'h9' && pasted.content.buttons[0].id !== 'bb1');
+
+    click($('[aria-label="Version history"]'));
+    const hist = await waitFor(() => $('.cc-history'));
+    await waitFor(() => $$('.cc-history__item').length === 2);
+    check('Version history lists the saved versions (published / draft, who, when)', $$('.cc-history__item').length === 2 && /Published/.test($$('.cc-history__item')[0].textContent) && /bob/.test($$('.cc-history__item')[1].textContent));
+    click($$('.cc-history__item')[1]);
+    await waitFor(() => /Old version text/.test(($('.cc-history__frame') || {}).textContent || ''));
+    check('…picking one shows a preview', /Old version text/.test($('.cc-history__frame').textContent));
+    click(btnHas('Restore this version', hist));
+    const cd = await waitFor(() => $('[role="alertdialog"]'));
+    click(btn('Restore version', cd)); await sleep(60);
+    check('…Restore puts it in the editor as an unsaved change (one undo step)', st().blocks.length === 1 && st().blocks[0].content.text === '<p>Old version text</p>' && !$('.cc-history'));
+    st().undo();
+    check('…and Ctrl+Z undoes the restore', st().blocks.length === 2);
   }
 
   console.log('\nSTORE & SAVING');

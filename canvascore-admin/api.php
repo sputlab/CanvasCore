@@ -329,6 +329,26 @@ function relink_slug_change($pdo, $data_dir, $old_slug, $new_slug) {
     }
 }
 
+// Revision history: cc_add_revision() in config.php records each save.
+if ($action === 'get_revisions') {
+    // A draft copy's history is its live page's history
+    $owner = (string)($_GET['owner'] ?? '');
+    if (strpos($owner, 'item:') !== 0) {
+        $r = $pdo->prepare("SELECT parent_id, is_draft_copy FROM pages WHERE id = ?"); $r->execute([$owner]);
+        $row = $r->fetch(PDO::FETCH_ASSOC);
+        if ($row && (int)$row['is_draft_copy'] === 1 && $row['parent_id']) $owner = $row['parent_id'];
+    }
+    $st = $pdo->prepare("SELECT id, title, kind, author, created_at, length(content_json) AS size FROM page_revisions WHERE owner = ? ORDER BY id DESC");
+    $st->execute([$owner]);
+    echo json_encode($st->fetchAll(PDO::FETCH_ASSOC)); exit;
+}
+if ($action === 'get_revision') {
+    $st = $pdo->prepare("SELECT id, owner, title, kind, author, created_at, content_json FROM page_revisions WHERE id = ?");
+    $st->execute([(int)($_GET['id'] ?? 0)]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    echo json_encode($row ?: ['success' => false, 'message' => 'Version not found.']); exit;
+}
+
 if ($action === 'get_pages') {
     $rows = $pdo->query("SELECT * FROM pages WHERE is_draft_copy = 0 ORDER BY updated_at DESC")->fetchAll(PDO::FETCH_ASSOC);
     $copyStmt = $pdo->prepare("SELECT * FROM pages WHERE parent_id = ? AND is_draft_copy = 1 ORDER BY updated_at DESC LIMIT 1");
@@ -396,12 +416,14 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($old) relink_slug_change($pdo, $data_dir, $old['clean_slug'] ?? null, $clean);
             $pdo->prepare("DELETE FROM pages WHERE id = ?")->execute([$id]); // remove the copy
             if ($has_home) apply_home($pdo, $parentId, $is_home);
+            cc_add_revision($pdo, $parentId, $title, $content, 'published');
             echo json_encode(['success' => true, 'message' => 'Page published!', 'new_id' => $parentId]); exit;
         } else {
             $oldClean = $existing['clean_slug'] ?? null;
             $writeRow($id, 'published', 0, null);
             relink_slug_change($pdo, $data_dir, $oldClean, $clean);
             if ($has_home) apply_home($pdo, $id, $is_home);
+            cc_add_revision($pdo, $id, $title, $content, 'published');
             echo json_encode(['success' => true, 'message' => 'Page published!', 'new_id' => $id]); exit;
         }
     }
@@ -411,12 +433,14 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         // New page: stays a draft with its own id
         $writeRow($id, 'draft', 0, null);
         if ($has_home) apply_home($pdo, $id, $is_home);
+        cc_add_revision($pdo, $id, $title, $content, 'draft');
         echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $id]); exit;
     }
     if ((int)($existing['is_draft_copy'] ?? 0) === 1) {
         // Already editing a draft copy: update in place
         $writeRow($id, 'draft', 1, $existing['parent_id']);
         if ($has_home) apply_home($pdo, $existing['parent_id'], $is_home);
+        cc_add_revision($pdo, $existing['parent_id'], $title, $content, 'draft');
         echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $id]); exit;
     }
     if (($existing['status'] ?? '') === 'published') {
@@ -425,11 +449,13 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $writeRow($copyId, 'draft', 1, $id);
         $pdo->prepare("UPDATE pages SET status='modified', updated_at=? WHERE id=?")->execute([$now, $id]);
         if ($has_home) apply_home($pdo, $id, $is_home);
+        cc_add_revision($pdo, $id, $title, $content, 'draft');
         echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $copyId]); exit;
     }
     // Primary draft / draft_new: update in place
     $writeRow($id, 'draft', 0, null);
     if ($has_home) apply_home($pdo, $id, $is_home);
+    cc_add_revision($pdo, $id, $title, $content, 'draft');
     echo json_encode(['success' => true, 'message' => 'Draft saved!', 'new_id' => $id]); exit;
 }
 
@@ -463,6 +489,7 @@ if ($action === 'delete_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare("DELETE FROM pages WHERE parent_id = ?")->execute([$id]); // delete the copies
         }
         $pdo->prepare("DELETE FROM pages WHERE id = ?")->execute([$id]);
+        try { $pdo->prepare("DELETE FROM page_revisions WHERE owner = ?")->execute([$id]); } catch (Exception $e) {}
     }
     echo json_encode(['success' => true]); exit;
 }
@@ -620,11 +647,16 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $now]);
     }
+    if ($blocks !== null || !$existing_item) {
+        $stored = $pdo->prepare("SELECT content_json FROM collection_items WHERE id = ?"); $stored->execute([$id]);
+        cc_add_revision($pdo, 'item:' . $id, $title, (string)$stored->fetchColumn(), $status === 'published' ? 'published' : 'draft');
+    }
     echo json_encode(['success' => true, 'id' => $id]); exit;
 }
 if ($action === 'delete_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';
     $pdo->prepare("DELETE FROM collection_items WHERE id = ?")->execute([$id]);
+    try { $pdo->prepare("DELETE FROM page_revisions WHERE owner = ?")->execute(['item:' . $id]); } catch (Exception $e) {}
     echo json_encode(['success' => true]); exit;
 }
 

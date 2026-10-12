@@ -1,7 +1,7 @@
 import React, { useState, createContext, useContext } from 'react';
 import { useStore } from '../store/useStore';
 import { DndContext, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core';
-import { ChevronRight, ChevronDown, Trash2, GripVertical } from 'lucide-react';
+import { ChevronRight, ChevronDown, Trash2, GripVertical, CopyPlus } from 'lucide-react';
 import { blockInfo, CONTAINER_TYPES } from '../editor/blockCatalog';
 import { dropPosition, containsId, findBlock } from '../editor/layerDrop';
 import { confirmDialog } from '../ui/dialog';
@@ -12,7 +12,7 @@ const DragState = createContext({ activeId: null, drop: null });
 // The rows never move or resize while dragging (no sortable transforms): a line shows
 // where the block will land (before/after a row) or a highlight when it goes inside a container.
 const LayerNode = ({ block, depth = 0 }) => {
-  const { selectedBlockId, setSelectedBlockId, removeBlock } = useStore();
+  const { selectedBlockId, setSelectedBlockId, removeBlock, duplicateBlock } = useStore();
   const { activeId, drop } = useContext(DragState);
   const isSelected = selectedBlockId === block.id;
   const isContainer = block.children !== undefined;
@@ -61,6 +61,12 @@ const LayerNode = ({ block, depth = 0 }) => {
           </span>
         </div>
 
+        {isSelected && (
+          <button onClick={(e) => { e.stopPropagation(); duplicateBlock(block.id); }} title="Duplicate (Ctrl/Cmd+D)" aria-label="Duplicate block"
+            style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, marginRight: 8 }}>
+            <CopyPlus size={12} />
+          </button>
+        )}
         {isSelected && (
           <button onClick={async (e) => { e.stopPropagation(); if (await confirmDialog({ title: `Delete this ${info.label} block?`, message: isContainer ? 'Everything inside it is deleted too. You can undo it with Ctrl+Z.' : 'You can undo it with Ctrl+Z.', confirmLabel: 'Delete block', danger: true })) removeBlock(block.id); }}
             title="Delete block" aria-label="Delete block" style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>

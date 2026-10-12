@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
-import { ChevronLeft, Sliders, Palette, Shield, Save, Trash2, Crown, FileEdit, MousePointerClick } from 'lucide-react';
+import { ChevronLeft, Sliders, Palette, Shield, Save, Trash2, Crown, FileEdit, MousePointerClick, ArrowUp, ArrowDown, CopyPlus, Clipboard } from 'lucide-react';
 import MediaPickerModal from './MediaPickerModal';
 import { IconButton, Button } from '../ui/kit';
 import { notify } from '../ui/notify';
@@ -18,7 +18,7 @@ import { confirmDialog, promptDialog } from '../ui/dialog';
 const TABS = [['content', 'Content', Sliders], ['style', 'Style', Palette], ['advanced', 'Advanced', Shield]];
 
 export default function PropertyPanel() {
-  const { blocks, selectedBlockId, setSelectedBlockId, updateBlock, removeBlock, activePage, updateActivePage, pages, fetchTemplates, enterMasterEditMode, saveAsMaster, userRole } = useStore();
+  const { blocks, selectedBlockId, setSelectedBlockId, updateBlock, removeBlock, activePage, updateActivePage, pages, fetchTemplates, enterMasterEditMode, saveAsMaster, userRole, duplicateBlock, copyBlock, moveBlockBy } = useStore();
 
   // Blocks from templates, imports or older pages may have no "content"/"styles" (e.g. SECTION/CONTAINER):
   // the panel reads them directly, so it always gets objects (a crash here blanks the whole editor).
@@ -123,11 +123,23 @@ export default function PropertyPanel() {
       <span className="ui-row" style={{ gap: 4, flexWrap: 'nowrap' }}>{actions}</span>
     </div>
   );
+  // Quick actions on the selected block (same as the keyboard shortcuts)
+  const sib = (function where(list) { for (let i = 0; i < (list || []).length; i++) { if (list[i].id === selectedBlock.id) return { i, n: list.length }; const r = where(list[i].children); if (r) return r; } return null; })(blocks) || { i: 0, n: 1 };
+  const quick = (
+    <div className="cc-pp-quick" role="toolbar" aria-label="Block actions">
+      <IconButton icon={ArrowUp} label="Move up (Alt+↑)" size="sm" disabled={sib.i === 0} onClick={() => moveBlockBy(selectedBlock.id, -1)} />
+      <IconButton icon={ArrowDown} label="Move down (Alt+↓)" size="sm" disabled={sib.i >= sib.n - 1} onClick={() => moveBlockBy(selectedBlock.id, 1)} />
+      <span className="cc-ed-sep" style={{ height: 18 }} />
+      <IconButton icon={CopyPlus} label="Duplicate (Ctrl/Cmd+D)" size="sm" onClick={() => duplicateBlock(selectedBlock.id)} />
+      <IconButton icon={Clipboard} label="Copy, to paste on any page (Ctrl/Cmd+C)" size="sm" onClick={() => { if (copyBlock(selectedBlock.id)) notify(`${info.label} copied. Paste it on any page with Ctrl/Cmd+V or from the Add tab.`); }} />
+    </div>
+  );
 
   if (selectedBlock.type === 'MASTER') {
     return (
       <div className="cc-pp">
         {head('#fcd34d', <IconButton icon={Trash2} label="Remove this master from the page" size="sm" onClick={handleDeleteBlock} style={{ color: '#f87171' }} />)}
+        {quick}
         <div style={{ padding: 14 }}>
           <div className="ui-card" style={{ textAlign: 'center' }}>
             <Crown size={30} color="#fcd34d" style={{ marginBottom: 8 }} aria-hidden="true" />
@@ -160,6 +172,7 @@ export default function PropertyPanel() {
         <Button variant="gold" size="sm" icon={Crown} onClick={handleCreateMaster} title="Make it a global master: edit once, update everywhere">Master</Button>
         <IconButton icon={Trash2} label="Delete block" size="sm" onClick={handleDeleteBlock} style={{ color: '#f87171' }} />
       </>)}
+      {quick}
 
       <div className="ui-tabs" role="tablist" aria-label="Block settings" style={{ background: '#0f172a' }}>
         {tabs.map(([id, label, Icon]) => (

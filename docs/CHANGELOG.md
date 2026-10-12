@@ -11,6 +11,15 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Version history** (History button in the editor's top bar): every Save Draft or Publish that changes a page or
+  collection item keeps a version (the newest 40). Preview any version and restore it into the editor as an unsaved
+  change (Ctrl/Cmd+Z undoes it). DB migration 6 (`page_revisions`).
+- **Duplicate, copy and paste blocks**: Ctrl/Cmd+D duplicates the selected block (with everything inside);
+  Ctrl/Cmd+C copies it and Ctrl/Cmd+V pastes it on any page, even in another tab (also "Paste copied …" in the Add
+  tab); pasting goes inside the selected container, after the selected block, or at the end.
+- **Move and delete from the keyboard**: Alt+↑/↓ moves the selected block among its neighbours, Delete/Backspace
+  deletes it (Ctrl/Cmd+Z brings it back). The settings panel has a quick bar (move up/down, duplicate, copy) and the
+  Layers row a duplicate button.
 - **Change your own password** from the sidebar (key icon next to Logout): current password + the new one twice.
   Any role. A voluntary change now requires the current password.
 - **Flex Row** has a Content tab: direction, space between blocks, horizontal/vertical alignment, wrapping.

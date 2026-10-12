@@ -1,8 +1,8 @@
 // Editor left panel, "Add" tab: every block grouped by category, with a search box, plus the
 // user's saved templates and global masters. Blocks go inside the selected container, or at the end.
-import React, { useState } from 'react';
-import { useStore } from '../store/useStore';
-import { Crown, Library, Trash2, ChevronDown } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useStore, readBlockClipboard } from '../store/useStore';
+import { Crown, Library, Trash2, ChevronDown, ClipboardPaste } from 'lucide-react';
 import { CATEGORIES, searchBlocks, blockLabel } from '../editor/blockCatalog';
 import { SearchInput } from '../ui/kit';
 
@@ -23,8 +23,17 @@ function Group({ title, count, defaultOpen = true, children }) {
 const tile = { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 4px', minHeight: 64, cursor: 'pointer', background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155', borderRadius: 8, font: '600 11px/1.15 Inter, system-ui, sans-serif', textAlign: 'center' };
 
 export default function AddBlocksPanel({ onAdd, targetType, parentId = null }) {
-  const { userRole, templates, masters, addSavedBlock, deleteTemplate, insertMaster, deleteMaster, isEditingMaster } = useStore();
+  const { userRole, templates, masters, addSavedBlock, deleteTemplate, insertMaster, deleteMaster, isEditingMaster, pasteBlock } = useStore();
   const [query, setQuery] = useState('');
+  // A block copied here or in another tab (the clipboard lives in localStorage; copying here re-renders
+  // through the store, copying in another tab through the storage event)
+  const [, setTick] = useState(0);
+  const clip = readBlockClipboard();
+  useEffect(() => {
+    const onStorage = (e) => { if (e.key === 'cc_block_clipboard') setTick((t) => t + 1); };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
   const found = searchBlocks(query, { admin: userRole === 'admin' });
   const q = query.trim().toLowerCase();
   const myTemplates = (templates || []).filter((t) => !q || String(t.name).toLowerCase().includes(q));
@@ -32,6 +41,12 @@ export default function AddBlocksPanel({ onAdd, targetType, parentId = null }) {
 
   return (
     <div style={{ padding: 10 }}>
+      {clip && (
+        <button type="button" className="ui-btn ui-btn--secondary ui-btn--sm" style={{ width: '100%', justifyContent: 'flex-start', marginBottom: 8 }} onClick={() => pasteBlock()}
+          title="Paste the copied block (Ctrl/Cmd+V)">
+          <ClipboardPaste size={14} aria-hidden="true" /> Paste copied {blockLabel(clip.block.type)}
+        </button>
+      )}
       <SearchInput value={query} onChange={setQuery} placeholder="Search blocks…" label="Search blocks" />
       <p style={{ margin: '8px 2px 6px', fontSize: 11, color: '#64748b' }} aria-live="polite">
         {targetType ? <>Adds inside the selected <strong style={{ color: '#38bdf8' }}>{blockLabel(targetType)}</strong></> : 'Adds at the end of the page'}
