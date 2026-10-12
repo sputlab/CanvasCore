@@ -73,6 +73,9 @@ function cc_install_requirements($data_dir, $site_dir) {
         $r[] = [$label, $ok ? 'ok' : 'fail', $ok ? 'Available' : "Enable the $ext extension"];
     }
 
+    $zip = class_exists('ZipArchive');
+    $r[] = ['ZIP extension', $zip ? 'ok' : 'warn', $zip ? 'Available' : 'Missing: whole-site backups (Backup page) cannot be made or restored'];
+
     $dom = class_exists('DOMDocument');
     $r[] = ['DOM extension', $dom ? 'ok' : 'warn', $dom ? 'Available' : 'Missing: rich text is cleaned with a simpler fallback sanitizer'];
 

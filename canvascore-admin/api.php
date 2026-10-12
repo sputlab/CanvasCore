@@ -4,6 +4,7 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/media.php';
+require_once __DIR__ . '/backup.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
 // PHP notices/warnings must never be printed into a JSON answer (the client could not read it): log them
@@ -142,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') session_write_close();
 if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
-if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions']) && !$is_admin) {
+if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions']) && !$is_admin) {
     echo json_encode(['success' => false, 'message' => 'Only admins can do this.']); exit;
 }
 
@@ -821,6 +822,101 @@ if ($action === 'get_starters') {
     $file = __DIR__ . '/starters.json';
     echo file_exists($file) ? file_get_contents($file) : json_encode([]);
     exit;
+}
+
+// ---------------------------------------------------------------------------
+// Backup (admin): whole site as a ZIP (content, options, images), saved copies on the server, restore
+// ---------------------------------------------------------------------------
+if ($action === 'backup_info') {
+    if (class_exists('ZipArchive')) cc_backup_cleanup();
+    echo json_encode(['success' => true, 'zip' => class_exists('ZipArchive'), 'max_upload' => cc_backup_max_upload(), 'backups' => class_exists('ZipArchive') ? cc_backup_list() : []]); exit;
+}
+// Makes a backup: kept on the server ({temp: false}), or made for one download ({temp: true}: then
+// backup_download&name=… sends it and deletes it). Errors come back here as JSON, before any download starts.
+if ($action === 'backup_create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    session_write_close();
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    cc_backup_cleanup();
+    try {
+        $temp = !empty($data['temp']);
+        $name = cc_backup_new_name($temp ? 'download' : 'backup');
+        cc_backup_create($pdo, cc_backup_dir() . '/' . $name, ['history' => !isset($data['history']) || !empty($data['history']), 'submissions' => !isset($data['submissions']) || !empty($data['submissions']), 'kind' => $temp ? 'download' : 'saved']);
+        echo json_encode(['success' => true, 'message' => $temp ? 'Backup ready.' : 'Backup saved on the server.', 'name' => $name, 'backups' => cc_backup_list()]);
+    } catch (Exception $e) { echo json_encode(['success' => false, 'message' => $e->getMessage()]); }
+    exit;
+}
+// Sends a backup file (a saved one, or a one-time "download-" one, which is then deleted)
+if ($action === 'backup_download') {
+    $name = (string)($_GET['name'] ?? '');
+    $file = cc_backup_dir() . '/' . $name;
+    if (!cc_backup_name_ok($name, true) || !is_file($file)) { http_response_code(404); header('Content-Type: text/plain'); echo 'Backup not found. Go back and make it again.'; exit; }
+    $dl = $name;
+    if (strpos($name, 'download-') === 0) {
+        register_shutdown_function(function () use ($file) { @unlink($file); });
+        $dl = cc_backup_slug(json_decode((string)@file_get_contents($data_dir . '/settings.json'), true)['siteName'] ?? '') . '-backup-' . date('Y-m-d-His') . '.zip';
+    }
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="' . $dl . '"');
+    header('Content-Length: ' . filesize($file));
+    header('X-Content-Type-Options: nosniff');
+    readfile($file);
+    exit;
+}
+if ($action === 'backup_delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $name = $data['name'] ?? '';
+    if (!cc_backup_name_ok($name) || !is_file(cc_backup_dir() . '/' . $name)) { echo json_encode(['success' => false, 'message' => 'Backup not found.']); exit; }
+    @unlink(cc_backup_dir() . '/' . $name);
+    echo json_encode(['success' => true, 'message' => 'Backup deleted.', 'backups' => cc_backup_list()]); exit;
+}
+// A backup file to restore is uploaded in pieces (any size, whatever the server's upload limit):
+// backup_upload_chunk (multipart: id, index, chunk) appends each piece to backups/upload-<id>.part.
+if ($action === 'backup_upload_chunk' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    session_write_close();
+    $id = (string)($_POST['id'] ?? ''); $index = (int)($_POST['index'] ?? -1);
+    if (!preg_match('/^[a-f0-9]{16}$/', $id) || $index < 0) { echo json_encode(['success' => false, 'message' => 'Invalid upload.']); exit; }
+    if (empty($_FILES['chunk']) || ($_FILES['chunk']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        echo json_encode(['success' => false, 'message' => 'A piece of the file did not arrive' . (in_array($_FILES['chunk']['error'] ?? null, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) || empty($_FILES) ? ' (larger than this server accepts)' : '') . '. Try again.']); exit;
+    }
+    if ($index === 0) cc_backup_cleanup();
+    $part = cc_backup_dir() . '/upload-' . $id . '.part';
+    if ($index > 0 && !is_file($part)) { echo json_encode(['success' => false, 'message' => 'The upload expired. Try again.']); exit; }
+    $free = @disk_free_space(cc_backup_dir());
+    if ($free !== false && $free < 2 * (int)$_FILES['chunk']['size'] + 50 * 1048576) { echo json_encode(['success' => false, 'message' => 'Not enough free disk space on the server.']); exit; }
+    $in = fopen($_FILES['chunk']['tmp_name'], 'rb'); $out = fopen($part, $index === 0 ? 'wb' : 'ab');
+    if (!$in || !$out) { echo json_encode(['success' => false, 'message' => 'The file could not be saved on the server.']); exit; }
+    stream_copy_to_stream($in, $out); fclose($in); fclose($out);
+    echo json_encode(['success' => true, 'received' => filesize($part)]); exit;
+}
+// Restore from an uploaded file ({upload: id}, after backup_upload_chunk) or from a copy saved on the server
+// ({name}). A safety copy of the current site is saved first; one restore at a time.
+if (($action === 'backup_restore' || $action === 'backup_restore_saved') && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    session_write_close();   // a long restore must not hold back the other requests of this session
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $lock = @fopen(cc_backup_dir() . '/.restore.lock', 'c');
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) { echo json_encode(['success' => false, 'message' => 'Another restore is running. Wait for it to finish.']); exit; }
+    if ($action === 'backup_restore') {
+        $id = (string)($data['upload'] ?? '');
+        $part = cc_backup_dir() . '/upload-' . $id . '.part';
+        if (!preg_match('/^[a-f0-9]{16}$/', $id) || !is_file($part)) { echo json_encode(['success' => false, 'message' => 'The uploaded file was not found. Upload it again.']); exit; }
+        if (isset($data['size']) && (int)$data['size'] !== filesize($part)) { @unlink($part); echo json_encode(['success' => false, 'message' => 'The file did not arrive complete. Upload it again.']); exit; }
+        register_shutdown_function(function () use ($part) { @unlink($part); });
+        $src = $part;
+    } else {
+        $name = $data['name'] ?? '';
+        if (!cc_backup_name_ok($name) || !is_file(cc_backup_dir() . '/' . $name)) { echo json_encode(['success' => false, 'message' => 'Backup not found.']); exit; }
+        $src = cc_backup_dir() . '/' . $name;
+    }
+    $check = cc_backup_inspect($src);
+    if (!$check['ok']) { echo json_encode(['success' => false, 'message' => $check['message']]); exit; }
+    $check['zip']->close();
+    try { $safety = cc_backup_safety_copy($pdo); }
+    catch (Exception $e) { echo json_encode(['success' => false, 'message' => 'Could not save a safety copy of the current site first, so nothing was restored: ' . $e->getMessage()]); exit; }
+    $res = cc_backup_restore($pdo, $src);
+    $res['safety'] = $safety;
+    $res['backups'] = cc_backup_list();
+    echo json_encode($res); exit;
 }
 
 if ($action === 'export_site') {

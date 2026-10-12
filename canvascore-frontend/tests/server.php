@@ -153,5 +153,89 @@ $u = cc_media_usage($udb, ['a.jpg', 'b.jpg', 'c.jpg']);
 check('usage: where each image is used (pages, item covers…) before deleting', $u['a.jpg'] === ['Page: Home'] && $u['b.jpg'] === [] && $u['c.jpg'] === ['Item: Post'], json_encode($u));
 @unlink($GLOBALS['CC_MEDIA_META_FILE']); @unlink($GLOBALS['CC_MEDIA_FOLDERS_FILE']);
 
+echo "\nBACKUP & RESTORE\n";
+require_once __DIR__ . '/../../canvascore-admin/backup.php';
+$bk = sys_get_temp_dir() . '/cc_bk_' . getmypid();
+cc_backup_rrmdir($bk); @mkdir($bk . '/data', 0755, true); @mkdir($bk . '/site/uploads/_cc', 0755, true);
+$GLOBALS['CC_BACKUP_DATA_DIR'] = $bk . '/data'; $GLOBALS['CC_UPLOADS_DIR'] = $bk . '/site/uploads';
+$GLOBALS['CC_MEDIA_META_FILE'] = $bk . '/data/media.json'; $GLOBALS['CC_MEDIA_FOLDERS_FILE'] = $bk . '/data/media-folders.json';
+$bdb = new PDO('sqlite::memory:'); $bdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+cc_migrate($bdb);
+$bdb->exec("INSERT INTO pages (id, title, slug, clean_slug, content_json, status, is_home) VALUES ('p1', 'Home', 'index', 'index', '[]', 'published', 1), ('p2', 'About', 'about', 'about', '[]', 'draft', 0)");
+$bdb->exec("INSERT INTO pages (id, parent_id, title, slug, clean_slug, content_json, status, is_draft_copy) VALUES ('p1-draft', 'p1', 'Home', 'index', 'index', '[1]', 'draft', 1)");
+$bdb->exec("INSERT INTO collections (id, name, slug) VALUES ('c1', 'Blog', 'blog')");
+$bdb->exec("INSERT INTO collection_items (id, collection_id, title, slug, cover_image) VALUES ('i1', 'c1', 'First post', 'first-post', '/uploads/photo.png')");
+$bdb->exec("INSERT INTO redirects (from_path, to_path) VALUES ('old', 'about')");
+$bdb->exec("INSERT INTO page_revisions (owner, title, content_json, kind, author) VALUES ('p1', 'Home', '[]', 'draft', 'ann')");
+$bdb->exec("INSERT INTO form_submissions (form_id, page, data_json) VALUES ('f1', 'Home', '{\"name\":\"Bob\"}')");
+$adminsBefore = (int)$bdb->query("SELECT COUNT(*) FROM admin")->fetchColumn();
+file_put_contents($bk . '/data/settings.json', json_encode(['siteName' => 'Acme', 'trustedProxies' => '']));
+file_put_contents($bk . '/data/menu.json', json_encode(['items' => [['label' => 'Home']]]));
+file_put_contents($bk . '/data/media.json', json_encode(['photo.png' => ['alt' => 'A photo', 'folder' => 'Shop']]));
+file_put_contents($bk . '/data/media-folders.json', json_encode(['Shop']));
+$img = imagecreatetruecolor(40, 30); imagepng($img, $bk . '/site/uploads/photo.png'); imagewebp($img, $bk . '/site/uploads/_cc/photo-480.webp');
+file_put_contents($bk . '/site/uploads/logo.svg', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><rect width="4" height="4"/></svg>');
+file_put_contents($bk . '/site/uploads/.htaccess', 'x'); file_put_contents($bk . '/site/uploads/notes.txt', 'not an image');
+$zf = $bk . '/full.zip';
+$man = cc_backup_create($bdb, $zf);
+$z = new ZipArchive(); $z->open($zf); $names = []; for ($i = 0; $i < $z->numFiles; $i++) $names[] = $z->getNameIndex($i); $z->close();
+check('backup ZIP: manifest, every content table, options, menu, media data and images (with optimized copies)', !array_diff(['manifest.json', 'db/pages.json', 'db/collections.json', 'db/collection_items.json', 'db/redirects.json', 'db/page_revisions.json', 'db/form_submissions.json', 'data/settings.json', 'data/menu.json', 'data/media.json', 'data/media-folders.json', 'uploads/photo.png', 'uploads/_cc/photo-480.webp', 'uploads/logo.svg'], $names), implode(',', $names));
+check('…never the accounts, the .htaccess or files that aren\'t images', !preg_grep('~admin|\.htaccess|notes\.txt|cc_meta~', $names));
+check('…manifest with versions, site name and counts', $man['format'] === 'canvascore-backup' && $man['site_name'] === 'Acme' && $man['counts']['pages'] === 2 && $man['counts']['collection_items'] === 1 && $man['uploads']['files'] === 3 && $man['db_schema'] === cc_backup_db_schema());
+$zl = $bk . '/light.zip';
+cc_backup_create($bdb, $zl, ['history' => false, 'submissions' => false]);
+$z->open($zl); check('version history and form messages can be left out', $z->locateName('db/page_revisions.json') === false && $z->locateName('db/form_submissions.json') === false && $z->locateName('db/pages.json') !== false); $z->close();
+
+// the site changes after the backup…
+$bdb->exec("DELETE FROM pages WHERE id = 'p2'"); $bdb->exec("INSERT INTO pages (id, title, slug, clean_slug) VALUES ('p9', 'New', 'new', 'new')");
+$bdb->exec("DELETE FROM collection_items"); $bdb->exec("DELETE FROM redirects"); $bdb->exec("UPDATE admin SET role = role");
+$bdb->exec("INSERT INTO page_revisions (owner, title, content_json, kind, author) VALUES ('p9', 'New', '[]', 'draft', 'ann')");
+file_put_contents($bk . '/data/settings.json', json_encode(['siteName' => 'Changed', 'trustedProxies' => '10.0.0.2']));
+file_put_contents($bk . '/data/media.json', json_encode(['new.png' => ['alt' => 'new one']]));
+unlink($bk . '/site/uploads/photo.png'); imagepng($img, $bk . '/site/uploads/new.png');
+// …restoring the light backup keeps the current history and form messages (not in that file)
+$r = cc_backup_restore($bdb, $zl);
+check('restoring a backup without history keeps the current versions', $r['success'] && (int)$bdb->query("SELECT COUNT(*) FROM page_revisions WHERE owner = 'p9'")->fetchColumn() === 1, json_encode($r));
+$bdb->exec("DELETE FROM pages WHERE id = 'p2'"); $bdb->exec("INSERT OR REPLACE INTO pages (id, title, slug, clean_slug) VALUES ('p9', 'New', 'new', 'new')");
+file_put_contents($bk . '/data/settings.json', json_encode(['siteName' => 'Changed', 'trustedProxies' => '10.0.0.2']));
+imagepng($img, $bk . '/site/uploads/new.png');
+$r = cc_backup_restore($bdb, $zf);
+$ids = $bdb->query("SELECT id FROM pages ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+check('restore: pages and their unpublished drafts back as they were (pages made later are gone)', $r['success'] && $ids === ['p1', 'p1-draft', 'p2'] && $r['counts']['pages'] === 2, json_encode($ids) . ' ' . ($r['message'] ?? ''));
+check('restore: collections, items, redirects, versions and form messages back', (int)$bdb->query("SELECT COUNT(*) FROM collection_items")->fetchColumn() === 1 && (int)$bdb->query("SELECT COUNT(*) FROM redirects")->fetchColumn() === 1
+    && (int)$bdb->query("SELECT COUNT(*) FROM page_revisions")->fetchColumn() === 1 && (int)$bdb->query("SELECT COUNT(*) FROM form_submissions")->fetchColumn() === 1);
+check('restore: accounts untouched', (int)$bdb->query("SELECT COUNT(*) FROM admin")->fetchColumn() === $adminsBefore);
+$set = json_decode(file_get_contents($bk . '/data/settings.json'), true);
+check('restore: options and menu back, this server\'s trusted proxies kept', $set['siteName'] === 'Acme' && $set['trustedProxies'] === '10.0.0.2' && json_decode(file_get_contents($bk . '/data/menu.json'), true)['items'][0]['label'] === 'Home');
+check('restore: the images are exactly the backup\'s (with descriptions and folders), uploads protected again',
+    is_file($bk . '/site/uploads/photo.png') && is_file($bk . '/site/uploads/_cc/photo-480.webp') && !is_file($bk . '/site/uploads/new.png') && is_file($bk . '/site/uploads/.htaccess')
+    && cc_media_meta_all()['photo.png']['alt'] === 'A photo' && cc_media_folders() === ['Shop'] && $r['counts']['images'] === 3);
+check('restore: no temporary folders left behind', !glob($bk . '/site/.cc-*'));
+
+// files that must be refused
+$mk = function ($name, $entries, $manifest = null) use ($bk) {
+    $f = $bk . '/' . $name; $z = new ZipArchive(); $z->open($f, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+    if ($manifest !== false) $z->addFromString('manifest.json', json_encode($manifest ?? ['canvascore' => true, 'format' => 'canvascore-backup', 'format_version' => 1, 'db_schema' => 1, 'app' => '0.1']));
+    $z->addFromString('db/pages.json', '[{"id":"z1","title":"Zed","slug":"zed","clean_slug":"zed","ghost_column":"ignored"}]');
+    foreach ($entries as $n => $c) $z->addFromString($n, $c);
+    $z->close(); return $f;
+};
+check('refused: a ZIP that is not a CanvasCore backup', !cc_backup_inspect($mk('a.zip', [], false))['ok']);
+check('refused: paths that climb out ("../")', !cc_backup_inspect($mk('b.zip', ['uploads/../../evil.php' => '<?php']))['ok']);
+check('refused: scripts among the images', !cc_backup_inspect($mk('c.zip', ['uploads/shell.php' => '<?php']))['ok'] && !cc_backup_inspect($mk('c2.zip', ['uploads/x.phtml' => '<?php']))['ok']);
+check('refused: unknown tables or data files (e.g. accounts)', !cc_backup_inspect($mk('d.zip', ['db/admin.json' => '[]']))['ok'] && !cc_backup_inspect($mk('d2.zip', ['data/login_attempts.json' => '{}']))['ok']);
+$newer = cc_backup_inspect($mk('e.zip', [], ['canvascore' => true, 'format' => 'canvascore-backup', 'format_version' => 1, 'db_schema' => 999, 'app' => '9.0']));
+check('refused: a backup from a newer CanvasCore, with a clear message', !$newer['ok'] && stripos($newer['message'], 'newer') !== false);
+$r = cc_backup_restore($bdb, $mk('f.zip', ['uploads/bad.svg' => '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'uploads/fake.png' => 'not a png']));
+check('an older backup restores (unknown columns ignored); unsafe SVGs and fake images are left out', $r['success'] && $bdb->query("SELECT title FROM pages")->fetchAll(PDO::FETCH_COLUMN) === ['Zed']
+    && !is_file($bk . '/site/uploads/bad.svg') && !is_file($bk . '/site/uploads/fake.png') && in_array('bad.svg', $r['skipped'], true) && in_array('fake.png', $r['skipped'], true), json_encode($r));
+check('download file name from the site name', cc_backup_slug('Acme Bakery & Café') === 'acme-bakery-cafe' && cc_backup_slug('') === 'site' && cc_backup_slug('***') === 'site');
+check('saved backup names are checked (no paths)', cc_backup_name_ok('backup-20261013-101500-ab12.zip') && cc_backup_name_ok('before-restore-20261013-101500-ab12.zip') && !cc_backup_name_ok('../backup-20261013-101500.zip') && !cc_backup_name_ok('x.zip'));
+for ($i = 0; $i < 7; $i++) cc_backup_safety_copy($bdb);
+check('only the newest ' . CC_BACKUP_KEEP_SAFETY . ' safety copies are kept', count(array_filter(cc_backup_list(), function ($b) { return $b['kind'] === 'safety'; })) === CC_BACKUP_KEEP_SAFETY);
+check('the list shows what each saved backup contains', ($l = cc_backup_list()) && $l[0]['counts']['pages'] === 1 && $l[0]['site_name'] === 'Acme');
+cc_backup_rrmdir($bk);
+unset($GLOBALS['CC_BACKUP_DATA_DIR'], $GLOBALS['CC_UPLOADS_DIR'], $GLOBALS['CC_MEDIA_META_FILE'], $GLOBALS['CC_MEDIA_FOLDERS_FILE']);
+
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);

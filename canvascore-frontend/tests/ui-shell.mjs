@@ -48,6 +48,12 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('media_usage')) return new Response(JSON.stringify({ success: true, usage: { 'sky.jpg': ['Page: Home'] } }));
   if (u.includes('delete_media')) { const b = JSON.parse(init.body); return new Response(JSON.stringify({ success: true, deleted: b.names.length, message: `${b.names.length} images deleted.` })); }
   if (u.includes('upload_media')) return new Response(JSON.stringify({ success: true, url: '/uploads/123_new-icon.png' }));
+  if (u.includes('backup_info')) return new Response(JSON.stringify({ success: true, zip: true, max_upload: 300 * 1024, backups: BACKUPS }));
+  if (u.includes('backup_create')) { const b = JSON.parse(init.body); BACKUP_OPTS.push(b); return new Response(JSON.stringify({ success: true, name: b.temp ? 'download-20261013-101500-ab12.zip' : 'backup-20261013-101600-cd34.zip', backups: b.temp ? BACKUPS : [{ ...BACKUPS[1], name: 'backup-20261013-101600-cd34.zip', created: 1791900000 }, ...BACKUPS] })); }
+  if (u.includes('backup_upload_chunk')) { CHUNKS.push({ id: init.body.get('id'), index: init.body.get('index'), size: init.body.get('chunk').size }); return new Response(JSON.stringify({ success: true })); }
+  if (u.includes('backup_restore')) return new Response(JSON.stringify({ success: true, message: 'Backup restored (Acme).', counts: { pages: 3, collection_items: 2, images: 5 }, skipped: ['bad.svg'], safety: 'before-restore-20261013-101700-ef56.zip', backups: BACKUPS }));
+  if (u.includes('backup_delete')) return new Response(JSON.stringify({ success: true, backups: BACKUPS.slice(1) }));
+  if (u.includes('rebuild_all')) return new Response(JSON.stringify({ success: true, message: 'Published.' }));
   if (u.includes('action=branding')) return new Response(JSON.stringify({ siteName: 'Acme Bakery', faviconUrl: '/uploads/fav.png' }));
   if (u.includes('optimize_media')) return new Response(JSON.stringify({ success: true, done: 1, remaining: 0 }));
   if (u.includes('save_media_meta')) return new Response(JSON.stringify({ success: true }));
@@ -77,6 +83,12 @@ const MEDIA = [
   { name: LONG, url: '/uploads/' + LONG, folder: '', mtime: 300, alt: '', w: 10, h: 10, bytes: 900, optimized: true, variants: [] },
 ];
 const MEDIA_FOLDERS = ['Products', 'Products/Shoes'];
+const BACKUPS = [
+  { name: 'before-restore-20261012-090000-aa11.zip', kind: 'safety', bytes: 5 * 1048576, created: 1791795600, site_name: 'Acme', app: '0.13.0', counts: { pages: 12, collection_items: 4 }, uploads: { files: 37 } },
+  { name: 'backup-20261011-090000-bb22.zip', kind: 'saved', bytes: 3 * 1048576, created: 1791709200, site_name: 'Acme', app: '0.13.0', counts: { pages: 1 }, uploads: { files: 1 } },
+];
+const BACKUP_OPTS = [];
+const CHUNKS = [];
 const PAGES = [
   { id: 'p1', title: 'Home', clean_slug: 'index', status: 'published', is_home: 1, updated_at: '2026-10-01 10:00:00', content_json: '[]' },
   { id: 'p2', title: 'About us', clean_slug: 'about', status: 'modified', updated_at: '2026-10-05 10:00:00', content_json: '[{"id":"b1","type":"TEXT","content":{"text":"<p>x</p>"},"styles":{}}]' },
@@ -524,6 +536,62 @@ try {
 
     const css = readFileSync(path.join(PROJECT, 'src/ui/kit.css'), 'utf8');
     check('media selection bar has a solid background (readable text)', /\.cc-media-selbar \{[^}]*background: #1e293b/.test(css));
+  }
+
+  console.log('\nBACKUP');
+  {
+    const clicked = [];
+    const origClick = w.HTMLAnchorElement.prototype.click;
+    w.HTMLAnchorElement.prototype.click = function () { clicked.push(this.getAttribute('href')); };
+    useStore.setState({ currentView: 'backup', userRole: 'admin' });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/Backup.jsx')).default)));
+    const list = await waitFor(() => $('[aria-label="Backups on the server"]'));
+    check('the page lists the backups kept on the server, safety copies marked', !!list && $$('li', list).length === 2 && /Safety copy before a restore/.test(list.textContent) && /Saved copy/.test(list.textContent));
+    check('…with what each contains and its size', /12 pages · 4 items · 37 image files · 5\.0 MB/.test(list.textContent) || /12 pages · 4 items · 37 image files/.test(list.textContent), list && list.textContent);
+    check('says what a backup includes (images too) and that accounts never are', /every uploaded image/.test(doc.body.textContent) && /User accounts and passwords are never included/.test(doc.body.textContent));
+    click($$('label').find((l) => /version history/.test(l.textContent)).querySelector('input')); await sleep(20);
+    click(btnHas('Download backup (.zip)'));
+    await waitFor(() => clicked.length, 2000);
+    check('Download: the backup is made first (with the chosen options), then the browser downloads it', BACKUP_OPTS[0] && BACKUP_OPTS[0].temp === true && BACKUP_OPTS[0].history === false && BACKUP_OPTS[0].submissions === true && clicked[0] === 'api.php?action=backup_download&name=download-20261013-101500-ab12.zip', JSON.stringify([BACKUP_OPTS, clicked]));
+    click(btnHas('Keep a copy on the server'));
+    await waitFor(() => $$('li', $('[aria-label="Backups on the server"]')).length === 3, 2000);
+    check('"Keep a copy on the server" adds it to the list', $$('li', $('[aria-label="Backups on the server"]')).length === 3 && BACKUP_OPTS[1].temp === false);
+    const dlBtn = $$('button').find((b) => /^Download the backup of/.test(b.getAttribute('aria-label') || ''));
+    click(dlBtn); await sleep(20);
+    check('a saved backup can be downloaded', clicked[1] === 'api.php?action=backup_download&name=backup-20261013-101600-cd34.zip', clicked[1]);
+
+    // restore from a file: sent in pieces under the server's upload limit (300 KB here), then restored by id
+    const fileInput = $('input[type="file"]');
+    const F = globalThis.File || w.File;
+    const before = calls.length;
+    Object.defineProperty(fileInput, 'files', { configurable: true, value: [new F([new Uint8Array(600 * 1024)], 'site-backup.zip', { type: 'application/zip' })] });
+    fileInput.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const dlg = await waitFor(() => $('[role="alertdialog"]'));
+    check('restoring asks first, saying the site is replaced and a safety copy is made', !!dlg && /REPLACES the whole site/.test(dlg.textContent) && /safety copy/.test(dlg.textContent));
+    click(btn('Restore and replace the site', dlg));
+    const res = await waitFor(() => $('.cc-backup-result'), 3000);
+    check('restore: result with counts, files left out and the safety copy', !!res && /Backup restored \(Acme\)/.test(res.textContent) && /3 pages, 2 items, 5 image files/.test(res.textContent) && /bad\.svg/.test(res.textContent) && /safety copy/.test(res.textContent), res && res.textContent);
+    await waitFor(() => calls.some((c) => c.u.includes('rebuild_all')), 2000);
+    const rc = calls.find((c) => c.u.includes('action=backup_restore') && !c.u.includes('saved'));
+    check('a big file is uploaded in pieces below the server limit, then restored by its upload id', CHUNKS.length === 3 && CHUNKS.every((c) => c.size <= 300 * 1024 && c.id === CHUNKS[0].id) && CHUNKS.map((c) => c.index).join() === '0,1,2'
+      && CHUNKS.reduce((a, c) => a + c.size, 0) === 600 * 1024 && rc && JSON.parse(rc.body).upload === CHUNKS[0].id && JSON.parse(rc.body).size === 600 * 1024, JSON.stringify(CHUNKS));
+    check('…then the pages and site name are reloaded and the site is published', calls.some((c) => c.u.includes('rebuild_all')) && calls.slice(before).some((c) => c.u.includes('action=branding')) && calls.slice(before).some((c) => c.u.includes('get_pages')));
+    const rs = $$('button').find((b) => /^Restore the backup of/.test(b.getAttribute('aria-label') || ''));
+    click(rs);
+    const dlg2 = await waitFor(() => $('[role="alertdialog"]'));
+    check('restoring a saved backup asks first too', !!dlg2 && /REPLACES the whole site/.test(dlg2.textContent));
+    click(btn('Restore and replace the site', dlg2));
+    await waitFor(() => calls.some((c) => c.u.includes('backup_restore_saved')), 2000);
+    check('…and sends only its name', (() => { const c = calls.find((x) => x.u.includes('backup_restore_saved')); return c && JSON.parse(c.body).name === 'before-restore-20261012-090000-aa11.zip'; })());
+    await sleep(50);
+    const del = $$('button').find((b) => /^Delete the backup of/.test(b.getAttribute('aria-label') || ''));
+    click(del);
+    const dlg3 = await waitFor(() => $('[role="alertdialog"]'));
+    check('deleting a backup asks first', !!dlg3 && /cannot be undone/.test(dlg3.textContent));
+    click(btn('Delete backup', dlg3));
+    await waitFor(() => calls.some((c) => c.u.includes('backup_delete')), 2000);
+    check('…then deletes it', calls.some((c) => c.u.includes('backup_delete')));
+    w.HTMLAnchorElement.prototype.click = origClick;
   }
 
   console.log('\nSTORE & SAVING');
