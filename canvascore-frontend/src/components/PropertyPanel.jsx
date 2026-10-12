@@ -10,6 +10,7 @@ import { CONTENT_PANELS } from './panel/blocks';
 import StyleTab from './panel/StyleTab';
 import AdvancedTab from './panel/AdvancedTab';
 import PageSettings from './panel/PageSettings';
+import { confirmDialog, promptDialog } from '../ui/dialog';
 
 // Editor right panel. With no block selected it shows the page settings; with a block selected,
 // three tabs: Content (the block's own panel, src/components/panel/blocks/), Style and Advanced
@@ -33,7 +34,7 @@ export default function PropertyPanel() {
   useEffect(() => { fetch('api.php?action=get_collections').then(r => r.json()).then(d => { if (Array.isArray(d)) setCollections(d); }).catch(() => {}); }, []);
 
   const handleSaveTemplate = async () => {
-    const name = window.prompt('Template name (a reusable copy of this block):');
+    const name = await promptDialog({ title: 'Save as template', message: 'A reusable copy of this block, under Add › My templates.', label: 'Template name', placeholder: 'e.g. Pricing table', confirmLabel: 'Save template' });
     if (!name || name.trim() === '') return;
     try {
       await fetch('api.php?action=save_template', { method: 'POST', body: JSON.stringify({ name, content_json: JSON.stringify(selectedBlock) }) });
@@ -41,13 +42,14 @@ export default function PropertyPanel() {
     } catch { notify('Could not save the template.', 'error'); }
   };
   const handleCreateMaster = async () => {
-    const name = window.prompt('Global master name (e.g. Main Header):');
+    const name = await promptDialog({ title: 'Make a global master', message: 'The block becomes shared: edit it once and it changes on every page that uses it.', label: 'Master name', placeholder: 'e.g. Main Header', confirmLabel: 'Create master' });
     if (!name || name.trim() === '') return;
     await saveAsMaster(selectedBlock.id, name);
   };
-  const handleDeleteBlock = () => {
+  const handleDeleteBlock = async () => {
     const info = blockInfo(selectedBlock.type);
-    if (window.confirm(`Delete this ${info.label} block${selectedBlock.children && selectedBlock.children.length ? ' and everything inside it' : ''}?`)) removeBlock(selectedBlock.id);
+    const inside = selectedBlock.children && selectedBlock.children.length;
+    if (await confirmDialog({ title: `Delete this ${info.label} block?`, message: inside ? 'Everything inside it is deleted too. You can undo it with Ctrl+Z.' : 'You can undo it with Ctrl+Z.', confirmLabel: 'Delete block', danger: true })) removeBlock(selectedBlock.id);
   };
 
   // Content is ALWAYS read from the store (not from the last render's copy): two edits in quick succession

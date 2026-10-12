@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import { Library, Plus, Trash2, Edit3, FileText, Folder, Archive, ArchiveRestore, Globe } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, Badge, StatusBadge } from '../ui/kit';
 import { notify } from '../ui/notify';
+import { confirmDialog } from '../ui/dialog';
 
 export default function Collections() {
   const { setView, userRole, setActivePage, setBlocks, setSelectedBlockId, publishSiteAsync, activePage } = useStore();
@@ -51,7 +52,7 @@ export default function Collections() {
     } catch { notify('Could not create the collection (connection problem).', 'error'); }
   };
   const removeCollection = async (c) => {
-    if (!window.confirm(`Delete collection "${c.name}" and ALL its items?`)) return;
+    if (!(await confirmDialog({ title: `Delete the collection "${c.name}"?`, message: 'All its items are deleted too. This cannot be undone.', confirmLabel: 'Delete collection', danger: true }))) return;
     try {
       const data = await (await fetch('api.php?action=delete_collection', { method: 'POST', body: JSON.stringify({ id: c.id }) })).json();
       if (!data || data.success === false) { notify((data && data.message) || 'Could not delete the collection.', 'error'); return; }
@@ -114,7 +115,7 @@ export default function Collections() {
   };
 
   const removeItem = async (item) => {
-    if (!window.confirm(`Delete "${item.title}"?`)) return;
+    if (!(await confirmDialog({ title: `Delete "${item.title}"?`, message: 'The item is removed from the collection (and from the site at the next publish). This cannot be undone.', confirmLabel: 'Delete item', danger: true }))) return;
     try {
       const data = await (await fetch('api.php?action=delete_item', { method: 'POST', body: JSON.stringify({ id: item.id }) })).json();
       if (!data || data.success === false) notify((data && data.message) || 'Could not delete the item.', 'error');

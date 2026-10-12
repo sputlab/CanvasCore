@@ -56,7 +56,7 @@ function installEnv(newDom) {
   globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
   globalThis.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} };
   globalThis.alert = (m) => { alerts.push(String(m)); };
-  globalThis.confirm = () => true;
+  globalThis.confirm = () => { throw new Error('native confirm() used'); };
   globalThis.IS_REACT_ACT_ENVIRONMENT = false;
   delete globalThis.__CC_SESSION; delete globalThis.__CC_FETCH_WRAPPED; delete globalThis.__CC_CSRF;
 }
@@ -276,6 +276,10 @@ try {
   check('the backup stays until you save', draftKeys().some((k) => k.endsWith(':menu')));
 
   click(buttonByText('Discard'));
+  // the in-app confirmation dialog
+  const dlg = await waitFor(() => $('[role="alertdialog"]'));
+  check('Discard asks for confirmation in an in-app dialog', !!dlg && /Discard the restored changes\?/.test(dlg.textContent));
+  click([...dlg.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Discard changes'));
   const reset = await waitFor(() => $('input[placeholder="Label"]') && $('input[placeholder="Label"]').value === 'Home');
   check('Discard → back to the menu saved on the server', !!reset && !/Restored unsaved changes/.test(bodyText()));
   check('…and the backup is deleted (and not rewritten)', !(await waitFor(() => draftKeys().some((k) => k.endsWith(':menu')), { timeout: 1500 })));

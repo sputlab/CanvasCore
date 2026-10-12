@@ -4,6 +4,7 @@ import { uniqueSlug } from '../utils/slug';
 import { FileText, Plus, Trash2, Edit3, LayoutTemplate, ExternalLink, Copy, Home } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, SearchInput, Segmented, Select, StatusBadge, Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
+import { confirmDialog } from '../ui/dialog';
 
 export default function PageManager() {
   const { setView, setActivePage, setBlocks, pages, setPages, setSelectedBlockId } = useStore();
@@ -64,7 +65,8 @@ export default function PageManager() {
   };
 
   const deletePage = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this page? This will also delete the published HTML.')) return;
+    const pg = pages.find((p) => p.id === id);
+    if (!(await confirmDialog({ title: `Delete the page "${pg ? pg.title : 'this page'}"?`, message: 'If it is online, it is removed from the site too. This cannot be undone.', confirmLabel: 'Delete page', danger: true }))) return;
     try {
       const data = await (await fetch('api.php?action=delete_page', { method: 'POST', body: JSON.stringify({ id }) })).json();
       if (!data || data.success === false) { notify('Could not delete the page: ' + ((data && data.message) || 'unexpected answer'), 'error'); return; }

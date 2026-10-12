@@ -4,6 +4,7 @@ import { DndContext, DragOverlay, pointerWithin, PointerSensor, useSensor, useSe
 import { ChevronRight, ChevronDown, Trash2, GripVertical } from 'lucide-react';
 import { blockInfo } from '../editor/blockCatalog';
 import { dropPosition, containsId, findBlock } from '../editor/layerDrop';
+import { confirmDialog } from '../ui/dialog';
 
 // Drag state shared by every row: the dragged id and where it would land ({ id, pos }).
 const DragState = createContext({ activeId: null, drop: null });
@@ -61,7 +62,7 @@ const LayerNode = ({ block, depth = 0 }) => {
         </div>
 
         {isSelected && (
-          <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete this ${info.label} block${isContainer ? ' and everything inside it' : ''}?`)) removeBlock(block.id); }}
+          <button onClick={async (e) => { e.stopPropagation(); if (await confirmDialog({ title: `Delete this ${info.label} block?`, message: isContainer ? 'Everything inside it is deleted too. You can undo it with Ctrl+Z.' : 'You can undo it with Ctrl+Z.', confirmLabel: 'Delete block', danger: true })) removeBlock(block.id); }}
             title="Delete block" aria-label="Delete block" style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
             <Trash2 size={12} />
           </button>

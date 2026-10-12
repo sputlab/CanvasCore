@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore';
 import { PanelTop, PanelBottom, Edit3, Trash2, Save, Palette, Mail, Search, ShieldCheck, Settings2 } from 'lucide-react';
 import { Button, Card, Field, Input, Select, Checkbox, PageHeader } from '../ui/kit';
 import { notify } from '../ui/notify';
+import { confirmDialog } from '../ui/dialog';
 
 const DEFAULT_SETTINGS = { brandColor: '#3b82f6', fontFamily: 'Inter', adminEmail: '', emailFrom: '', emailSubject: '', siteSuffix: ' | My Site' };
 
@@ -61,7 +62,7 @@ export default function GlobalSettings() {
     } catch { notify('Could not open the ' + name + '.', 'error'); }
   };
   const deletePart = async (name) => {
-    if (!window.confirm(`Delete the global ${name}? This removes all its blocks.`)) return;
+    if (!(await confirmDialog({ title: `Delete the global ${name}?`, message: 'All its blocks are removed from every page. This cannot be undone.', confirmLabel: `Delete ${name}`, danger: true }))) return;
     try {
       await fetch('api.php?action=delete_part', { method: 'POST', body: JSON.stringify({ name }) });
       await publishSiteAsync();
@@ -82,8 +83,8 @@ export default function GlobalSettings() {
       {restoredAt && (
         <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#0c4a6e', border: '1px solid #0369a1', borderRadius: 10, padding: '9px 13px', marginBottom: 16, fontSize: 13, color: '#e0f2fe' }}>
           <span><strong>Restored unsaved changes</strong> from {new Date(restoredAt).toLocaleString()}. They are <strong>not saved to the site yet</strong>: click Save &amp; Publish to keep them.</span>
-          <Button size="sm" variant="ghost" onClick={() => {
-            if (!window.confirm('Discard the restored changes and reload the saved options?')) return;
+          <Button size="sm" variant="ghost" onClick={async () => {
+            if (!(await confirmDialog({ title: 'Discard the restored changes?', message: 'The options go back to their last saved version.', confirmLabel: 'Discard changes', danger: true }))) return;
             setSettings(draft.discard()); setRestoredAt(null);
           }}>Discard</Button>
         </div>

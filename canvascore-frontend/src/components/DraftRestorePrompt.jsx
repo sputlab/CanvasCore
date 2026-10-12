@@ -4,6 +4,7 @@ import { History, RotateCcw, Trash2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { listDrafts, clearDraft, describeDraft } from '../session/drafts';
 import { applyDraftToStore } from '../session/draftTrackers';
+import { confirmDialog } from '../ui/dialog';
 
 const ago = (ts) => {
   const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
@@ -36,9 +37,9 @@ export default function DraftRestorePrompt() {
     if (!view) { notify('This backup could not be restored.', 'error'); return; }
     setItems(null);
   };
-  const discard = (entry) => {
+  const discard = async (entry) => {
     const d = describeDraft(entry);
-    if (!window.confirm(`Discard the unsaved changes to "${d.title}"? This cannot be undone.`)) return;
+    if (!(await confirmDialog({ title: `Discard the unsaved changes to "${d.title}"?`, message: 'They were never saved to the site. This cannot be undone.', confirmLabel: 'Discard changes', danger: true }))) return;
     clearDraft(entry.scope, username);
     const rest = items.filter((x) => x.scope !== entry.scope);
     setItems(rest.length ? rest : null);

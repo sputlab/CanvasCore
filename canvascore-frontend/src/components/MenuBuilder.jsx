@@ -11,6 +11,7 @@ import {
 import { Button, PageHeader } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { DEFAULT_SETTINGS, BURGER_ICONS, EFFECT_GROUPS, THEMES, applyTheme, matchingTheme, normalizeSettings, toggleEffect, cleanEffects } from '../menu/menuThemes';
+import { confirmDialog } from '../ui/dialog';
 
 // ---- tree utilities (immutable) ----
 const clone = (t) => JSON.parse(JSON.stringify(t));
@@ -181,8 +182,8 @@ export default function MenuBuilder() {
       {restoredAt && (
         <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', background: '#0c4a6e', border: '1px solid #0369a1', borderRadius: '10px', padding: '9px 13px', marginBottom: '14px', fontSize: '13px', color: '#e0f2fe' }}>
           <span><strong>Restored unsaved changes</strong> from {new Date(restoredAt).toLocaleString()}. They are <strong>not saved to the site yet</strong>: click Save &amp; Publish to keep them.</span>
-          <button onClick={() => {
-            if (!window.confirm('Discard the restored changes and reload the saved menu?')) return;
+          <button onClick={async () => {
+            if (!(await confirmDialog({ title: 'Discard the restored changes?', message: 'The menu goes back to its last saved version.', confirmLabel: 'Discard changes', danger: true }))) return;
             const srv = draft.discard(); setItems(srv.items); setSettings(normalizeSettings(srv.settings)); setRestoredAt(null);
           }} style={{ background: 'transparent', color: '#bae6fd', border: '1px solid #0369a1', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12px' }}>Discard</button>
         </div>

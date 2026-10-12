@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { flushDrafts, setDraftUser } from '../session/drafts';
 import { CONTAINER_TYPES } from '../editor/blockCatalog';
 import { notify } from '../ui/notify';
+import { confirmDialog } from '../ui/dialog';
 
 // Unique ids even for many blocks created in the same millisecond (templates, masters, imports)
 let idSeq = 0;
@@ -278,7 +279,8 @@ export const useStore = create((set, get) => ({
     } catch { return state; }
   }),
   deleteTemplate: async (id) => {
-    if (!window.confirm("Delete permanently?")) return;
+    const t = (get().templates || []).find((x) => x.id === id);
+    if (!(await confirmDialog({ title: `Delete the template${t ? ` "${t.name}"` : ''}?`, message: 'Blocks already added to pages stay. This cannot be undone.', confirmLabel: 'Delete template', danger: true }))) return;
     await fetch('api.php?action=delete_template', { method: 'POST', body: JSON.stringify({ id }) });
     get().fetchTemplates();
   },
@@ -383,7 +385,8 @@ export const useStore = create((set, get) => ({
   },
 
   deleteMaster: async (id) => {
-    if (!window.confirm("Delete this Master Component globally? It will be removed from ALL pages!")) return;
+    const m = (get().masters || []).find((x) => x.id === id);
+    if (!(await confirmDialog({ title: `Delete the master${m ? ` "${m.name}"` : ''}?`, message: 'It is removed from EVERY page that uses it. This cannot be undone.', confirmLabel: 'Delete master', danger: true }))) return;
     await fetch('api.php?action=delete_master', { method: 'POST', body: JSON.stringify({ id }) });
     get().fetchMasters();
     set((state) => {
