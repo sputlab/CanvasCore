@@ -46,6 +46,14 @@ if ($action === 'version') {
     echo json_encode($v); exit;
 }
 
+// Public branding for the sign-in screen and the admin shell: only the site name and the favicon address
+// (both already public on the published site). Nothing else from the settings is exposed here.
+if ($action === 'branding') {
+    session_write_close();
+    $s = @json_decode((string)@file_get_contents($data_dir . '/settings.json'), true);
+    echo json_encode(cc_public_branding(is_array($s) ? $s : [])); exit;
+}
+
 // READ-ONLY session status: does not extend the session (background polling must not
 // keep it from expiring due to inactivity). Releases the session lock immediately.
 if ($action === 'session_status') {

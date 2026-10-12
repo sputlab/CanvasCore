@@ -122,6 +122,13 @@ check('cookie banner: escaped text, privacy link, Accept/Decline, consent gating
 $sb = render_block(['id' => 'sr', 'type' => 'SEARCH', 'styles' => [], 'content' => ['placeholder' => 'Find "it"', 'limit' => 999]]);
 check('Site Search block: escaped placeholder, index address, limit capped at 50, its script', strpos($sb, 'placeholder="Find &quot;it&quot;"') !== false && strpos($sb, 'data-index="{{BASE_URL}}search-index.json"') !== false && strpos($sb, 'data-limit="50"') !== false && strpos($sb, "getElementById('sr')") !== false);
 
+echo "\nSITE BRANDING\n";
+$br = cc_public_branding(['siteName' => '  Acme Bakery ', 'faviconUrl' => '/uploads/fav.png', 'adminEmail' => 'x@y.z', 'trustedProxies' => '10.0.0.1']);
+check('public branding: only the site name and favicon', $br === ['siteName' => 'Acme Bakery', 'faviconUrl' => '/uploads/fav.png']);
+check('public branding: unsafe favicon addresses are dropped', cc_public_branding(['faviconUrl' => 'javascript:alert(1)'])['faviconUrl'] === '' && cc_public_branding(['faviconUrl' => '//evil.test/x.png'])['faviconUrl'] === ''
+    && cc_public_branding(['faviconUrl' => 'uploads/f.ico'])['faviconUrl'] === 'uploads/f.ico' && cc_public_branding(['faviconUrl' => 'https://cdn.test/f.png'])['faviconUrl'] === 'https://cdn.test/f.png');
+check('public branding: empty settings → empty values', cc_public_branding([]) === ['siteName' => '', 'faviconUrl' => '']);
+
 echo "\nMEDIA FOLDERS\n";
 $mf = sys_get_temp_dir() . '/cc_mf_' . getmypid();
 $GLOBALS['CC_MEDIA_META_FILE'] = $mf . '-meta.json'; $GLOBALS['CC_MEDIA_FOLDERS_FILE'] = $mf . '-folders.json';

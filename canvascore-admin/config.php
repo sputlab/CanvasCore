@@ -602,3 +602,12 @@ function cc_boot_session() {
 }
 
 cc_boot_session();
+
+// What the sign-in screen may know about the site before login (api.php?action=branding): the site name and
+// the favicon address, nothing else. A favicon that is not an http(s), root or plain relative address is dropped.
+function cc_public_branding(array $settings) {
+    $fav = trim((string)($settings['faviconUrl'] ?? ''));
+    if ($fav !== '' && !preg_match('~^(https?://|/(?!/)|[A-Za-z0-9._-][A-Za-z0-9._/-]*$)~i', $fav)) $fav = '';
+    return ['siteName' => mb_substr(trim((string)($settings['siteName'] ?? '')), 0, 120), 'faviconUrl' => $fav];
+}
+

@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { Layers, LogIn, Clock } from 'lucide-react';
+import { LogIn, Clock } from 'lucide-react';
+import { BrandLogo } from '../ui/BrandLogo';
 import { Button, Field, Input } from '../ui/kit';
 import { readExpiredNotice, clearExpiredNotice } from '../session/drafts';
 
 export default function Login() {
   const { login } = useStore();
+  const siteName = useStore((s) => s.branding.siteName);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -33,8 +35,8 @@ export default function Login() {
     <div style={{ minHeight: '100vh', background: 'radial-gradient(1200px 600px at 50% -10%, #1e3a5f 0%, #0b1220 60%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, boxSizing: 'border-box', fontFamily: 'var(--ui-font)' }}>
       <main className="ui-card" style={{ padding: 32, width: '100%', maxWidth: 400, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
         <div style={{ textAlign: 'center', marginBottom: 26 }}>
-          <div className="ui-brand__logo" style={{ width: 52, height: 52, borderRadius: 14, margin: '0 auto 14px' }}><Layers size={26} aria-hidden="true" /></div>
-          <h1 style={{ color: '#f8fafc', margin: '0 0 6px', fontSize: 22 }}>CanvasCore</h1>
+          <BrandLogo size={52} iconSize={26} radius={14} style={{ margin: '0 auto 14px' }} />
+          <h1 style={{ color: '#f8fafc', margin: '0 0 6px', fontSize: 22, overflowWrap: 'anywhere' }}>{siteName || 'Sign in'}</h1>
           <p style={{ color: '#94a3b8', margin: 0, fontSize: 14 }}>Enter your credentials to manage the site</p>
         </div>
 

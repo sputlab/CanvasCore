@@ -4,10 +4,12 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import {
   FileText, LayoutTemplate, Library, Image as ImageIcon, ListTree, Palette, Inbox, Users, LogOut, Globe,
-  Menu as MenuIcon, X, DatabaseBackup, Layers, KeyRound,
+  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info,
 } from 'lucide-react';
 import { Button } from '../ui/kit';
 import ChangePasswordDialog from './ChangePasswordDialog';
+import AboutDialog from './AboutDialog';
+import { BrandLogo } from '../ui/BrandLogo';
 import { notify } from '../ui/notify';
 
 const NAV = [
@@ -33,6 +35,8 @@ export default function AdminLayout({ children, wide }) {
   const [navOpen, setNavOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const siteName = useStore((s) => s.branding.siteName) || 'My Site';
   const version = (serverVersion && serverVersion.app) || appVersion || '0.0.0';
   const build = (serverVersion && serverVersion.build) || appBuild;
 
@@ -49,7 +53,7 @@ export default function AdminLayout({ children, wide }) {
   return (
     <div className="ui-shell" data-nav-open={navOpen}>
       <aside className="ui-sidebar" aria-label="Main navigation">
-        <div className="ui-brand"><span className="ui-brand__logo"><Layers size={16} /></span> CanvasCore</div>
+        <div className="ui-brand" title={siteName}><BrandLogo /> <span className="ui-brand__name">{siteName}</span></div>
         <div style={{ padding: '0 12px 6px' }}>
           <Button variant="success" block icon={Globe} onClick={publish} disabled={publishing} title="Rebuild and publish the whole site">
             {publishing ? 'Publishing…' : 'Publish Site'}
@@ -79,20 +83,24 @@ export default function AdminLayout({ children, wide }) {
               <Button variant="ghost" size="sm" icon={LogOut} onClick={logout} title="Log out" aria-label="Log out" />
             </div>
           )}
-          <div className="ui-version">CanvasCore v{version}{build ? ` · build ${build}` : ''}</div>
+          <div className="ui-version ui-version--row">
+            <span>CanvasCore v{version}{build ? ` · build ${build}` : ''}</span>
+            <button type="button" className="ui-version__info" onClick={() => setAboutOpen(true)} aria-label="About CanvasCore" title="About CanvasCore"><Info size={14} aria-hidden="true" /></button>
+          </div>
           {serverVersion && appVersion && (serverVersion.app !== appVersion || (appBuild && serverVersion.build && Number(serverVersion.build) !== Number(appBuild))) && (
             <div className="ui-version" style={{ color: '#f59e0b' }}>Editor v{appVersion}{appBuild ? ` (build ${appBuild})` : ''} / server v{serverVersion.app}{serverVersion.build ? ` (build ${serverVersion.build})` : ''}: reload the page after updating.</div>
           )}
         </div>
       </aside>
       {pwOpen && <ChangePasswordDialog onClose={() => setPwOpen(false)} />}
+      {aboutOpen && <AboutDialog version={version} build={build} onClose={() => setAboutOpen(false)} />}
       {navOpen && <div className="ui-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <div className="ui-main">
         <div className="ui-topbar">
           <button type="button" className="ui-btn ui-btn--ghost ui-btn--icon" aria-label={navOpen ? 'Close menu' : 'Open menu'} onClick={() => setNavOpen(!navOpen)}>
             {navOpen ? <X size={18} /> : <MenuIcon size={18} />}
           </button>
-          CanvasCore
+          <BrandLogo size={22} iconSize={13} radius={6} /> <span className="ui-brand__name">{siteName}</span>
         </div>
         <main className={`ui-content${wide ? ' ui-content--wide' : ''}`}>{children}</main>
       </div>
