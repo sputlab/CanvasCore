@@ -1,5 +1,8 @@
 # CanvasCore — Phase 2: single rendering contract + automatic versioning
 
+> **Historical note.** This describes the project as it was at that phase. For the current architecture see
+> the [Developer Guide](manuals/DEVELOPER-GUIDE.md).
+
 Version: **0.2.0** (automatic incremental build number).
 
 This round sets up the definitive architecture for editor ↔ compiled page

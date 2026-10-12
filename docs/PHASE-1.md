@@ -1,5 +1,8 @@
 # CanvasCore — Phase 1 (security hardening)
 
+> **Historical note.** This describes the project as it was at that phase. For the current architecture see
+> the [Developer Guide](manuals/DEVELOPER-GUIDE.md).
+
 This round closes the security holes left after Phase 0. Everything has been
 tested: XSS sanitizer, CSRF/same-origin, data dir migration, forced password
 change, code stripping for non-admins, form email registry.

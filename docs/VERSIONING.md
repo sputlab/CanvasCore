@@ -21,7 +21,7 @@ Three coordinated versions, a single source of truth: `canvascore-admin/version.
 
 - `canvascore-admin/version.json`
 - `canvascore-admin/migrations.php`
-- `CHANGELOG.md` (in the project root)
+- `docs/CHANGELOG.md`
 
 ## Files to replace
 

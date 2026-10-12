@@ -1,5 +1,5 @@
 /* CanvasCore admin UI kit (src/ui/kit.jsx). Every class is prefixed "ui-" so nothing leaks into the
-   canvas, which renders the site's real HTML (cc-* classes). Uses the tokens defined in global.css. */
+   canvas, which renders the site's real HTML (cc-* classes). Its tokens (--ui-*) are defined right below. */
 
 :root {
   --ui-bg: #0b1220;

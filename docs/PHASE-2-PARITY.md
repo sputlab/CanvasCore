@@ -1,5 +1,8 @@
 # CanvasCore — Phase 2 (pass 1): editor ↔ compiled page parity
 
+> **Historical note.** This describes the project as it was at that phase. For the current architecture see
+> the [Developer Guide](manuals/DEVELOPER-GUIDE.md).
+
 Goal: reduce the discrepancies between the editor canvas (React, `SortableBlock.jsx`)
 and the compiled page (PHP, `compiler.php`). This is the first step towards the
 single block schema.

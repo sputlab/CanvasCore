@@ -1,5 +1,8 @@
 # CanvasCore — Phase 0 (stable starting point)
 
+> **Historical note.** This describes the project as it was at that phase. For the current architecture see
+> the [Developer Guide](manuals/DEVELOPER-GUIDE.md).
+
 This package makes the app **work end-to-end** and closes the security holes
 that lived in the rewritten files. Below you'll find what to replace, what to
 delete and how to verify.
