@@ -11,6 +11,13 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Rename a collection**: a ✎ next to each collection (and "Rename" above its items) changes its name; the address
+  (`/blog/`) stays unless you change it too. A new address asks first, and every published item forwards from its
+  old URL to the new one after the next publish.
+- **Bulk actions on collection items**: a checkbox on each row (shift-click selects a range, the header box selects
+  all) opens a selection bar to **move** the items to another collection, **archive** / **unarchive** or **delete**
+  them in one go. Items whose URL slug is already used by a published item in the destination are skipped and
+  listed; moved published items forward from their old address. New `api.php?action=bulk_items`.
 - **Full site backup (ZIP)**: Backup › "Download backup (.zip)" saves everything in one file: pages and their drafts,
   collections and items, templates, masters, global header/footer, redirects, Global Options, the menu, and every
   uploaded image with its description and folder (plus the optimized copies). Version history and form messages are
@@ -182,6 +189,14 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   slug automatically (`new-page`, `new-page-2`…).
 
 ### Fixed
+- Deleting a collection item (or a whole collection) now takes its published page offline at once, like deleting a
+  page; before, the HTML stayed online until the next publish. Only files a build wrote are removed, and a deleted
+  draft never removes the live page that shares its address. Deleting a collection also removes its RSS feed and the
+  version history of its items.
+- Archived items in the Collections list show only "Archived" instead of "Published" and "Archived" together.
+- The Collections list keeps a fixed width: a long collection name is cut with an ellipsis (full name on hover)
+  instead of stretching its row and pushing the delete button out of the card; the items header no longer squeezes
+  a long name into a narrow column.
 - Media library: the bar shown when images are selected has a solid background, so its text is readable over the
   images scrolling under it.
 - **Media library: long file names pushed the copy/delete buttons out of the card**: names are now cut with "…" (full

@@ -53,6 +53,20 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('backup_upload_chunk')) { CHUNKS.push({ id: init.body.get('id'), index: init.body.get('index'), size: init.body.get('chunk').size }); return new Response(JSON.stringify({ success: true })); }
   if (u.includes('backup_restore')) return new Response(JSON.stringify({ success: true, message: 'Backup restored (Acme).', counts: { pages: 3, collection_items: 2, images: 5 }, skipped: ['bad.svg'], safety: 'before-restore-20261013-101700-ef56.zip', backups: BACKUPS }));
   if (u.includes('backup_delete')) return new Response(JSON.stringify({ success: true, backups: BACKUPS.slice(1) }));
+  if (u.includes('get_collections')) return new Response(JSON.stringify(COLS.map((c) => ({ ...c, item_count: ITEMS.filter((i) => i.collection_id === c.id).length }))));
+  if (u.includes('get_items')) { const cid = decodeURIComponent(u.split('collection=')[1]); return new Response(JSON.stringify(ITEMS.filter((i) => i.collection_id === cid))); }
+  if (u.includes('save_collection')) { const b = JSON.parse(init.body); COL_SAVES.push(b); const c = COLS.find((x) => x.id === b.id); const moved = c.slug !== b.slug; Object.assign(c, { name: b.name, slug: b.slug }); return new Response(JSON.stringify({ success: true, id: c.id, name: c.name, slug: c.slug, moved })); }
+  if (u.includes('bulk_items')) {
+    const b = JSON.parse(init.body); BULK.push(b);
+    const skipped = [];
+    b.ids.forEach((id) => {
+      const it = ITEMS.find((i) => i.id === id);
+      if (b.op === 'archive' || b.op === 'unarchive') it.archived = b.op === 'archive' ? 1 : 0;
+      else if (b.op === 'delete') ITEMS.splice(ITEMS.indexOf(it), 1);
+      else if (b.op === 'move') { if (it.slug === 'clash') skipped.push({ id, title: it.title, reason: 'the URL slug "clash" is already used there' }); else it.collection_id = b.collection_id; }
+    });
+    return new Response(JSON.stringify({ success: true, done: b.ids.length - skipped.length, skipped }));
+  }
   if (u.includes('rebuild_all')) return new Response(JSON.stringify({ success: true, message: 'Published.' }));
   if (u.includes('action=branding')) return new Response(JSON.stringify({ siteName: 'Acme Bakery', faviconUrl: '/uploads/fav.png' }));
   if (u.includes('optimize_media')) return new Response(JSON.stringify({ success: true, done: 1, remaining: 0 }));
@@ -88,6 +102,16 @@ const BACKUPS = [
   { name: 'backup-20261011-090000-bb22.zip', kind: 'saved', bytes: 3 * 1048576, created: 1791709200, site_name: 'Acme', app: '0.13.0', counts: { pages: 1 }, uploads: { files: 1 } },
 ];
 const BACKUP_OPTS = [];
+const LONG_COL = 'Recipes and seasonal stories from our kitchen, collected over many many years';
+const COLS = [{ id: 'c1', name: 'Blog', slug: 'blog' }, { id: 'c2', name: LONG_COL, slug: 'recipes' }];
+const ITEMS = [
+  { id: 'i1', collection_id: 'c1', title: 'Live post', slug: 'live', date: '2026-10-03', status: 'published', archived: 0 },
+  { id: 'i2', collection_id: 'c1', title: 'Old post', slug: 'old', date: '2026-10-02', status: 'published', archived: 1 },
+  { id: 'i3', collection_id: 'c1', title: 'Draft post', slug: 'draft', date: '2026-10-01', status: 'draft', archived: 0 },
+  { id: 'i4', collection_id: 'c1', title: 'Clash post', slug: 'clash', date: '2026-09-30', status: 'published', archived: 0 },
+];
+const COL_SAVES = [];
+const BULK = [];
 const CHUNKS = [];
 const PAGES = [
   { id: 'p1', title: 'Home', clean_slug: 'index', status: 'published', is_home: 1, updated_at: '2026-10-01 10:00:00', content_json: '[]' },
@@ -592,6 +616,74 @@ try {
     await waitFor(() => calls.some((c) => c.u.includes('backup_delete')), 2000);
     check('…then deletes it', calls.some((c) => c.u.includes('backup_delete')));
     w.HTMLAnchorElement.prototype.click = origClick;
+  }
+
+  console.log('\nCOLLECTIONS');
+  {
+    useStore.setState({ currentView: 'collections', userRole: 'admin', activePage: null });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/Collections.jsx')).default)));
+    const nav = await waitFor(() => $$('.cc-col-row', $('nav[aria-label="Collections"]')).length === 2 && $('nav[aria-label="Collections"]'));
+    const longRow = $$('.cc-col-row', nav).find((r) => r.textContent.includes('Recipes'));
+    check('a long collection name is cut with an ellipsis instead of stretching the list', !!longRow && longRow.querySelector('.cc-col-row__name') && longRow.querySelector('button').getAttribute('title') === LONG_COL);
+    const css = (await import('node:fs')).readFileSync(new URL('../src/ui/kit.css', import.meta.url), 'utf8');
+    check('…the list has a fixed width and its rows can shrink (min-width: 0, nowrap + ellipsis)', /\.cc-collections-grid \{[^}]*grid-template-columns: 260px minmax\(0, 1fr\)/.test(css) && /\.cc-col-row__btn \{[^}]*min-width: 0/.test(css) && /\.cc-col-row__name \{[^}]*text-overflow: ellipsis[^}]*white-space: nowrap/.test(css));
+    click($$('button', nav).find((b) => b.textContent.includes('Blog')));
+    const rows = await waitFor(() => $$('tbody tr').length === 4 && $$('tbody tr'));
+    const statusOf = (t) => rows.find((r) => r.textContent.includes(t)).children[3].textContent;
+    check('an archived item shows only "Archived" (not "Published" too)', statusOf('Old post') === 'Archived' && statusOf('Live post') === 'Published' && statusOf('Draft post') === 'Draft', rows.map((r) => r.children[3].textContent).join('|'));
+
+    // rename (name only: the address stays)
+    click($('[aria-label="Rename collection Blog"]'));
+    const ren = await waitFor(() => $('form[aria-label="Rename collection"]'));
+    check('Rename opens a form with the current name and address', !!ren && $('#cc-ren-col').value === 'Blog' && $('#cc-ren-slug').value === 'blog');
+    typeIn($('#cc-ren-col'), 'Journal');
+    click(btn('Save', ren));
+    await waitFor(() => !$('form[aria-label="Rename collection"]'), 2000);
+    check('…saving sends the new name and keeps the address', COL_SAVES[0] && COL_SAVES[0].id === 'c1' && COL_SAVES[0].name === 'Journal' && COL_SAVES[0].slug === 'blog' && !$('[role="alertdialog"]'));
+    check('…the list and the header show the new name', await waitFor(() => /Journal/.test(nav.textContent) && $('.cc-col-head__title h2').textContent === 'Journal'));
+    // rename with a new address asks first
+    click(btn('Rename'));
+    await waitFor(() => $('form[aria-label="Rename collection"]'));
+    typeIn($('#cc-ren-slug'), 'Our Journal');
+    click(btn('Save', $('form[aria-label="Rename collection"]')));
+    const adlg = await waitFor(() => $('[role="alertdialog"]'));
+    check('changing the address asks first and explains the old URLs forward', !!adlg && /\/our-journal\//.test(adlg.textContent) && /forward/.test(adlg.textContent));
+    click(btn('Change address', adlg));
+    await waitFor(() => COL_SAVES.length === 2, 2000);
+    check('…then saves the cleaned slug and reminds to publish', COL_SAVES[1].slug === 'our-journal' && !!(await waitFor(() => /address changed/.test($('[role="status"]')?.textContent || ''))));
+
+    // multi-select
+    const cb = (t) => $$('tbody tr').find((r) => r.textContent.includes(t)).querySelector('input[type="checkbox"]');
+    check('no selection bar until something is selected', !$('[aria-label="Selected items"]'));
+    click(cb('Live post'));
+    cb('Draft post').dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true }));
+    const bar = await waitFor(() => $('[aria-label="Selected items"]'));
+    check('shift-click selects a range; the bar shows the count', !!bar && /3 selected/.test(bar.textContent) && cb('Old post').checked);
+    check('…Archive and Unarchive are offered for a mixed selection, plus Move and Delete', !!btn('Archive', bar) && !!btn('Unarchive', bar) && !!btn('Delete', bar) && !!bar.querySelector('select[aria-label="Move to collection"]'));
+    click(btn('Archive', bar));
+    await waitFor(() => BULK.length === 1, 2000);
+    check('Archive sends only the items not archived yet, in one request', BULK[0].op === 'archive' && BULK[0].ids.join() === 'i1,i3');
+    check('…and the list updates', !!(await waitFor(() => $$('tbody tr').filter((r) => r.children[3].textContent === 'Archived').length === 3)));
+    // select all → move to the other collection (one is refused there)
+    click($('thead input[aria-label="Select all items"]'));
+    await waitFor(() => /4 selected/.test($('[aria-label="Selected items"]')?.textContent || ''));
+    const sel = $('select[aria-label="Move to collection"]');
+    check('the move list offers the other collections only', $$('option', sel).map((o) => o.value).join() === ',c2');
+    Object.getOwnPropertyDescriptor(w.HTMLSelectElement.prototype, 'value').set.call(sel, 'c2'); sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await sleep(20);
+    click(btn('Move', $('[aria-label="Selected items"]')));
+    await waitFor(() => BULK.length === 2, 2000);
+    check('Move sends the selected items and the destination', BULK[1].op === 'move' && BULK[1].collection_id === 'c2' && BULK[1].ids.length === 4);
+    const moved = await waitFor(() => $$('tbody tr').length === 1 && $$('tbody tr'));
+    check('…moved items leave the list; a refused one stays and is explained', !!moved && /Clash post/.test(moved[0].textContent) && /skipped/.test(doc.body.textContent) && /already used/.test(doc.body.textContent));
+    check('…the selection keeps only what is still listed', /1 selected/.test($('[aria-label="Selected items"]')?.textContent || ''));
+    check('…and the item counts are refreshed', !!(await waitFor(() => $$('.cc-col-row', nav).find((r) => r.textContent.includes('Recipes'))?.querySelector('.ui-badge')?.textContent === '3')));
+    click(btn('Delete', $('[aria-label="Selected items"]')));
+    const ddlg = await waitFor(() => $('[role="alertdialog"]'));
+    check('bulk delete asks first, saying the pages go offline', !!ddlg && /Delete 1 item\?/.test(ddlg.textContent) && /offline/.test(ddlg.textContent));
+    click(btn('Delete 1 item', ddlg));
+    await waitFor(() => BULK.length === 3, 2000);
+    check('…then deletes them', BULK[2].op === 'delete' && BULK[2].ids.join() === 'i4' && !!(await waitFor(() => $('.ui-empty'))));
   }
 
   console.log('\nSTORE & SAVING');
