@@ -1,7 +1,7 @@
 // "About CanvasCore" (the ⓘ next to the version in the sidebar footer): what the web app is, its version,
-// and where to get help, report a bug or support the project.
+// its license, and where to get help, report a bug or support the project.
 import React, { useEffect, useRef } from 'react';
-import { Info, Globe, Mail, Heart, ExternalLink } from 'lucide-react';
+import { Info, Globe, Mail, Heart, Scale, ExternalLink } from 'lucide-react';
 
 // Brand marks (lucide has no brand icons): official GitHub and Discord logos, from Simple Icons (CC0)
 const brandIcon = (name, d) => {
@@ -17,6 +17,7 @@ const DiscordIcon = brandIcon('DiscordIcon', 'M20.317 4.3698a19.7913 19.7913 0 0
 const LINKS = [
   { icon: Globe, label: 'Website', text: 'sputlab.com', href: 'https://www.sputlab.com' },
   { icon: GitHubIcon, label: 'Source code', text: 'github.com/sputlab/CanvasCore', href: 'https://github.com/sputlab/CanvasCore' },
+  { icon: Scale, label: 'License', text: 'GNU AGPL v3 or later', href: 'https://github.com/sputlab/CanvasCore/blob/main/LICENSE' },
   { icon: DiscordIcon, label: 'Community', text: 'Join the Discord server', href: 'https://discord.gg/sD8KMc2kN' },
   { icon: Mail, label: 'Bugs & suggestions', text: 'bug@sputlab.com', href: 'mailto:bug@sputlab.com?subject=CanvasCore%20feedback' },
   { icon: Heart, label: 'Support the project', text: 'Make a donation', href: 'https://www.sputlab.com/donate' },
@@ -34,7 +35,7 @@ export default function AboutDialog({ version, build, onClose }) {
           <h2 id="cc-about-title" className="ui-dialog__title">About CanvasCore</h2>
         </div>
         <p className="cc-about__version">Version {version}{build ? ` · build ${build}` : ''}</p>
-        <p className="ui-dialog__msg" style={{ marginLeft: 0 }}>CanvasCore is a visual website builder: design pages with blocks, manage collections and media, and publish a fast static site. Made by Sputlab.</p>
+        <p className="ui-dialog__msg" style={{ marginLeft: 0 }}>CanvasCore is a visual website builder: design pages with blocks, manage collections and media, and publish a fast static site. Made by Sputlab. Free software: you can use, study, change and share it under the GNU Affero General Public License.</p>
         <ul className="cc-about__links">
           {LINKS.map(({ icon: Icon, label, text, href }) => {
             const external = href.startsWith('http');

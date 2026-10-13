@@ -19,11 +19,16 @@
 !/.gitattributes
 !/.editorconfig
 !/README.md
+!/LICENSE
+!/SECURITY.md
+!/CONTRIBUTING.md
 !/docs/
 !/canvascore-admin/
 !/canvascore-frontend/
 # A page or collection with the slug "docs" would be published in here
 /docs/**/index.html
+# Internal dev notes (phase notes, old release notes): kept locally, not published
+/docs/dev/
 
 # ---------------------------------------------------------------------
 #  PHP backend: local data and deploy artifacts
@@ -31,7 +36,7 @@
 # "Legacy" data dir inside the web root (SQLite DB, settings.json, menu.json,
 # forms.json, sessions/). The recommended one is ../../canvascore-data, already outside the repo.
 /canvascore-admin/data/
-# Frontend build copied into canvascore-admin/ for deployment (see docs/PHASE-0.md)
+# Frontend build copied into canvascore-admin/ for deployment
 /canvascore-admin/index.html
 /canvascore-admin/assets/
 /canvascore-admin/favicon.svg

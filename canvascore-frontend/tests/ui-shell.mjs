@@ -523,6 +523,7 @@ try {
     const hrefs = about ? $$('a', about).map((a) => a.getAttribute('href')) : [];
     check('the ⓘ next to the version opens "About CanvasCore"', !!about && /Version /.test(about.textContent));
     check('…with links to sputlab.com, GitHub, Discord, the bug email and donations', ['https://www.sputlab.com', 'https://github.com/sputlab/CanvasCore', 'https://discord.gg/sD8KMc2kN', 'https://www.sputlab.com/donate'].every((h) => hrefs.includes(h)) && hrefs.some((h) => h.startsWith('mailto:bug@sputlab.com')) && /bug@sputlab\.com/.test(about.textContent));
+    check('…and the license (GNU AGPL, links to the LICENSE file)', hrefs.includes('https://github.com/sputlab/CanvasCore/blob/main/LICENSE') && /AGPL/.test(about.textContent));
     const rowOf = (h) => $$('li', about).find((li) => li.querySelector(`a[href="${h}"]`));
     check('…GitHub and Discord show their own logos', ['https://github.com/sputlab/CanvasCore', 'https://discord.gg/sD8KMc2kN'].every((h) => { const svg = rowOf(h)?.querySelector('svg'); return svg && svg.getAttribute('viewBox') === '0 0 24 24' && svg.getAttribute('aria-hidden') === 'true' && !/lucide/.test(svg.getAttribute('class') || ''); }));
     check('…external links open in a new tab safely', $$('a[target="_blank"]', about).every((a) => /noopener/.test(a.getAttribute('rel'))));
