@@ -522,7 +522,9 @@ try {
     const about = await waitFor(() => $('[role="dialog"][aria-labelledby="cc-about-title"]'));
     const hrefs = about ? $$('a', about).map((a) => a.getAttribute('href')) : [];
     check('the ⓘ next to the version opens "About CanvasCore"', !!about && /Version /.test(about.textContent));
-    check('…with links to sputlab.com, Discord, the bug email and donations', ['https://www.sputlab.com', 'https://discord.gg/sD8KMc2kN', 'https://www.sputlab.com/donate'].every((h) => hrefs.includes(h)) && hrefs.some((h) => h.startsWith('mailto:bug@sputlab.com')) && /bug@sputlab\.com/.test(about.textContent));
+    check('…with links to sputlab.com, GitHub, Discord, the bug email and donations', ['https://www.sputlab.com', 'https://github.com/sputlab/CanvasCore', 'https://discord.gg/sD8KMc2kN', 'https://www.sputlab.com/donate'].every((h) => hrefs.includes(h)) && hrefs.some((h) => h.startsWith('mailto:bug@sputlab.com')) && /bug@sputlab\.com/.test(about.textContent));
+    const rowOf = (h) => $$('li', about).find((li) => li.querySelector(`a[href="${h}"]`));
+    check('…GitHub and Discord show their own logos', ['https://github.com/sputlab/CanvasCore', 'https://discord.gg/sD8KMc2kN'].every((h) => { const svg = rowOf(h)?.querySelector('svg'); return svg && svg.getAttribute('viewBox') === '0 0 24 24' && svg.getAttribute('aria-hidden') === 'true' && !/lucide/.test(svg.getAttribute('class') || ''); }));
     check('…external links open in a new tab safely', $$('a[target="_blank"]', about).every((a) => /noopener/.test(a.getAttribute('rel'))));
     about.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await sleep(30);
@@ -630,6 +632,9 @@ try {
     click($$('button', nav).find((b) => b.textContent.includes('Blog')));
     const rows = await waitFor(() => $$('tbody tr').length === 4 && $$('tbody tr'));
     const statusOf = (t) => rows.find((r) => r.textContent.includes(t)).children[3].textContent;
+    check('each item has a pencil-only Edit button (no text label)', rows.every((r) => { const b = r.querySelector('button[aria-label^="Edit "]'); return b && b.textContent.trim() === '' && b.querySelector('svg'); }) && !rows.some((r) => btn('Edit', r)));
+    check('the items table fits its card: fixed layout, long titles and slugs end in "…" with the full text on hover', /\.cc-col-table \{[^}]*table-layout: fixed/.test(css) && /\.cc-col-title > div \{[^}]*text-overflow: ellipsis[^}]*white-space: nowrap/.test(css)
+      && rows.every((r) => r.querySelector('.cc-col-title .ui-cell-title').getAttribute('title') === r.querySelector('.cc-col-title .ui-cell-title').textContent));
     check('an archived item shows only "Archived" (not "Published" too)', statusOf('Old post') === 'Archived' && statusOf('Live post') === 'Published' && statusOf('Draft post') === 'Draft', rows.map((r) => r.children[3].textContent).join('|'));
 
     // rename (name only: the address stays)

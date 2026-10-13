@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
-import { Library, Plus, Trash2, Edit3, Pencil, FileText, Folder, Archive, ArchiveRestore, Globe, CheckSquare, MoveRight, X } from 'lucide-react';
+import { Library, Plus, Trash2, Pencil, FileText, Folder, Archive, ArchiveRestore, Globe, CheckSquare, MoveRight, X } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, Badge, StatusBadge, Select } from '../ui/kit';
 import { slugify } from '../utils/slug';
 import { notify } from '../ui/notify';
@@ -199,6 +199,7 @@ export default function Collections() {
     loadItems(active.id); loadCollections();
   };
 
+  const statusBadge = (it) => (Number(it.archived) ? <Badge>Archived</Badge> : <StatusBadge status={it.status} />);
   const others = collections.filter((c) => c.id !== active?.id);
   return (
     <>
@@ -304,22 +305,22 @@ export default function Collections() {
                 <EmptyState icon={FileText} title="No items yet" action={<Button variant="primary" icon={Plus} onClick={() => editItem(null)}>Create the first item</Button>} />
               ) : (
                 <div className="ui-table-wrap">
-                  <table className="ui-table">
+                  <table className="ui-table cc-col-table">
                     <thead><tr>
                       <th className="cc-col-check"><input type="checkbox" checked={allSelected} ref={(el) => { if (el) el.indeterminate = n > 0 && !allSelected; }} onChange={toggleAll} aria-label="Select all items" /></th>
-                      <th>Title</th><th>Date</th><th>Status</th><th className="ui-cell-actions">Actions</th>
+                      <th>Title</th><th className="cc-col-date">Date</th><th className="cc-col-status">Status</th><th className="ui-cell-actions cc-col-actions">Actions</th>
                     </tr></thead>
                     <tbody>
                       {items.map(it => (
                         <tr key={it.id} onDoubleClick={() => editItem(it)} className={selected.has(it.id) ? 'cc-col-row--selected' : undefined}>
                           <td className="cc-col-check"><input type="checkbox" checked={selected.has(it.id)} onChange={() => {}} onClick={(e) => toggleSel(it.id, e)} onDoubleClick={(e) => e.stopPropagation()} aria-label={`Select ${it.title}`} /></td>
-                          <td><div className="ui-cell-title">{it.title}</div><div className="ui-cell-muted">/{it.slug}/</div></td>
-                          <td className="ui-cell-muted">{it.date || '—'}</td>
-                          <td>{Number(it.archived) ? <Badge>Archived</Badge> : <StatusBadge status={it.status} />}</td>
+                          <td className="cc-col-title"><div className="ui-cell-title" title={it.title}>{it.title}</div><div className="ui-cell-muted" title={`/${it.slug}/`}>/{it.slug}/</div><div className="cc-col-status-inline">{statusBadge(it)}</div></td>
+                          <td className="ui-cell-muted cc-col-date">{it.date || '—'}</td>
+                          <td className="cc-col-status">{statusBadge(it)}</td>
                           <td className="ui-cell-actions">
                             <span className="ui-row" style={{ justifyContent: 'flex-end', gap: 4, flexWrap: 'nowrap' }}>
                               <IconButton icon={Number(it.archived) ? ArchiveRestore : Archive} label={Number(it.archived) ? 'Unarchive' : 'Archive'} size="sm" onClick={() => toggleArchive(it)} disabled={bulkBusy} />
-                              <Button variant="primary" size="sm" icon={Edit3} onClick={() => editItem(it)}>Edit</Button>
+                              <IconButton icon={Pencil} label={`Edit ${it.title}`} size="sm" onClick={() => editItem(it)} />
                               <IconButton icon={Trash2} label={`Delete ${it.title}`} size="sm" onClick={() => removeItem(it)} style={{ color: '#f87171' }} />
                             </span>
                           </td>

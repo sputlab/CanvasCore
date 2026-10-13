@@ -352,3 +352,14 @@
 .cc-col-check { width: 34px; }
 .cc-col-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--ui-primary); cursor: pointer; vertical-align: middle; }
 .ui-table tr.cc-col-row--selected td { background: rgba(56, 189, 248, .08); }
+/* Items table: fits its card (no horizontal scrolling); long titles and slugs end in "…" (full text on hover) */
+.cc-col-main { container-type: inline-size; }
+.cc-col-table { table-layout: fixed; }
+.cc-col-table th, .cc-col-table td { padding-left: 10px; padding-right: 10px; }
+.cc-col-table .cc-col-title > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-col-table .cc-col-date { width: 104px; }
+.cc-col-table .cc-col-status { width: 96px; }
+.cc-col-table .cc-col-actions { width: 112px; }
+.cc-col-table .cc-col-status-inline { display: none; margin-top: 4px; }
+@container (max-width: 520px) { .cc-col-table .cc-col-date { display: none; } }
+@container (max-width: 400px) { .cc-col-table .cc-col-status { display: none; } .cc-col-table .cc-col-status-inline { display: block; } }

@@ -35,7 +35,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   (falls back to the default icon when there is no favicon or it can't be loaded). "CanvasCore" stays in the
   sidebar footer next to the version. New public `api.php?action=branding` returns only the site name and favicon.
 - **About CanvasCore**: an ⓘ next to the version opens a dialog with the version, a link to sputlab.com, the
-  Discord server, the bug/suggestion email (bug@sputlab.com) and the donation page.
+  source code on GitHub, the Discord server (both with their own logos), the bug/suggestion email (bug@sputlab.com)
+  and the donation page.
 - **Global Options › Favicon / Default social image**: "Upload image" (with progress) and "Library" buttons next to
   the address, plus a preview.
 - **Media library folders**: create, rename and delete folders (nested), see counts, open a folder to see its images
@@ -197,6 +198,9 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 - The Collections list keeps a fixed width: a long collection name is cut with an ellipsis (full name on hover)
   instead of stretching its row and pushing the delete button out of the card; the items header no longer squeezes
   a long name into a narrow column.
+- The items table of a collection fits its card without horizontal scrolling: long titles and slugs end in "…"
+  (full text on hover), the Edit button is a pencil icon only, and on narrow screens the date is hidden and the
+  status moves under the title.
 - Media library: the bar shown when images are selected has a solid background, so its text is readable over the
   images scrolling under it.
 - **Media library: long file names pushed the copy/delete buttons out of the card**: names are now cut with "…" (full
