@@ -6,7 +6,9 @@
 //
 // The site counts as "installed" when:
 //   - cc_meta contains installed_at (installation done by this wizard), or
-//   - at least one account other than the default admin/admin exists (pre-existing installation).
+//   - at least one account other than the old default admin/admin exists (pre-existing installation).
+// Proof of server access: the form asks for the setup key written to install-key.txt in the data folder, so only
+// someone who can open the server's files can install (nobody can take over a freshly uploaded site first).
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
 
@@ -16,12 +18,15 @@ header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+ini_set('display_errors', '0');
+cc_session_start();
 
 const CC_INSTALL_MIN_PHP = '8.0.0';
 
 $data_dir = cc_data_dir();
 $db_file  = $data_dir . '/canvascore.sqlite';
 $site_dir = dirname(__DIR__);
+ensure_admin_htaccess(__DIR__);
 
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
@@ -46,9 +51,6 @@ function cc_install_state($db_file) {
     return 'fresh';
 }
 
-function cc_is_default_admin($row) {
-    return ($row['username'] ?? '') === 'admin' && password_verify('admin', (string)($row['password_hash'] ?? ''));
-}
 
 // ---------------------------------------------------------------------------
 // Requirements: [label, 'ok'|'warn'|'fail', detail]
@@ -77,16 +79,22 @@ function cc_install_requirements($data_dir, $site_dir) {
     $r[] = ['ZIP extension', $zip ? 'ok' : 'warn', $zip ? 'Available' : 'Missing: whole-site backups (Backup page) cannot be made or restored'];
 
     $dom = class_exists('DOMDocument');
-    $r[] = ['DOM extension', $dom ? 'ok' : 'warn', $dom ? 'Available' : 'Missing: rich text is cleaned with a simpler fallback sanitizer'];
+    $r[] = ['DOM extension', $dom ? 'ok' : 'fail', $dom ? 'Available' : 'Enable the dom extension (php-xml): rich text and SVG images are checked with it'];
 
     $data_ok = cc_can_write($data_dir);
-    $outside = strpos(rtrim(realpath($data_dir) ?: $data_dir, '/') . '/', rtrim(realpath($site_dir) ?: $site_dir, '/') . '/') !== 0;
+    $docroot = cc_doc_root();
+    $inside = $docroot ? cc_path_inside($data_dir, $docroot) : cc_path_inside($data_dir, $site_dir);
     if (!$data_ok) {
         $r[] = ['Data folder', 'fail', 'Not writable: ' . $data_dir];
-    } elseif ($outside) {
+    } elseif (!$inside) {
         $r[] = ['Data folder', 'ok', 'Outside the web root: ' . $data_dir];
     } else {
-        $r[] = ['Data folder', 'warn', 'Inside the web root (' . $data_dir . '). Protected by .htaccess on Apache only: on Nginx add a deny rule, or make ' . dirname($site_dir) . '/canvascore-data writable'];
+        // Inside the web root: it must not be downloadable. Checked for real with a test file.
+        $probe = cc_install_probe_data($data_dir, $docroot);
+        $fix = 'Make ' . ($docroot ? dirname($docroot) : dirname($site_dir)) . '/canvascore-data writable (CanvasCore then uses it), or deny web access to ' . $data_dir . ' (Nginx: see the Administrator Guide).';
+        if ($probe === 'exposed') $r[] = ['Data folder', 'fail', 'Inside the web root and DOWNLOADABLE by anyone (' . $data_dir . '): the database and passwords would be public. ' . $fix];
+        elseif ($probe === 'protected') $r[] = ['Data folder', 'warn', 'Inside the web root (' . $data_dir . '), protected by the server right now. Safer: ' . $fix];
+        else $r[] = ['Data folder', 'warn', 'Inside the web root (' . $data_dir . ') and it could not be checked whether it is protected. ' . $fix];
     }
 
     $site_ok = cc_can_write($site_dir);
@@ -109,6 +117,40 @@ function cc_install_requirements($data_dir, $site_dir) {
     $r[] = ['HTTPS', $https ? 'ok' : 'warn', $https ? 'Secure connection' : 'Not using HTTPS: passwords and session cookies travel unencrypted'];
 
     return $r;
+}
+
+// Is the data folder reachable over HTTP? A random test file is written there and requested from this same server
+// (by its own address, never another host). 'exposed', 'protected' or 'unknown'.
+function cc_install_probe_data($data_dir, $docroot) {
+    $real = realpath($data_dir);
+    if (!$docroot || !$real || !cc_path_inside($real, $docroot) || !ini_get('allow_url_fopen')) return 'unknown';
+    $name = 'cc-probe-' . bin2hex(random_bytes(8)) . '.txt'; $secret = bin2hex(random_bytes(16));
+    if (@file_put_contents($real . '/' . $name, $secret) === false) return 'unknown';
+    $path = str_replace('%2F', '/', rawurlencode(str_replace('\\', '/', substr($real, strlen($docroot))))) . '/' . $name;
+    $https = cc_is_https();
+    $ip = (string)($_SERVER['SERVER_ADDR'] ?? '127.0.0.1'); if ($ip === '' || $ip === '0.0.0.0' || $ip === '::') $ip = '127.0.0.1';
+    $port = (int)($_SERVER['SERVER_PORT'] ?? ($https ? 443 : 80));
+    $host = preg_replace('/[^A-Za-z0-9.:\[\]-]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
+    $url = ($https ? 'https' : 'http') . '://' . (strpos($ip, ':') !== false ? '[' . $ip . ']' : $ip) . ':' . $port . $path;
+    $ctx = stream_context_create(['http' => ['method' => 'GET', 'header' => 'Host: ' . $host . "\r\n", 'timeout' => 4, 'follow_location' => 0, 'ignore_errors' => true],
+                                  'ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'peer_name' => preg_replace('/:\d+$/', '', $host)]]);
+    $body = @file_get_contents($url, false, $ctx, 0, 256);
+    @unlink($real . '/' . $name);
+    if ($body === false) return 'unknown';
+    return trim($body) === $secret ? 'exposed' : 'protected';
+}
+
+// The setup key (install-key.txt in the data folder), created on first use
+function cc_install_key($data_dir) {
+    $f = $data_dir . '/install-key.txt';
+    $k = is_file($f) ? trim((string)@file_get_contents($f)) : '';
+    if (!preg_match('/^[A-Z2-9]{4}(-[A-Z2-9]{4}){4}$/', $k)) {
+        $alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; $k = '';
+        for ($i = 0; $i < 20; $i++) $k .= ($i && $i % 4 === 0 ? '-' : '') . $alpha[random_int(0, strlen($alpha) - 1)];
+        if (@file_put_contents($f, $k . "\n", LOCK_EX) === false) return null;
+        @chmod($f, 0600);
+    }
+    return $k;
 }
 
 function cc_has_failures($reqs) {
@@ -144,8 +186,10 @@ function cc_default_site_url() {
 // ---------------------------------------------------------------------------
 // Installation
 // ---------------------------------------------------------------------------
-function cc_install_validate($in, $starters) {
+function cc_install_validate($in, $starters, $key) {
     $err = [];
+    $sent = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $in['setup_key']));
+    if ($key === null || $sent === '' || !hash_equals(str_replace('-', '', $key), $sent)) $err['setup_key'] = 'This is not the setup key in install-key.txt.';
     if ($in['site_name'] === '') $err['site_name'] = 'Enter the site name.';
     elseif (mb_strlen($in['site_name']) > 120) $err['site_name'] = 'Use at most 120 characters.';
 
@@ -173,17 +217,17 @@ function cc_install_validate($in, $starters) {
 function cc_run_install($db_file, $data_dir, $in, $starters) {
     $pdo = new PDO('sqlite:' . $db_file);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    cc_migrate($pdo);           // create the schema (and the default admin/admin, replaced below)
+    cc_migrate($pdo);           // create the schema
     cc_migrate_content($pdo);
 
     $pdo->beginTransaction();
     try {
-        // Remove the default admin/admin: the only account allowed at this point.
+        // Remove the old default admin/admin, if an earlier version created it: the only account allowed at this point.
         $del = $pdo->prepare("DELETE FROM admin WHERE id = ?");
         foreach ($pdo->query("SELECT id, username, password_hash FROM admin")->fetchAll(PDO::FETCH_ASSOC) as $u) {
             if (cc_is_default_admin($u)) $del->execute([$u['id']]);
         }
-        $pdo->prepare("INSERT INTO admin (username, password_hash, role, must_change_pw) VALUES (?, ?, 'admin', 0)")
+        $pdo->prepare("INSERT INTO admin (username, password_hash, role, must_change_pw, session_gen) VALUES (?, ?, 'admin', 0, 0)")
             ->execute([$in['admin_user'], password_hash($in['admin_pass'], PASSWORD_DEFAULT)]);
 
         // Homepage (draft) from the chosen starter, only if the site has no pages yet.
@@ -223,14 +267,11 @@ function cc_run_install($db_file, $data_dir, $in, $starters) {
 }
 
 // Automatic sign-in with the new account (same session as api.php?action=login).
-function cc_install_login($username) {
-    session_regenerate_id(true);
-    $_SESSION['logged_in'] = true;
-    $_SESSION['username'] = $username;
-    $_SESSION['role'] = 'admin';
-    $_SESSION['last_seen'] = time();
-    $_SESSION['csrf'] = bin2hex(random_bytes(32));
-    cc_issue_csrf();
+function cc_install_login($db_file, $username) {
+    $pdo = new PDO('sqlite:' . $db_file);
+    $st = $pdo->prepare("SELECT id, username, role, session_gen FROM admin WHERE username = ?"); $st->execute([$username]);
+    $u = $st->fetch(PDO::FETCH_ASSOC);
+    if ($u) cc_session_login($u);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,9 +288,11 @@ $view      = $state === 'installed' ? 'installed' : ($state === 'error' ? 'error
 $notice    = '';
 $page_created = false;
 $in = [
-    'site_name' => '', 'site_url' => cc_default_site_url(), 'admin_user' => 'admin',
-    'admin_pass' => '', 'admin_pass2' => '', 'admin_email' => '', 'starter' => '',
+    'site_name' => '', 'site_url' => cc_default_site_url(), 'admin_user' => '',
+    'admin_pass' => '', 'admin_pass2' => '', 'admin_email' => '', 'starter' => '', 'setup_key' => '',
 ];
+$setup_key = $state === 'fresh' ? cc_install_key($data_dir) : null;
+if ($setup_key === null && $state === 'fresh') $reqs[] = ['Setup key', 'fail', 'install-key.txt could not be written in the data folder: ' . $data_dir];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $sent = (string)($_POST['csrf'] ?? '');
@@ -265,28 +308,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($state === 'fresh') {
         foreach (array_keys($in) as $k) $in[$k] = is_string($_POST[$k] ?? null) ? $_POST[$k] : '';
-        foreach (['site_name', 'site_url', 'admin_user', 'admin_email', 'starter'] as $k) $in[$k] = trim($in[$k]);
+        foreach (['site_name', 'site_url', 'admin_user', 'admin_email', 'starter', 'setup_key'] as $k) $in[$k] = trim($in[$k]);
 
         if (cc_has_failures($reqs)) {
             $notice = 'Fix the failed requirements before installing.';
         } else {
-            $errors = cc_install_validate($in, $starters);
+            $errors = cc_install_validate($in, $starters, $setup_key);
             if (!$errors) {
-                try {
-                    $page_created = cc_run_install($db_file, $data_dir, $in, $starters);
-                    cc_install_login($in['admin_user']);
-                    $view = 'done';
-                } catch (Exception $e) {
-                    error_log('CanvasCore install: ' . $e->getMessage());
-                    $notice = 'Installation failed: ' . $e->getMessage();
+                // One installation at a time: the state is checked again under a lock
+                $lock = @fopen($data_dir . '/.install.lock', 'c');
+                if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+                    $notice = 'Another installation is running. Reload this page in a moment.';
+                } elseif (cc_install_state($db_file) !== 'fresh') {
+                    $view = 'installed';
+                } else {
+                    try {
+                        $page_created = cc_run_install($db_file, $data_dir, $in, $starters);
+                        @unlink($data_dir . '/install-key.txt');
+                        cc_install_login($db_file, $in['admin_user']);
+                        $view = 'done';
+                    } catch (Exception $e) {
+                        error_log('CanvasCore install: ' . $e->getMessage());
+                        $notice = 'Installation failed because of a server error. Details are in the server error log.';
+                    }
                 }
+                if ($lock) { flock($lock, LOCK_UN); fclose($lock); }
             }
         }
     }
 }
 
-// Passwords are never sent back to the browser.
-$in['admin_pass'] = $in['admin_pass2'] = '';
+// Passwords and the setup key are never sent back to the browser.
+$in['admin_pass'] = $in['admin_pass2'] = $in['setup_key'] = '';
 $version = cc_version()['app'];
 $has_failures = cc_has_failures($reqs);
 $editor_exists = file_exists(__DIR__ . '/index.html');
@@ -396,12 +449,12 @@ $field = function ($name, $label, $type = 'text', $attrs = '', $hint = '') use (
   <?php elseif ($view === 'error'): ?>
     <section class="card">
       <h2>Database unreadable</h2>
-      <p>A database exists at <code><?= h($db_file) ?></code> but it could not be opened. Check its permissions, or move it away to start a fresh installation.</p>
+      <p>A database exists in the data folder but it could not be opened. Check its permissions, or move <code>canvascore.sqlite</code> away to start a fresh installation.</p>
     </section>
 
   <?php else: ?>
     <section class="card">
-      <h2>1. Server check</h2>
+      <h2>Server check</h2>
       <p><?= $has_failures ? 'Fix the items marked in red, then reload this page.' : 'Your server can run CanvasCore. Items in yellow are worth a look but do not block the installation.' ?></p>
       <ul class="req">
         <?php foreach ($reqs as [$label, $status, $detail]): ?>
@@ -414,6 +467,13 @@ $field = function ($name, $label, $type = 'text', $attrs = '', $hint = '') use (
     <form method="post" novalidate>
       <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
       <section class="card">
+        <h2>1. Setup key</h2>
+        <p>To prove this is your server, open the file <code>install-key.txt</code> in the data folder
+          (<code><?= h($data_dir) ?></code>) with your hosting file manager or FTP, and paste its content here.
+          It is deleted when the installation is complete.</p>
+        <?= $field('setup_key', 'Setup key', 'text', 'required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"') ?>
+      </section>
+      <section class="card">
         <h2>2. Your site</h2>
         <p>You can change these later in Settings.</p>
         <?= $field('site_name', 'Site name', 'text', 'required maxlength="120" autocomplete="organization"') ?>
@@ -422,7 +482,7 @@ $field = function ($name, $label, $type = 'text', $attrs = '', $hint = '') use (
 
       <section class="card">
         <h2>3. Administrator account</h2>
-        <p>Replaces the default <code>admin</code> / <code>admin</code> login.</p>
+        <p>The first account. Choose a username that is hard to guess (not <code>admin</code>) and a strong password.</p>
         <?= $field('admin_user', 'Username', 'text', 'required minlength="3" maxlength="32" autocomplete="username" autocapitalize="none" spellcheck="false"') ?>
         <div class="row">
           <?= $field('admin_pass', 'Password', 'password', 'required minlength="8" autocomplete="new-password"', 'At least 8 characters.') ?>

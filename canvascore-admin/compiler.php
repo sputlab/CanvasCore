@@ -1,9 +1,24 @@
 <?php
 // canvascore-admin/compiler.php
+// Library file: included by the endpoints, never opened directly
+if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
 require_once __DIR__ . '/config.php';
 
 // Registry of the forms collected during the build (formId => recipient email)
 function &cc_form_registry() { static $r = []; return $r; }
+
+// An image address: http(s), a relative or root path, or an inline raster image; any other scheme (javascript:,
+// data:text/html…) -> ''. Mirrors ccImgUrl() in renderBlock.mjs.
+function cc_img_url($u) {
+    $u = trim((string)$u);
+    $probe = strtolower(preg_replace('/[\x00-\x20\x7f]+/', '', $u));
+    if (preg_match('/^[a-z][a-z0-9+.-]*:/', $probe) && !preg_match('#^(https?:|data:image/(png|jpe?g|gif|webp|avif);)#', $probe)) return '';
+    return $u;
+}
+// The same, for use inside CSS url('…'): quotes, parentheses, backslashes and line breaks are percent-encoded
+function cc_css_url($u) {
+    return str_replace(["'", '"', '\\', '(', ')', "\n", "\r", '<', '>'], ['%27', '%22', '%5C', '%28', '%29', '', '', '%3C', '%3E'], cc_img_url($u));
+}
 
 // URL for block links (same logic as BUTTON, with mailto:/tel: left intact)
 function cc_block_url($url) {
@@ -222,6 +237,8 @@ function build_inline_style($styles) {
         if ($v === '' || $v === null || $k === 'animation') continue;
         // Property names must look like CSS properties (a crafted key can't break out of the style attribute)
         if (!is_string($k) || !preg_match('/^[a-zA-Z][a-zA-Z0-9-]*$/', $k) || is_array($v) || is_object($v)) continue;
+        // One value per property: no ; { } that would add declarations or rules, no escapes, no script URLs
+        if (preg_match('/[;{}<>\\\\]|expression\s*\(|javascript:|vbscript:/i', (string)$v)) continue;
         $kebab_key = strtolower(preg_replace('/(?<!^)[A-Z]/', '-$0', $k));
         $str .= $kebab_key . ': ' . htmlspecialchars($v) . '; ';
     }
@@ -787,7 +804,8 @@ function render_block($block) {
             return $customCss . $html;
 
         case 'HERO':
-            $bg = !empty($block['content']['bgImage']) ? "background-image: url('".htmlspecialchars($block['content']['bgImage'])."'); background-size: cover; background-position: center;" : "";
+            $bgUrl = cc_css_url($block['content']['bgImage'] ?? '');
+            $bg = $bgUrl !== '' ? "background-image: url('".htmlspecialchars($bgUrl)."'); background-size: cover; background-position: center;" : "";
             $title = cc_sanitize_html($block['content']['title'] ?? '');
             $subtitle = cc_sanitize_html($block['content']['subtitle'] ?? '');
             $minHeight = htmlspecialchars((string)($block['styles']['minHeight'] ?? 'auto'));
@@ -856,7 +874,11 @@ function render_block($block) {
             $form_id = !empty($block['content']['customId'])
                 ? 'f_' . preg_replace('/[^a-zA-Z0-9_-]/', '', $block['content']['customId'])
                 : 'f_' . substr(sha1(($block['id'] ?? '') . '|' . $raw_email), 0, 16);
-            $reg =& cc_form_registry(); $reg[$form_id] = $raw_email;
+            // The registry also holds the form's fields and message: submit_form.php accepts only those fields and
+            // shows only this message (nothing a visitor sends decides either)
+            $regLabels = [];
+            foreach (($block['content']['fields'] ?? [['label' => 'Name'], ['label' => 'Email'], ['label' => 'Message']]) as $rf) $regLabels[] = mb_substr((string)($rf['label'] ?? ''), 0, 200);
+            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $regLabels, 'success' => (string)(($block['content']['successMsg'] ?? '') !== '' ? $block['content']['successMsg'] : 'Sent!')];
 
             $html = "<div id=\"$innerId\" class=\"cc-form-block$animClass$innerClass\"$styleString>\n<div style=\"margin-bottom:20px;\">$title</div>\n<form id=\"$form_id\" action=\"{{BASE_URL}}canvascore-admin/submit_form.php\" method=\"POST\">\n<input type=\"hidden\" name=\"_form\" value=\"$form_id\">\n<input type=\"hidden\" name=\"_success\" value=\"$successMsg\">\n<input type=\"text\" name=\"_hp\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\" style=\"position:absolute; left:-9999px; width:0; height:0; opacity:0;\">\n";
 
@@ -1001,7 +1023,7 @@ function render_block($block) {
             $imgStyle = $useAr ? 'width:100%; height:100%; object-fit:cover; display:block;' : 'width:100%; height:auto; display:block;';
             $figs = '';
             foreach ($images as $im) {
-                $src = htmlspecialchars($im['src'] ?? '');
+                $src = htmlspecialchars(cc_img_url($im['src'] ?? ''));
                 $alt = htmlspecialchars($im['alt'] ?? '');
                 $cap = htmlspecialchars($im['caption'] ?? '');
                 $imgHtml = '<img src="' . $src . '" alt="' . $alt . '" loading="lazy" style="' . $imgStyle . '">';

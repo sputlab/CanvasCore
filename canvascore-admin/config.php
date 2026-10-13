@@ -2,9 +2,14 @@
 // canvascore-admin/config.php
 // Shared module: hardened session, CSRF, data dir outside the web root, HTML sanitizer, protections.
 // Included by api.php, rebuild_all.php, submit_form.php.
+// Library file: included by the endpoints, never opened directly
+if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
 
 if (defined('CC_CONFIG_LOADED')) return;
 define('CC_CONFIG_LOADED', true);
+
+// Errors go to the server log, never into a page or a JSON answer (they could reveal paths and internals)
+if (PHP_SAPI !== 'cli') { ini_set('display_errors', '0'); ini_set('log_errors', '1'); }
 
 // Hosts without the mbstring extension: UTF-8 safe fallbacks for the two functions used
 if (!function_exists('mb_substr')) {
@@ -21,9 +26,21 @@ if (!function_exists('mb_strlen')) {
 // Hardened session (HttpOnly cookie, SameSite=Lax, Secure over HTTPS)
 // ---------------------------------------------------------------------------
 function cc_is_https() {
-    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
-        || (($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '') === 'on');
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') return true;
+    // A proxy's word about the original scheme counts only when the request comes from a trusted proxy
+    if (!in_array((string)($_SERVER['REMOTE_ADDR'] ?? ''), cc_trusted_proxies(), true)) return false;
+    return strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https'
+        || strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '')) === 'on';
+}
+// Global Options › Security › Trusted proxy addresses (a list of IPs). $override: the list to use (tests).
+function cc_trusted_proxies($override = null) {
+    static $trusted = null;
+    if ($override !== null) $trusted = array_values($override);
+    if ($trusted === null) {
+        $s = @json_decode((string)@file_get_contents(cc_data_dir() . '/settings.json'), true);
+        $trusted = array_values(array_filter(array_map('trim', explode(',', (string)($s['trustedProxies'] ?? ''))), function ($ip) { return filter_var($ip, FILTER_VALIDATE_IP); }));
+    }
+    return $trusted;
 }
 
 // Session start (with inactivity timeout) is in cc_boot_session(), called at the end of the file.
@@ -44,7 +61,50 @@ $GLOBALS['CC_HT_UPLOADS'] =
     "<IfModule mod_php.c>\n  php_flag engine off\n</IfModule>\n" .
     "<IfModule mod_php7.c>\n  php_flag engine off\n</IfModule>\n" .
     // SVG files opened directly can't run scripts (defense in depth, besides the upload check)
-    "<FilesMatch \"\\.(?i:svg)$\">\n  <IfModule mod_headers.c>\n    Header set Content-Security-Policy \"script-src 'none'; sandbox\"\n  </IfModule>\n</FilesMatch>\n";
+    "<FilesMatch \"\\.(?i:svg)$\">\n  <IfModule mod_headers.c>\n    Header set Content-Security-Policy \"default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'none'; sandbox\"\n  </IfModule>\n</FilesMatch>\n" .
+    "<IfModule mod_headers.c>\n  Header set X-Content-Type-Options nosniff\n</IfModule>\n";
+
+// Security headers for every response of the admin's PHP files: never framed by another site (clickjacking),
+// no MIME sniffing, no referrer leaks. The editor's static index.html gets the same from canvascore-admin/.htaccess
+// (Apache) or the server configuration (Nginx: see the Administrator Guide).
+function cc_security_headers() {
+    if (headers_sent()) return;
+    header('X-Frame-Options: DENY');
+    header("Content-Security-Policy: frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'");
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+    header('Cross-Origin-Opener-Policy: same-origin');
+    header_remove('X-Powered-By');
+}
+
+// The admin folder itself (Apache): security headers for the editor page too (it is a static file, so PHP can't
+// send them), and no direct access to the library files and JSON data. Written by api.php and install.php.
+$GLOBALS['CC_HT_ADMIN'] =
+    "# CanvasCore: written automatically (security headers and access rules). Nginx: see the Administrator Guide.\n" .
+    "<IfModule mod_headers.c>\n" .
+    "  Header always set X-Frame-Options \"DENY\"\n" .
+    "  Header always set Content-Security-Policy \"frame-ancestors 'none'; base-uri 'self'; object-src 'none'\"\n" .
+    "  Header always set X-Content-Type-Options \"nosniff\"\n" .
+    "  Header always set Referrer-Policy \"same-origin\"\n" .
+    "  Header always set Cross-Origin-Opener-Policy \"same-origin\"\n" .
+    "</IfModule>\n" .
+    "<FilesMatch \"^(config|compiler|migrations|media|backup)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
+    "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n" .
+    "  <IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n  </IfModule>\n" .
+    "</FilesMatch>\n" .
+    // the Menu Builder's sandboxed live preview is the one page the editor itself frames
+    "<FilesMatch \"^menu-preview\\.html$\">\n  <IfModule mod_headers.c>\n" .
+    "    Header always set X-Frame-Options \"SAMEORIGIN\"\n" .
+    "    Header always set Content-Security-Policy \"frame-ancestors 'self'; base-uri 'none'; object-src 'none'\"\n" .
+    "  </IfModule>\n</FilesMatch>\n";
+
+// The admin folder's .htaccess is rewritten only while it is CanvasCore's own (starts with its marker line):
+// an administrator who replaces it with their own rules (basic auth…) keeps them.
+function ensure_admin_htaccess($dir) {
+    $f = $dir . '/.htaccess';
+    if (is_file($f) && strpos((string)@file_get_contents($f, false, null, 0, 64), '# CanvasCore: written automatically') !== 0) return;
+    ensure_htaccess($dir, $GLOBALS['CC_HT_ADMIN']);
+}
 
 function ensure_htaccess($dir, $contents) {
     if (!is_dir($dir)) @mkdir($dir, 0755, true);
@@ -64,28 +124,60 @@ function cc_can_write($dir) {
     return true;
 }
 
+// The web server's document root (null in the CLI or when unknown)
+function cc_doc_root() {
+    $d = (string)($_SERVER['DOCUMENT_ROOT'] ?? '');
+    $r = $d !== '' ? realpath($d) : false;
+    return $r ?: null;
+}
+// Is $path (existing or not) inside $root? Resolves the nearest existing ancestor, so symlinks are followed.
+function cc_path_inside($path, $root) {
+    if (!$root) return false;
+    $p = rtrim(str_replace('\\', '/', $path), '/'); $tail = '';
+    while ($p !== '' && !file_exists($p)) { $tail = '/' . basename($p) . $tail; $nd = dirname($p); if ($nd === $p) break; $p = $nd; }
+    $real = realpath($p === '' ? '/' : $p);
+    if ($real === false) return false;
+    $full = rtrim(str_replace('\\', '/', $real), '/') . $tail . '/';
+    return strpos($full, rtrim(str_replace('\\', '/', $root), '/') . '/') === 0;
+}
+
 function cc_data_dir() {
     static $dir = null;
     if ($dir !== null) return $dir;
 
     $legacy  = __DIR__ . '/data';                        // inside the web root
-    $outside = dirname(__DIR__, 2) . '/canvascore-data'; // outside the web root (recommended)
-    foreach ([$outside, $legacy] as $c) { if (!is_dir($c)) @mkdir($c, 0755, true); }
+    $outside = dirname(__DIR__, 2) . '/canvascore-data'; // next to the site folder (outside the web root when the site IS the web root)
+    // A site installed in a sub-folder of the web root (example.com/site/): the folder next to it is still inside
+    // the web root, so a new installation goes next to the web root itself.
+    $docroot = cc_doc_root();
+    // One folder per site (canvascore-data-<sub-folder>), so two sites in different sub-folders never share data.
+    $above = null;
+    if ($docroot && cc_path_inside($outside, $docroot)) {
+        $site = realpath(dirname(__DIR__)) ?: dirname(__DIR__);
+        $rel = trim(str_replace('\\', '/', substr($site, strlen($docroot))), '/');
+        $above = dirname($docroot) . '/canvascore-data' . ($rel !== '' ? '-' . trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($rel)), '-') : '');
+    }
+    $candidates = array_values(array_filter([$above, $outside, $legacy]));
 
-    // A location that is REALLY writable (not just is_writable), preferring the outside one.
-    if (cc_can_write($outside))    $dir = $outside;
-    elseif (cc_can_write($legacy)) $dir = $legacy;
-    else                           $dir = $legacy;
-
-    $other = ($dir === $outside) ? $legacy : $outside;
-
-    // Two-way migration: move DB and config to the chosen location if they are in the other one.
-    // If the outside folder is not writable, the data goes back where it CAN be written.
-    if (!file_exists($dir . '/canvascore.sqlite') && file_exists($other . '/canvascore.sqlite')) {
-        foreach (['canvascore.sqlite', 'settings.json', 'menu.json', 'forms.json'] as $f) {
-            if (file_exists($other . '/' . $f)) @copy($other . '/' . $f, $dir . '/' . $f);
+    // An existing database stays where it is
+    foreach ($candidates as $c) { if (is_file($c . '/canvascore.sqlite')) { $dir = $c; break; } }
+    if ($dir === null) {
+        foreach ($candidates as $c) { if (!is_dir($c)) @mkdir($c, 0755, true); }
+        foreach ($candidates as $c) { if (cc_can_write($c) && !cc_path_inside($c, $docroot)) { $dir = $c; break; } }
+        if ($dir === null) foreach ($candidates as $c) { if (cc_can_write($c)) { $dir = $c; break; } }
+        if ($dir === null) $dir = $legacy;
+    } elseif ($dir === $legacy) {
+        // Data in the legacy folder inside the web root: moved out as soon as a folder outside it can be written
+        foreach ([$above, $outside] as $c) {
+            if (!$c || cc_path_inside($c, $docroot)) continue;
+            if (!is_dir($c)) @mkdir($c, 0755, true);
+            if (!cc_can_write($c)) continue;
+            foreach (['canvascore.sqlite', 'settings.json', 'menu.json', 'forms.json'] as $f) {
+                if (file_exists($legacy . '/' . $f)) @copy($legacy . '/' . $f, $c . '/' . $f);
+            }
+            if (file_exists($c . '/canvascore.sqlite')) { @unlink($legacy . '/canvascore.sqlite'); $dir = $c; }
+            break;
         }
-        if (file_exists($dir . '/canvascore.sqlite')) @unlink($other . '/canvascore.sqlite');
     }
 
     ensure_htaccess($dir, $GLOBALS['CC_HT_DENY']);
@@ -133,38 +225,81 @@ function cc_safe_slug($raw) {
 if (!function_exists('sanitize_slug')) {
     function sanitize_slug($raw) { return cc_safe_slug($raw); }
 }
+// Values that go into CSS: a color (hex, rgb()/rgba(), a color name) or a length; anything else -> $default
+function cc_css_color($v, $default) {
+    $v = trim((string)$v);
+    return preg_match('/^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,30}|rgba?\(\s*[\d.]+%?\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?\s*(,\s*[\d.]+%?\s*)?\))$/', $v) ? $v : $default;
+}
+function cc_css_length($v, $default) {
+    $v = trim((string)$v);
+    return preg_match('/^\d{1,5}(\.\d+)?(px|%|rem|em|vw)?$/', $v) ? $v : $default;
+}
+// Top-level folders of the site that belong to CanvasCore itself: no page, collection or redirect may use them
+// (a page published there would replace or redirect the admin, the images or the data).
+function cc_reserved_slugs() {
+    return array_values(array_unique([cc_safe_slug(basename(__DIR__)), 'canvascore-admin', 'uploads', 'canvascore-data', 'data']));
+}
+function cc_slug_reserved($slug) { return in_array(cc_safe_slug($slug), cc_reserved_slugs(), true); }
 
 // ---------------------------------------------------------------------------
-// CSRF + Origin check (defense in depth, on top of SameSite)
+// CSRF: a per-session token, sent back by the editor in the X-CSRF-Token header (a custom header can't be added
+// by another site without CORS, which is never allowed), plus an Origin / Fetch-Metadata check.
 // ---------------------------------------------------------------------------
 function cc_issue_csrf() {
+    if (session_status() !== PHP_SESSION_ACTIVE) return '';
     if (empty($_SESSION['csrf'])) {
         $_SESSION['csrf'] = bin2hex(random_bytes(32));
     }
-    if (!headers_sent() && (($_COOKIE['cc_csrf'] ?? '') !== $_SESSION['csrf'])) {
-        @setcookie('cc_csrf', $_SESSION['csrf'], [
-            'path' => '/', 'samesite' => 'Lax', 'secure' => cc_is_https(), 'httponly' => false,
-        ]);
-        $_COOKIE['cc_csrf'] = $_SESSION['csrf'];
+    // The token used to be mirrored in a script-readable cookie: removed (only the session copy counts)
+    if (isset($_COOKIE['cc_csrf']) && !headers_sent()) {
+        @setcookie('cc_csrf', '', ['expires' => time() - 3600, 'path' => '/', 'samesite' => 'Lax', 'secure' => cc_is_https(), 'httponly' => true]);
+        unset($_COOKIE['cc_csrf']);
     }
     return $_SESSION['csrf'];
 }
+// A request that a browser marks as coming from another site, or whose Origin is not this host, is refused.
+function cc_same_origin_request() {
+    $site = strtolower((string)($_SERVER['HTTP_SEC_FETCH_SITE'] ?? ''));
+    if ($site === 'cross-site' || $site === 'same-site') return false;
+    $origin = (string)($_SERVER['HTTP_ORIGIN'] ?? '');
+    if ($origin === '' || $origin === 'null') return $origin === '';
+    $oh = strtolower((string)parse_url($origin, PHP_URL_HOST)); $op = parse_url($origin, PHP_URL_PORT);
+    if ($oh === '') return false;
+    $host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+    $hh = preg_replace('/:\d+$/', '', $host); $hp = preg_match('/:(\d+)$/', $host, $m) ? (int)$m[1] : null;
+    if ($oh === $hh && ($op === null || $hp === null || (int)$op === $hp)) return true;
+    // Behind a trusted reverse proxy that rewrites Host, the public host it forwards counts too
+    if (in_array((string)($_SERVER['REMOTE_ADDR'] ?? ''), cc_trusted_proxies(), true)) {
+        $fh = strtolower(trim(explode(',', (string)($_SERVER['HTTP_X_FORWARDED_HOST'] ?? ''))[0]));
+        if ($fh !== '' && $oh === preg_replace('/:\d+$/', '', $fh)) return true;
+    }
+    return false;
+}
 
 // ---------------------------------------------------------------------------
-// Login throttling: 5 wrong passwords in 15 minutes for the same account from the same address
-// -> that pair waits 15 minutes. Stored in the data dir (login_attempts.json), with a file lock.
+// Login throttling, in the data dir (login_attempts.json, under a file lock). Every attempt is counted BEFORE the
+// password is checked, in the same locked step that checks the limits, so parallel requests can't slip past them:
+//  - 5 wrong passwords in 15 minutes for one account from one address -> that pair waits 15 minutes;
+//  - 20 wrong passwords in 15 minutes from one address (any accounts) -> that address waits 15 minutes;
+//  - 100 wrong passwords in an hour for one account (any addresses) -> that account waits 15 minutes.
+// The file holds at most CC_LOGIN_MAX_KEYS entries (the oldest go first), so it can't grow without limit.
 // ---------------------------------------------------------------------------
+const CC_LOGIN_MAX_KEYS = 5000;
 function cc_login_attempts_update($fn) {
     $file = cc_data_dir() . '/login_attempts.json';
     $fh = @fopen($file, 'c+');
     if (!$fh) return $fn([])[1] ?? null;
     flock($fh, LOCK_EX);
-    $raw = stream_get_contents($fh);
-    $all = json_decode($raw ?: '{}', true);
+    $raw = stream_get_contents($fh, 4 * 1048576);
+    $all = strlen((string)$raw) < 4 * 1048576 ? json_decode($raw ?: '{}', true) : [];   // a damaged or huge file starts over
     if (!is_array($all)) $all = [];
     $now = time();
-    foreach ($all as $k => $v) { if (($v['until'] ?? 0) < $now && ($v['first'] ?? 0) < $now - 900) unset($all[$k]); }
+    foreach ($all as $k => $v) { if (!is_array($v) || (($v['until'] ?? 0) < $now && ($v['first'] ?? 0) < $now - (int)($v['win'] ?? 900))) unset($all[$k]); }
     [$all, $result] = $fn($all);
+    if (count($all) > CC_LOGIN_MAX_KEYS) {
+        uasort($all, function ($a, $b) { return max($b['first'] ?? 0, $b['until'] ?? 0) <=> max($a['first'] ?? 0, $a['until'] ?? 0); });
+        $all = array_slice($all, 0, CC_LOGIN_MAX_KEYS, true);
+    }
     ftruncate($fh, 0); rewind($fh); fwrite($fh, json_encode($all));
     fflush($fh); flock($fh, LOCK_UN); fclose($fh);
     return $result;
@@ -174,12 +309,7 @@ function cc_login_attempts_update($fn) {
 // address the proxy reports (X-Forwarded-For, nearest untrusted hop) is used instead.
 function cc_client_ip($trustedOverride = null) {   // $trustedOverride: list of proxy IPs (tests)
     $remote = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    static $trusted = null;
-    if ($trustedOverride !== null) $trusted = $trustedOverride;
-    if ($trusted === null) {
-        $s = @json_decode((string)@file_get_contents(cc_data_dir() . '/settings.json'), true);
-        $trusted = array_values(array_filter(array_map('trim', explode(',', (string)($s['trustedProxies'] ?? '')))));
-    }
+    $trusted = cc_trusted_proxies($trustedOverride);
     if (!$trusted || !in_array($remote, $trusted, true)) return $remote;
     $chain = array_map('trim', explode(',', (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')));
     for ($i = count($chain) - 1; $i >= 0; $i--) {
@@ -188,25 +318,45 @@ function cc_client_ip($trustedOverride = null) {   // $trustedOverride: list of 
     }
     return $remote;
 }
-function cc_login_key($username) { return sha1(cc_client_ip() . '|' . strtolower($username)); }
-// Seconds to wait before trying again (0 = allowed)
+// The throttling keys of an attempt: [key, limit, window seconds]
+function cc_login_keys($username) {
+    $ip = cc_client_ip(); $u = strtolower($username);
+    return [['a:' . sha1($ip . '|' . $u), 5, 900], ['i:' . sha1($ip), 20, 900], ['u:' . sha1($u), 100, 3600]];
+}
+// Starts a login attempt: seconds to wait (> 0: refused), or 0 when the attempt may go ahead. The attempt is
+// counted as a failure right away; cc_login_result(…, true) clears the account's counters after a success.
+function cc_login_begin($username) {
+    $keys = cc_login_keys($username);
+    return (int) cc_login_attempts_update(function ($all) use ($keys) {
+        $now = time(); $wait = 0;
+        foreach ($keys as [$k]) $wait = max($wait, (int)($all[$k]['until'] ?? 0) - $now);
+        if ($wait > 0) return [$all, $wait];
+        $locked = false;
+        foreach ($keys as [$k, $max, $win]) {
+            $e = $all[$k] ?? null;
+            if (!$e || ($e['first'] ?? 0) < $now - $win) $e = ['count' => 0, 'first' => $now, 'until' => 0, 'win' => $win];
+            $e['count']++;
+            if ($e['count'] > $max) { $e['until'] = $now + 900; $e['count'] = 0; $e['first'] = $now; $locked = true; }
+            $all[$k] = $e;
+        }
+        return [$all, $locked ? 900 : 0];
+    });
+}
+// Seconds to wait before trying again (0 = allowed). Read-only.
 function cc_login_wait($username) {
-    $k = cc_login_key($username);
-    return (int) cc_login_attempts_update(function ($all) use ($k) {
-        $until = (int)($all[$k]['until'] ?? 0);
-        return [$all, max(0, $until - time())];
+    $keys = cc_login_keys($username);
+    return (int) cc_login_attempts_update(function ($all) use ($keys) {
+        $wait = 0;
+        foreach ($keys as [$k]) $wait = max($wait, (int)($all[$k]['until'] ?? 0) - time());
+        return [$all, $wait];
     });
 }
 function cc_login_result($username, $ok) {
-    $k = cc_login_key($username);
-    cc_login_attempts_update(function ($all) use ($k, $ok) {
-        if ($ok) { unset($all[$k]); return [$all, null]; }
-        $now = time();
-        $e = $all[$k] ?? ['count' => 0, 'first' => $now, 'until' => 0];
-        if ($e['first'] < $now - 900) $e = ['count' => 0, 'first' => $now, 'until' => 0];
-        $e['count']++;
-        if ($e['count'] >= 5) { $e['until'] = $now + 900; $e['count'] = 0; $e['first'] = $now; }
-        $all[$k] = $e;
+    if (!$ok) return;   // already counted by cc_login_begin()
+    $keys = cc_login_keys($username);
+    cc_login_attempts_update(function ($all) use ($keys) {
+        unset($all[$keys[0][0]]);   // this account from this address starts over
+        foreach ([$keys[1][0], $keys[2][0]] as $k) { if (isset($all[$k]) && ($all[$k]['count'] ?? 0) > 0) $all[$k]['count']--; }   // a success is not a failure
         return [$all, null];
     });
 }
@@ -273,12 +423,15 @@ function cc_redirect_path($p) {
     if ($p === '' || $p[0] !== '/') return null;
     $p = '/' . trim($p, '/') . '/';
     if ($p === '//') return null;                                   // the home page can't be redirected
-    return preg_match('#^(/[a-z0-9][a-z0-9._-]*)+/$#i', $p) ? strtolower($p) : null;
+    if (!preg_match('#^(/[a-z0-9][a-z0-9._-]*)+/$#i', $p) || strpos($p, '..') !== false) return null;
+    $p = strtolower($p);
+    if (cc_slug_reserved(explode('/', $p)[1])) return null;         // CanvasCore's own folders are never redirected
+    return $p;
 }
 // Target: a site path, or a full http(s) address
 function cc_redirect_target($t) {
     $t = trim((string)$t);
-    if (preg_match('#^https?://[^\s"<>]+$#i', $t)) return $t;
+    if (preg_match('#^https?://[^\s"<>\\\\]+$#i', $t) && !preg_match('/[\x00-\x1f\x7f]/', $t)) return $t;
     if ($t === '/') return '/';
     return cc_redirect_path($t);
 }
@@ -303,6 +456,7 @@ function cc_drop_redirect_from($pdo, $path) {
 // publish manifest (or the item's own index.html / the collection's feed.xml) are touched, nothing else.
 function cc_unpublish_files($data_dir, $prefix, $extra = []) {
     if (!preg_match('#^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/$#', $prefix) || strpos($prefix, '..') !== false) return 0;
+    if (cc_slug_reserved(explode('/', $prefix)[0])) return 0;   // CanvasCore's own folders are never touched
     $root = realpath($GLOBALS['CC_SITE_ROOT'] ?? (__DIR__ . '/..'));   // overridable for tests
     if (!$root) return 0;
     $mfile = $data_dir . '/published_files.json';
@@ -364,44 +518,80 @@ function cc_htaccess_with_redirects($existing, $rules) {
     return ltrim($existing . $block);
 }
 
-// An uploaded SVG is a document that can carry scripts: accept it only without any active content
-// (scripts, event handlers, javascript: links, embedded HTML, external entities).
+// An uploaded SVG is a document that can carry scripts: it is accepted only when everything in it is on an
+// allowlist of plain drawing elements and attributes (no scripts, event handlers, animations of links, embedded
+// HTML or MathML, external entities or style sheets, links other than to its own parts).
+const CC_SVG_NS = 'http://www.w3.org/2000/svg';
+const CC_SVG_ELEMENTS = ['svg', 'g', 'defs', 'symbol', 'use', 'title', 'desc', 'metadata', 'path', 'rect', 'circle', 'ellipse',
+    'line', 'polyline', 'polygon', 'text', 'tspan', 'textpath', 'lineargradient', 'radialgradient', 'stop', 'clippath', 'mask',
+    'pattern', 'marker', 'image', 'switch', 'style', 'filter', 'fegaussianblur', 'feoffset', 'feblend', 'fecolormatrix',
+    'fecomponenttransfer', 'fefunca', 'fefuncr', 'fefuncg', 'fefuncb', 'fecomposite', 'feflood', 'femerge', 'femergenode',
+    'femorphology', 'fedropshadow', 'feturbulence', 'fedisplacementmap', 'fetile', 'feimage', 'feconvolvematrix',
+    'fediffuselighting', 'fespecularlighting', 'fedistantlight', 'fepointlight', 'fespotlight', 'animatetransform'];
+// Editor metadata (Inkscape, Sodipodi, Illustrator, RDF/Dublin Core): inert in browsers, allowed
+const CC_SVG_INERT_NS = ['http://www.inkscape.org/namespaces/inkscape', 'http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd',
+    'http://www.w3.org/1999/02/22-rdf-syntax-ns#', 'http://creativecommons.org/ns#', 'http://purl.org/dc/elements/1.1/',
+    'http://ns.adobe.com/AdobeIllustrator/10.0/', 'http://ns.adobe.com/AdobeSVGViewerExtensions/3.0/', 'http://ns.adobe.com/Extensibility/1.0/',
+    'http://ns.adobe.com/Flows/1.0/', 'http://ns.adobe.com/ImageReplacement/1.0/', 'http://ns.adobe.com/GenericCustomNamespace/1.0/',
+    'http://ns.adobe.com/XPath/1.0/', 'http://ns.adobe.com/SaveForWeb/1.0/', 'http://ns.adobe.com/Variables/1.0/',
+    'http://ns.adobe.com/xap/1.0/', 'http://www.bohemiancoding.com/sketch/ns', 'http://www.figma.com/figma/ns'];
+function cc_svg_url_ok($v, $allowImages) {
+    $v = preg_replace('/[\x00-\x20\x7f]+/', '', $v);
+    if ($v === '' || $v[0] === '#') return true;
+    return $allowImages && (preg_match('#^data:image/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$#i', $v) || preg_match('#^https?://#i', $v));
+}
+function cc_svg_css_ok($css) {
+    $p = strtolower(preg_replace('/[\x00-\x20\x7f]+|\/\*.*?\*\//s', '', html_entity_decode($css, ENT_QUOTES | ENT_HTML5)));
+    if (strpos($p, '\\') !== false || strpos($p, '@import') !== false || strpos($p, 'expression(') !== false
+        || strpos($p, 'javascript:') !== false || strpos($p, '-moz-binding') !== false || strpos($p, 'behavior:') !== false) return false;
+    // url(...) only to the drawing's own parts: url(#id)
+    return !preg_match('/url\((?![\'"]?#)/', $p);
+}
 function cc_svg_is_safe($path) {
     $svg = @file_get_contents($path);
-    if ($svg === false || $svg === '') return false;
+    if ($svg === false || $svg === '' || strlen($svg) > 10 * 1048576) return false;
     if (preg_match('/<!ENTITY|<!DOCTYPE[^>]*\[/i', $svg)) return false;
     $probe = preg_replace('/[\x00-\x20\x7f]+/', '', strtolower($svg));
-    if (strpos($probe, 'javascript:') !== false || strpos($probe, 'vbscript:') !== false || strpos($probe, '<script') !== false) return false;
-    if (!class_exists('DOMDocument')) {
-        return !preg_match('/<\s*(script|foreignobject|iframe|embed|object|handler|listener)\b|\son[a-z]+\s*=/i', $svg);
+    foreach (['javascript:', 'vbscript:', 'livescript:', '<script', 'data:text', 'data:application', 'data:image/svg', '<?xml-stylesheet'] as $bad) {
+        if (strpos($probe, $bad) !== false) return false;
     }
+    if (!class_exists('DOMDocument')) return false;   // can't be checked properly without the DOM extension
     $dom = new DOMDocument();
-    libxml_use_internal_errors(true);
+    $prev = libxml_use_internal_errors(true);
     $ok = $dom->loadXML($svg, LIBXML_NONET);
-    libxml_clear_errors();
-    if (!$ok || !$dom->documentElement || strtolower($dom->documentElement->localName) !== 'svg') return false;
-    foreach ($dom->getElementsByTagName('*') as $el) {
-        $name = strtolower($el->localName);
-        if (in_array($name, ['script', 'foreignobject', 'iframe', 'embed', 'object', 'handler', 'listener'], true)) return false;
+    libxml_clear_errors(); libxml_use_internal_errors($prev);
+    if (!$ok || !$dom->documentElement || $dom->documentElement->namespaceURI !== CC_SVG_NS || strtolower($dom->documentElement->localName) !== 'svg') return false;
+    $xp = new DOMXPath($dom);
+    // processing instructions (style sheets, XSLT) are not drawings
+    if ($xp->query('//processing-instruction()')->length > 0) return false;
+    foreach ($xp->query('//*') as $el) {
+        $ns = (string)$el->namespaceURI; $name = strtolower($el->localName);
+        if ($ns === CC_SVG_NS) {
+            if (!in_array($name, CC_SVG_ELEMENTS, true)) return false;
+            if ($name === 'style' && !cc_svg_css_ok($el->textContent)) return false;
+        } elseif (in_array($ns, CC_SVG_INERT_NS, true)) {
+            // metadata: its content is never rendered, but must not hide SVG or HTML elements
+            foreach ($el->getElementsByTagName('*') as $sub) { if (!in_array((string)$sub->namespaceURI, CC_SVG_INERT_NS, true)) return false; }
+        } else {
+            return false;   // HTML, MathML or any other vocabulary
+        }
         foreach ($el->attributes as $a) {
-            $an = strtolower($a->localName);
-            if (strpos($an, 'on') === 0) return false;
-            if (in_array($an, ['href', 'to', 'values', 'from', 'by'], true) && preg_match('#^(javascript|vbscript|data:text|data:application)#i', preg_replace('/[\x00-\x20\x7f]+/', '', $a->value))) return false;
+            $an = strtolower($a->localName); $ans = (string)$a->namespaceURI; $v = (string)$a->value;
+            if (strpos($an, 'on') === 0) return false;                                   // event handlers
+            if ($ans === 'http://www.w3.org/XML/1998/namespace' && $an === 'base') return false;
+            if ($an === 'href' || $an === 'src') { if (!cc_svg_url_ok($v, in_array($name, ['image', 'feimage'], true))) return false; continue; }
+            if (in_array($an, ['attributename', 'values', 'from', 'to', 'by', 'begin', 'end'], true) && $name !== 'animatetransform') return false;
+            if ($an === 'style' && !cc_svg_css_ok($v)) return false;
+            if (preg_match('/url\(/i', $v) && !cc_svg_css_ok($v)) return false;            // fill="url(#g)" only
         }
     }
     return true;
 }
 
 function cc_verify_csrf_or_die() {
-    $sent = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-    if ($sent !== '') {
-        $sess   = $_SESSION['csrf'] ?? '';
-        $cookie = $_COOKIE['cc_csrf'] ?? '';
-        if (($sess !== '' && hash_equals($sess, $sent)) ||
-            ($cookie !== '' && hash_equals($cookie, $sent))) {
-            return;
-        }
-    }
+    $sent = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    $sess = (string)($_SESSION['csrf'] ?? '');
+    if ($sent !== '' && $sess !== '' && hash_equals($sess, $sent) && cc_same_origin_request()) return;
     http_response_code(403);
     die(json_encode(['success' => false, 'message' => 'Invalid CSRF token. Reload the page.']));
 }
@@ -471,18 +661,41 @@ function cc_keep_code_surfaces(&$blocks, $previous) {
 // ---------------------------------------------------------------------------
 // HTML sanitizer (allowlist) for rich-text content
 // ---------------------------------------------------------------------------
+// Inline styles in rich text: only plain typography and box properties (no positioning, no url(), no
+// expressions or escapes), so text can't cover the page or load anything.
+const CC_STYLE_PROPS = ['color', 'background-color', 'background', 'font-size', 'font-weight', 'font-style', 'font-family',
+    'font-variant', 'text-align', 'text-decoration', 'text-decoration-line', 'text-decoration-color', 'text-decoration-style',
+    'text-transform', 'text-indent', 'line-height', 'letter-spacing', 'word-spacing', 'white-space', 'vertical-align',
+    'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'padding', 'padding-top', 'padding-right',
+    'padding-bottom', 'padding-left', 'border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-color',
+    'border-style', 'border-width', 'border-radius', 'border-collapse', 'border-spacing', 'width', 'max-width', 'min-width',
+    'height', 'max-height', 'min-height', 'display', 'float', 'clear', 'list-style', 'list-style-type', 'list-style-position',
+    'opacity', 'box-shadow', 'table-layout', 'overflow-wrap', 'word-break', 'direction', 'unicode-bidi'];
+function cc_sanitize_style($css) {
+    $out = [];
+    foreach (explode(';', html_entity_decode((string)$css, ENT_QUOTES | ENT_HTML5, 'UTF-8')) as $decl) {
+        if (strpos($decl, ':') === false) continue;
+        [$prop, $val] = array_map('trim', explode(':', $decl, 2));
+        $prop = strtolower($prop);
+        if (!in_array($prop, CC_STYLE_PROPS, true) || $val === '') continue;
+        $probe = strtolower(preg_replace('/[\x00-\x20\x7f]+/', '', $val));
+        if (preg_match('/[\\\\<>@{}"`]|url\(|expression|javascript|vbscript|-moz-binding|behavior|image-set|var\(|env\(|attr\(/', $probe)) continue;
+        if ($prop === 'display' && !in_array($probe, ['block', 'inline', 'inline-block', 'none', 'table', 'table-cell', 'table-row', 'list-item', 'flex', 'inline-flex'], true)) continue;
+        $out[] = $prop . ': ' . preg_replace('/[\x00-\x1f\x7f]+/', '', $val);
+    }
+    return implode('; ', $out);
+}
+
 function cc_sanitize_html($html) {
     $html = (string)$html;
     if (trim($html) === '') return '';
 
     if (!class_exists('DOMDocument')) {
-        // Conservative fallback without ext-dom
-        $html = preg_replace('#<\s*(script|iframe|object|embed|style|link|meta|base|form|input|button|textarea|select|noscript)\b[^>]*>.*?<\s*/\s*\1\s*>#is', '', $html);
-        $html = preg_replace('#<\s*(script|iframe|object|embed|style|link|meta|base|form|input|button|textarea|select|noscript)\b[^>]*/?>#is', '', $html);
-        $html = preg_replace('#\son\w+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#is', '', $html);
-        $html = preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+/', '', $html);
-        $html = preg_replace('#(href|src)\s*=\s*("|\')[\s]*(?:j[\s]*a[\s]*v[\s]*a[\s]*s[\s]*c[\s]*r[\s]*i[\s]*p[\s]*t|vbscript)\s*:[^"\']*\2#is', '$1="#"', $html);
-        return $html;
+        // Without the DOM extension rich text can't be cleaned safely: only plain formatting tags survive, with
+        // every attribute removed (links and images are lost until the extension is enabled; the installer requires it).
+        $html = preg_replace('#<\s*(script|style|iframe|object|embed|noscript|template|textarea|title|xmp|svg|math)\b.*?<\s*/\s*\1\s*>#is', '', $html);
+        $html = strip_tags($html, '<p><br><hr><b><strong><i><em><u><s><sub><sup><mark><small><ul><ol><li><blockquote><h1><h2><h3><h4><h5><h6><table><thead><tbody><tr><td><th><pre><code>');
+        return preg_replace('#<(/?)([a-z0-9]+)\b[^>]*>#i', '<$1$2>', $html);
     }
 
     $allowedTags = array_flip([
@@ -534,15 +747,16 @@ function cc_sanitize_html($html) {
                         if ($ok) { $child->setAttribute($attr->name, trim(preg_replace('/[\x00-\x1f\x7f]+/', '', $av))); continue; }
                     }
                     if ($ok && $an === 'style') {
-                        // Neutralize dangerous url(...), expression() and javascript/vbscript schemes
-                        $av = preg_replace('#url\(\s*[\'"]?\s*(?:javascript|vbscript|data)\s*:[^)]*\)?#i', 'none', $av);
-                        $av = preg_replace('#expression\s*\([^)]*\)?#i', '', $av);
-                        $av = preg_replace('#(?:javascript|vbscript)\s*:#i', '', $av);
-                        $child->setAttribute('style', $av);
+                        $av = cc_sanitize_style($av);
+                        if ($av === '') $child->removeAttribute($attr->name); else $child->setAttribute('style', $av);
                         continue;
                     }
+                    if ($ok && $an === 'target') { $ok = in_array(strtolower($av), ['_blank', '_self'], true); }
+                    if ($ok && $an === 'id') { $ok = (bool)preg_match('/^[A-Za-z][A-Za-z0-9_-]{0,63}$/', $av) && $av !== 'cc-root'; }
                     if (!$ok) $child->removeAttribute($attr->name);
                 }
+                // A link opened in a new tab can't reach back to this page
+                if ($tag === 'a' && strtolower($child->getAttribute('target')) === '_blank') $child->setAttribute('rel', 'noopener noreferrer');
                 $clean($child);
             } elseif ($child->nodeType === XML_COMMENT_NODE) {
                 $node->removeChild($child);
@@ -556,6 +770,93 @@ function cc_sanitize_html($html) {
     return $out;
 }
 
+
+// Rich-text fields of each block type (the same ones the compiler sanitizes). Cleaned when content is SAVED too,
+// not only when it is published: the editor shows saved content as HTML, so it must never hold active code.
+const CC_RICH_FIELDS = ['TEXT' => ['text'], 'HERO' => ['title', 'subtitle'], 'IMAGE_TEXT' => ['text'], 'FORM' => ['title'],
+    'CALLOUT' => ['text'], 'GRID' => ['items[]'], 'CARDS' => ['items[]'], 'ACCORDION' => ['items[].content'], 'TABS' => ['items[].content']];
+function cc_sanitize_blocks(&$blocks) {
+    if (!is_array($blocks)) return;
+    // a single block (masters, templates) or a list of blocks
+    if (isset($blocks['type']) && is_string($blocks['type'])) { $one = [&$blocks]; cc_sanitize_blocks($one); return; }
+    foreach ($blocks as &$b) {
+        if (!is_array($b)) continue;
+        $fields = CC_RICH_FIELDS[$b['type'] ?? ''] ?? [];
+        if ($fields && isset($b['content']) && is_array($b['content'])) {
+            // A rich-text value is text: anything else (an array, an object) is dropped, never stored unchecked
+            $rich = function ($v) { return is_string($v) ? cc_sanitize_html($v) : (is_int($v) || is_float($v) ? (string)$v : ''); };
+            foreach ($fields as $f) {
+                if (substr($f, -2) === '[]') {
+                    $k = substr($f, 0, -2);
+                    if (!array_key_exists($k, $b['content'])) continue;
+                    if (!is_array($b['content'][$k])) { $b['content'][$k] = []; continue; }
+                    foreach ($b['content'][$k] as &$it) $it = $rich($it);
+                    unset($it);
+                } elseif (strpos($f, '[].') !== false) {
+                    [$k, $sub] = explode('[].', $f, 2);
+                    if (!array_key_exists($k, $b['content'])) continue;
+                    if (!is_array($b['content'][$k])) { $b['content'][$k] = []; continue; }
+                    foreach ($b['content'][$k] as &$it) { if (!is_array($it)) { $it = []; continue; } if (array_key_exists($sub, $it)) $it[$sub] = $rich($it[$sub]); }
+                    unset($it);
+                } elseif (array_key_exists($f, $b['content'])) {
+                    $b['content'][$f] = $rich($b['content'][$f]);
+                }
+            }
+        }
+        // Any other value that is an active URL (javascript:, vbscript:, data:text…) is blanked: link and image fields
+        // are checked again when rendered, this keeps them out of storage too. Admin code fields are left alone.
+        if (isset($b['content']) && is_array($b['content'])) cc_scrub_urls($b['content']);
+        if (isset($b['children']) && is_array($b['children'])) cc_sanitize_blocks($b['children']);
+    }
+    unset($b);
+}
+function cc_scrub_urls(array &$node) {
+    foreach ($node as $k => &$v) {
+        if (in_array($k, ['code', 'customCss', 'customJs'], true)) continue;
+        if (is_array($v)) { cc_scrub_urls($v); continue; }
+        if (!is_string($v) || $v === '') continue;
+        $probe = strtolower(preg_replace('/[\x00-\x20\x7f]+/', '', html_entity_decode($v, ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+        if (preg_match('/^(javascript|vbscript|livescript|data:(text|application)|data:image\/svg)/', $probe)) $v = '';
+    }
+    unset($v);
+}
+// The same for a stored content_json (JSON text): returns the cleaned JSON, or the input when it isn't JSON
+function cc_sanitize_content_json($json) {
+    $data = json_decode((string)$json, true);
+    if (!is_array($data)) return $json;
+    cc_sanitize_blocks($data);
+    return json_encode($data);
+}
+// Every stored content (after a restore or an import, and once on update): pages, items, header/footer, masters,
+// templates and the version history.
+function cc_sanitize_all_content($pdo) {
+    foreach ([['pages', 'id'], ['collection_items', 'id'], ['site_parts', 'name'], ['master_components', 'id'], ['templates', 'id'], ['page_revisions', 'id']] as [$table, $key]) {
+        try { $rows = $pdo->query("SELECT $key AS k, content_json FROM $table")->fetchAll(PDO::FETCH_ASSOC); } catch (Exception $e) { continue; }
+        $up = $pdo->prepare("UPDATE $table SET content_json = ? WHERE $key = ?");
+        foreach ($rows as $r) {
+            $clean = cc_sanitize_content_json($r['content_json']);
+            if ($clean !== $r['content_json'] && json_decode((string)$clean, true) != json_decode((string)$r['content_json'], true)) $up->execute([$clean, $r['k']]);
+        }
+    }
+}
+// What an editor may read of stored content: a form's own receiving email is an admin setting (kept on save by
+// cc_keep_code_surfaces), so it is blanked in what editors receive.
+function cc_redact_blocks(&$blocks) {
+    if (!is_array($blocks)) return;
+    if (isset($blocks['type']) && is_string($blocks['type'])) { $one = [&$blocks]; cc_redact_blocks($one); return; }
+    foreach ($blocks as &$b) {
+        if (!is_array($b)) continue;
+        if (($b['type'] ?? '') === 'FORM' && isset($b['content']) && is_array($b['content']) && array_key_exists('email', $b['content'])) $b['content']['email'] = '';
+        if (isset($b['children']) && is_array($b['children'])) cc_redact_blocks($b['children']);
+    }
+    unset($b);
+}
+function cc_redact_content_json($json) {
+    $data = json_decode((string)$json, true);
+    if (!is_array($data)) return $json;
+    cc_redact_blocks($data);
+    return json_encode($data);
+}
 
 // ---------------------------------------------------------------------------
 // Session: deterministic INACTIVITY timeout (the server is the only authority)
@@ -607,10 +908,10 @@ function cc_unauthorized($message = 'Unauthorized.') {
     ]));
 }
 
-function cc_boot_session() {
-    if (session_status() === PHP_SESSION_ACTIVE) return;
+function cc_session_configure() {
+    static $done = false;
+    if ($done) return; $done = true;
     $limit = cc_session_limit();
-
     // Dedicated session folder (inside the data dir, protected): isolated from the server's other
     // applications, whose GC could otherwise delete our sessions too early.
     // If it is not writable, fall back to PHP's default path.
@@ -623,7 +924,8 @@ function cc_boot_session() {
     ini_set('session.gc_divisor', '50');
     ini_set('session.use_strict_mode', '1');                           // do not adopt unknown session IDs
     ini_set('session.use_only_cookies', '1');
-
+    ini_set('session.use_trans_sid', '0');
+    session_name('CCSESSID');
     session_set_cookie_params([
         'lifetime' => 0,
         'path' => '/',
@@ -631,6 +933,21 @@ function cc_boot_session() {
         'samesite' => 'Lax',
         'secure' => cc_is_https(),
     ]);
+}
+// Starts the session (sign-in, installer). Requests without a session cookie don't create one: a visitor, a form
+// on the site or the sign-in screen never leave a session file behind.
+function cc_session_start() {
+    if (session_status() === PHP_SESSION_ACTIVE) return;
+    cc_session_configure();
+    @session_start();
+}
+
+function cc_boot_session() {
+    if (session_status() === PHP_SESSION_ACTIVE) return;
+    if (PHP_SAPI === 'cli') return;
+    cc_session_configure();
+    if (empty($_COOKIE[session_name()])) return;   // no session yet: nothing to resume
+    $limit = cc_session_limit();
     @session_start();
 
     $GLOBALS['CC_SESSION_EXPIRED'] = false;
@@ -641,8 +958,60 @@ function cc_boot_session() {
             $_SESSION = [];                              // expired due to inactivity
             @session_regenerate_id(true);
             $GLOBALS['CC_SESSION_EXPIRED'] = true;
+        } elseif (time() - (int)($_SESSION['started'] ?? time()) > 7 * 86400) {
+            $_SESSION = [];                              // absolute limit: a week after signing in
+            @session_regenerate_id(true);
+            $GLOBALS['CC_SESSION_EXPIRED'] = true;
         }
     }
+}
+
+// Signs the user in on this session (api.php login, installer)
+function cc_session_login(array $user) {
+    cc_session_start();
+    session_regenerate_id(true);                         // session fixation mitigation
+    $_SESSION = [];
+    $_SESSION['logged_in'] = true;
+    $_SESSION['user_id'] = (int)$user['id'];
+    $_SESSION['username'] = (string)$user['username'];
+    $_SESSION['role'] = $user['role'] === 'admin' ? 'admin' : 'editor';
+    $_SESSION['gen'] = (int)($user['session_gen'] ?? 0);
+    $_SESSION['started'] = time();
+    $_SESSION['last_seen'] = time();
+    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+}
+function cc_session_logout() {
+    if (session_status() !== PHP_SESSION_ACTIVE) return;
+    $_SESSION = [];
+    if (!headers_sent()) {
+        $p = session_get_cookie_params();
+        @setcookie(session_name(), '', ['expires' => time() - 3600, 'path' => $p['path'], 'samesite' => 'Lax', 'secure' => $p['secure'], 'httponly' => true]);
+    }
+    @session_destroy();
+}
+// The signed-in account must still exist, unchanged: a deleted account, a password reset or a password change
+// elsewhere ends its other sessions at once. The role always comes from the database. Returns the account row
+// (id, username, role, must_change_pw), or null after logging the session out.
+function cc_session_account($pdo) {
+    if (!cc_session_is_logged_in()) return null;
+    try {
+        if (!empty($_SESSION['user_id'])) {
+            $st = $pdo->prepare("SELECT id, username, role, must_change_pw, session_gen FROM admin WHERE id = ?");
+            $st->execute([(int)$_SESSION['user_id']]);
+        } else {   // a session from before this update: matched by name once
+            $st = $pdo->prepare("SELECT id, username, role, must_change_pw, session_gen FROM admin WHERE username = ?");
+            $st->execute([(string)($_SESSION['username'] ?? '')]);
+        }
+        $u = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (Exception $e) { $u = false; }
+    if (!$u || $u['username'] !== ($_SESSION['username'] ?? null) || (!empty($_SESSION['user_id']) && (int)$u['session_gen'] !== (int)($_SESSION['gen'] ?? -1))) {
+        cc_session_logout();
+        return null;
+    }
+    $_SESSION['user_id'] = (int)$u['id'];
+    $_SESSION['gen'] = (int)$u['session_gen'];
+    $_SESSION['role'] = $u['role'] === 'admin' ? 'admin' : 'editor';
+    return $u;
 }
 
 cc_boot_session();

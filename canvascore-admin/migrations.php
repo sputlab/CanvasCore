@@ -8,6 +8,8 @@
 //   3. note the change in the CHANGELOG.
 // The runner applies, in order, every migration numbered higher than the one already applied,
 // recorded in the cc_meta table. Works for both new and existing installations.
+// Library file: included by the endpoints, never opened directly
+if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
 
 require_once __DIR__ . '/config.php';
 
@@ -95,15 +97,8 @@ function cc_db_migrations() {
             $pdo->exec("UPDATE pages SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
             $pdo->exec("UPDATE pages SET content_schema = 1 WHERE content_schema IS NULL");
 
-            // Default admin (admin/admin) on first start + force password change
-            if ((int)$pdo->query("SELECT COUNT(*) FROM admin")->fetchColumn() === 0) {
-                $pdo->prepare("INSERT INTO admin (username, password_hash, role, must_change_pw) VALUES (?, ?, ?, 1)")
-                    ->execute(['admin', password_hash('admin', PASSWORD_DEFAULT), 'admin']);
-            }
-            $def = $pdo->query("SELECT id, password_hash FROM admin WHERE username = 'admin'")->fetch(PDO::FETCH_ASSOC);
-            if ($def && password_verify('admin', $def['password_hash'])) {
-                $pdo->prepare("UPDATE admin SET must_change_pw = 1 WHERE id = ?")->execute([$def['id']]);
-            }
+            // No account is created here: the first administrator is created by install.php (there is no default
+            // admin/admin account any more, see migration 8).
         },
 
         // v2 — SEO (social image per page) + form submission archive
@@ -174,7 +169,35 @@ function cc_db_migrations() {
             )");
             cc_add_col($pdo, 'pages', 'noindex', "INTEGER DEFAULT 0");
         },
+
+        // v8 — security: sessions end when an account is deleted or its password changes (session_gen), unique
+        // user names, no default admin/admin account, rich text already stored is cleaned like new saves.
+        8 => function ($pdo) {
+            cc_add_col($pdo, 'admin', 'session_gen', "INTEGER DEFAULT 0");
+            $pdo->exec("UPDATE admin SET session_gen = 0 WHERE session_gen IS NULL");
+            $dup = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT lower(username) FROM admin GROUP BY lower(username) HAVING COUNT(*) > 1)")->fetchColumn();
+            if ($dup === 0) $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_username ON admin(username COLLATE NOCASE)");
+            // The old default account (admin/admin) can't be used any more; once a real account exists it goes.
+            $rows = $pdo->query("SELECT id, username, password_hash FROM admin")->fetchAll(PDO::FETCH_ASSOC);
+            $default = []; $real = 0;
+            foreach ($rows as $r) { if (cc_is_default_admin($r)) $default[] = (int)$r['id']; else $real++; }
+            if ($real > 0) {
+                foreach ($default as $id) $pdo->prepare("DELETE FROM admin WHERE id = ?")->execute([$id]);
+                // An installation made before the setup wizard existed counts as installed
+                if (!cc_meta_get($pdo, 'installed_at')) cc_meta_set($pdo, 'installed_at', gmdate('c'));
+            }
+            cc_sanitize_all_content($pdo);
+        },
     ];
+}
+
+// The account created on first start by versions before 0.14.1 (user admin, password admin)
+function cc_is_default_admin($row) {
+    return strtolower((string)($row['username'] ?? '')) === 'admin' && password_verify('admin', (string)($row['password_hash'] ?? ''));
+}
+// The setup wizard has run (or the site was set up before the wizard existed)
+function cc_is_installed($pdo) {
+    return (bool) cc_meta_get($pdo, 'installed_at');
 }
 
 // Apply all missing DB migrations. Returns the current schema version.

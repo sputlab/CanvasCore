@@ -36,8 +36,11 @@
 # "Legacy" data dir inside the web root (SQLite DB, settings.json, menu.json,
 # forms.json, sessions/). The recommended one is ../../canvascore-data, already outside the repo.
 /canvascore-admin/data/
+# Written automatically by api.php / install.php (security headers and access rules)
+/canvascore-admin/.htaccess
 # Frontend build copied into canvascore-admin/ for deployment
 /canvascore-admin/index.html
+/canvascore-admin/menu-preview.html
 /canvascore-admin/assets/
 /canvascore-admin/favicon.svg
 /canvascore-admin/icons.svg
