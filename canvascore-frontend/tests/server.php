@@ -237,5 +237,28 @@ check('the list shows what each saved backup contains', ($l = cc_backup_list()) 
 cc_backup_rrmdir($bk);
 unset($GLOBALS['CC_BACKUP_DATA_DIR'], $GLOBALS['CC_UPLOADS_DIR'], $GLOBALS['CC_MEDIA_META_FILE'], $GLOBALS['CC_MEDIA_FOLDERS_FILE']);
 
+echo "\nDELETED COLLECTIONS AND ITEMS GO OFFLINE\n";
+$sr = sys_get_temp_dir() . '/cc_site_' . getmypid();
+$GLOBALS['CC_SITE_ROOT'] = $sr;
+$put = function ($rel, $txt = 'x') use ($sr) { @mkdir(dirname($sr . '/' . $rel), 0755, true); file_put_contents($sr . '/' . $rel, $txt); };
+foreach (['blog/a/index.html', 'blog/b/index.html', 'blog/feed.xml', 'blog/notes.txt', 'news/a/index.html', 'about/index.html', 'index.html'] as $f) $put($f);
+file_put_contents($sr . '/published_files.json', json_encode(['blog/a/index.html', 'blog/b/index.html', 'blog/feed.xml', 'news/a/index.html', 'about/index.html', 'index.html']));
+$udb2 = new PDO('sqlite::memory:');
+$udb2->exec("CREATE TABLE collections (id TEXT, name TEXT, slug TEXT)");
+$udb2->exec("CREATE TABLE collection_items (id TEXT, collection_id TEXT, title TEXT, slug TEXT, status TEXT)");
+$udb2->exec("INSERT INTO collections VALUES ('c1', 'Blog', 'blog'), ('c2', 'News', 'news')");
+$udb2->exec("INSERT INTO collection_items VALUES ('d1', 'c1', 'Draft A', 'a', 'draft'), ('p1', 'c1', 'Live A', 'a', 'published')");
+check('a deleted draft never takes down the live page that shares its address', cc_unpublish_item($udb2, $sr, ['id' => 'd1', 'collection_id' => 'c1', 'slug' => 'a', 'status' => 'draft']) === 0 && is_file($sr . '/blog/a/index.html'));
+$udb2->exec("DELETE FROM collection_items WHERE id = 'p1'");
+$n = cc_unpublish_item($udb2, $sr, ['id' => 'p1', 'collection_id' => 'c1', 'slug' => 'a', 'status' => 'published']);
+check('a deleted published item: its page and folder are removed at once', $n === 1 && !is_dir($sr . '/blog/a') && is_file($sr . '/blog/b/index.html') && is_file($sr . '/news/a/index.html'));
+check('…and the publish manifest forgets it', !in_array('blog/a/index.html', json_decode(file_get_contents($sr . '/published_files.json'), true), true));
+$n = cc_unpublish_files($sr, 'blog/', ['blog/feed.xml']);
+check('a deleted collection: its pages and feed are removed, files it did not publish are kept', $n === 2 && !is_file($sr . '/blog/feed.xml') && !is_dir($sr . '/blog/b') && is_file($sr . '/blog/notes.txt'));
+check('other collections, pages and the home page are untouched', is_file($sr . '/news/a/index.html') && is_file($sr . '/about/index.html') && is_file($sr . '/index.html'));
+check('unsafe prefixes and paths are refused', cc_unpublish_files($sr, '../', []) === 0 && cc_unpublish_files($sr, '', ['index.html']) === 0 && cc_unpublish_files($sr, 'gone/', ['gone/../index.html']) === 0 && is_file($sr . '/index.html') && is_file($sr . '/news/a/index.html'));
+unset($GLOBALS['CC_SITE_ROOT']);
+cc_backup_rrmdir($sr);
+
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);

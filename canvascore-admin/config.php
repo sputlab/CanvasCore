@@ -298,6 +298,50 @@ function cc_drop_redirect_from($pdo, $path) {
     $path = cc_redirect_path($path);
     if ($path) $pdo->prepare("DELETE FROM redirects WHERE from_path = ?")->execute([$path]);
 }
+// Take generated files offline at once (a deleted collection or item): the HTML a previous build wrote
+// under $prefix ("blog/" or "blog/post/") is removed, plus the emptied folders. Only files listed in the
+// publish manifest (or the item's own index.html / the collection's feed.xml) are touched, nothing else.
+function cc_unpublish_files($data_dir, $prefix, $extra = []) {
+    if (!preg_match('#^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/$#', $prefix) || strpos($prefix, '..') !== false) return 0;
+    $root = realpath($GLOBALS['CC_SITE_ROOT'] ?? (__DIR__ . '/..'));   // overridable for tests
+    if (!$root) return 0;
+    $mfile = $data_dir . '/published_files.json';
+    $manifest = file_exists($mfile) ? json_decode((string)@file_get_contents($mfile), true) : null;
+    $list = is_array($manifest) ? $manifest : [];
+    $targets = [];
+    foreach (array_merge($list, $extra) as $rel) {
+        if (!is_string($rel) || strpos($rel, $prefix) !== 0 || strpos($rel, '..') !== false) continue;
+        if (!preg_match('#^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/(index\.html|feed\.xml)$#', $rel)) continue;
+        $targets[$rel] = true;
+    }
+    $removed = 0;
+    foreach (array_keys($targets) as $rel) {
+        $fp = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel);
+        if (is_file($fp) && @unlink($fp)) {
+            $removed++;
+            $d = dirname($fp);   // the emptied folders: item folder, then collection folder
+            for ($i = 0; $i < 2 && $d !== $root && @rmdir($d); $i++) $d = dirname($d);
+        }
+    }
+    if (is_array($manifest) && $targets) {
+        $left = array_values(array_filter($manifest, function ($rel) use ($targets) { return !isset($targets[$rel]); }));
+        @file_put_contents($mfile, json_encode($left));
+    }
+    return $removed;
+}
+// A deleted item: its page goes offline, unless another published item of the collection owns the same address
+function cc_unpublish_item($pdo, $data_dir, $item) {
+    if (!$item || ($item['status'] ?? '') !== 'published') return 0;
+    $cs = $pdo->prepare("SELECT slug FROM collections WHERE id = ?"); $cs->execute([$item['collection_id']]);
+    $col_slug = cc_safe_slug((string)$cs->fetchColumn());
+    $it_slug = cc_safe_slug((string)$item['slug']);
+    if ($col_slug === '' || $it_slug === '') return 0;
+    $other = $pdo->prepare("SELECT 1 FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id <> ?");
+    $other->execute([$item['collection_id'], $item['slug'], $item['id']]);
+    if ($other->fetchColumn()) return 0;
+    return cc_unpublish_files($data_dir, $col_slug . '/' . $it_slug . '/', [$col_slug . '/' . $it_slug . '/index.html']);
+}
+
 // Static redirect page written at the old address (works on any host); $href = where to go
 function cc_redirect_page_html($href) {
     $h = htmlspecialchars($href, ENT_QUOTES);

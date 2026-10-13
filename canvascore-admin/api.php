@@ -681,22 +681,54 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$is_admin) { echo json_encode(['success' => false, 'message' => 'Only admins can manage collections.']); exit; }
     $d = json_decode(file_get_contents('php://input'), true);
     $id = $d['id'] ?? ('col_' . uniqid());
-    $name = trim($d['name'] ?? 'Collection');
-    $slug = cc_safe_slug($d['slug'] ?? $name);
+    $name = trim((string)($d['name'] ?? ''));
+    if ($name === '') { echo json_encode(['success' => false, 'message' => 'The collection needs a name.']); exit; }
+    $name = mb_substr($name, 0, 120);
+    $chk = $pdo->prepare("SELECT id, slug FROM collections WHERE id = ?"); $chk->execute([$id]);
+    $existing = $chk->fetch(PDO::FETCH_ASSOC);
+    // Renaming keeps the address unless a new slug is sent explicitly
+    $slug = cc_safe_slug(isset($d['slug']) && trim((string)$d['slug']) !== '' ? $d['slug'] : ($existing ? $existing['slug'] : $name));
     if ($owner = cc_slug_owner($pdo, $slug, null, $id)) {
         echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL /$slug/ is already used by $owner. Choose a different slug."]); exit;
     }
-    $chk = $pdo->prepare("SELECT id FROM collections WHERE id = ?"); $chk->execute([$id]);
-    if ($chk->fetch()) $pdo->prepare("UPDATE collections SET name=?, slug=? WHERE id=?")->execute([$name, $slug, $id]);
-    else $pdo->prepare("INSERT INTO collections (id, name, slug) VALUES (?,?,?)")->execute([$id, $name, $slug]);
-    echo json_encode(['success' => true, 'id' => $id, 'slug' => $slug]); exit;
+    if ($existing) {
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare("UPDATE collections SET name=?, slug=? WHERE id=?")->execute([$name, $slug, $id]);
+            // New address: every published item forwards from its old URL (the files move at the next publish)
+            if ($existing['slug'] !== $slug) {
+                $its = $pdo->prepare("SELECT slug FROM collection_items WHERE collection_id = ? AND status = 'published'"); $its->execute([$id]);
+                foreach ($its->fetchAll(PDO::FETCH_COLUMN) as $is) {
+                    $is = cc_safe_slug($is);
+                    cc_add_redirect($pdo, '/' . $existing['slug'] . '/' . $is . '/', '/' . $slug . '/' . $is . '/');
+                }
+            }
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            echo json_encode(['success' => false, 'message' => 'Could not rename the collection: ' . $e->getMessage()]); exit;
+        }
+    } else {
+        $pdo->prepare("INSERT INTO collections (id, name, slug) VALUES (?,?,?)")->execute([$id, $name, $slug]);
+    }
+    echo json_encode(['success' => true, 'id' => $id, 'name' => $name, 'slug' => $slug, 'moved' => $existing && $existing['slug'] !== $slug]); exit;
 }
 if ($action === 'delete_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$is_admin) { echo json_encode(['success' => false, 'message' => 'Only admins can manage collections.']); exit; }
     $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';
+    $chk = $pdo->prepare("SELECT slug FROM collections WHERE id = ?"); $chk->execute([$id]);
+    $col_slug = $chk->fetchColumn();
+    $ids = $pdo->prepare("SELECT id FROM collection_items WHERE collection_id = ?"); $ids->execute([$id]);
+    $item_ids = $ids->fetchAll(PDO::FETCH_COLUMN);
     $pdo->prepare("DELETE FROM collection_items WHERE collection_id = ?")->execute([$id]);
     $pdo->prepare("DELETE FROM collections WHERE id = ?")->execute([$id]);
-    echo json_encode(['success' => true]); exit;
+    try { $rv = $pdo->prepare("DELETE FROM page_revisions WHERE owner = ?"); foreach ($item_ids as $iid) $rv->execute(['item:' . $iid]); } catch (Exception $e) {}
+    // Its pages and feed go offline now (the folder is the collection's own: slugs are unique site-wide)
+    $removed = 0;
+    if ($col_slug !== false && ($cs = cc_safe_slug($col_slug)) !== '' && !cc_slug_owner($pdo, $cs)) {
+        $removed = cc_unpublish_files($data_dir, $cs . '/', [$cs . '/feed.xml']);
+    }
+    echo json_encode(['success' => true, 'removed_files' => $removed]); exit;
 }
 
 // ---- Collection items (content: any logged-in user) ----
@@ -781,9 +813,60 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 if ($action === 'delete_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';
+    $st = $pdo->prepare("SELECT id, collection_id, slug, status FROM collection_items WHERE id = ?"); $st->execute([$id]);
+    $item = $st->fetch(PDO::FETCH_ASSOC);
     $pdo->prepare("DELETE FROM collection_items WHERE id = ?")->execute([$id]);
     try { $pdo->prepare("DELETE FROM page_revisions WHERE owner = ?")->execute(['item:' . $id]); } catch (Exception $e) {}
-    echo json_encode(['success' => true]); exit;
+    $removed = cc_unpublish_item($pdo, $data_dir, $item);
+    echo json_encode(['success' => true, 'removed_files' => $removed]); exit;
+}
+// Several items at once: move to another collection, archive, unarchive or delete.
+// Answers what was done and, item by item, what was skipped and why.
+if ($action === 'bulk_items' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true);
+    $op = $d['op'] ?? '';
+    $ids = array_values(array_unique(array_filter(is_array($d['ids'] ?? null) ? $d['ids'] : [], 'is_string')));
+    if (!in_array($op, ['move', 'archive', 'unarchive', 'delete'], true) || !$ids) { echo json_encode(['success' => false, 'message' => 'Nothing to do.']); exit; }
+    if (count($ids) > 1000) { echo json_encode(['success' => false, 'message' => 'Too many items at once (max 1000).']); exit; }
+    $target = null;
+    if ($op === 'move') {
+        $tc = $pdo->prepare("SELECT id, name, slug FROM collections WHERE id = ?"); $tc->execute([(string)($d['collection_id'] ?? '')]);
+        $target = $tc->fetch(PDO::FETCH_ASSOC);
+        if (!$target) { echo json_encode(['success' => false, 'message' => 'The destination collection no longer exists.']); exit; }
+    }
+    $get = $pdo->prepare("SELECT i.id, i.collection_id, i.title, i.slug, i.status, c.slug AS col_slug FROM collection_items i LEFT JOIN collections c ON c.id = i.collection_id WHERE i.id = ?");
+    $now = date('Y-m-d H:i:s');
+    $done = 0; $skipped = []; $removed = 0;
+    foreach ($ids as $iid) {
+        $get->execute([$iid]);
+        $it = $get->fetch(PDO::FETCH_ASSOC);
+        if (!$it) { $skipped[] = ['id' => $iid, 'title' => '', 'reason' => 'it no longer exists']; continue; }
+        if ($op === 'archive' || $op === 'unarchive') {
+            $pdo->prepare("UPDATE collection_items SET archived = ?, updated_at = ? WHERE id = ?")->execute([$op === 'archive' ? 1 : 0, $now, $iid]);
+        } elseif ($op === 'delete') {
+            $pdo->prepare("DELETE FROM collection_items WHERE id = ?")->execute([$iid]);
+            try { $pdo->prepare("DELETE FROM page_revisions WHERE owner = ?")->execute(['item:' . $iid]); } catch (Exception $e) {}
+            $removed += cc_unpublish_item($pdo, $data_dir, $it);
+        } else { // move
+            if ($it['collection_id'] === $target['id']) { $skipped[] = ['id' => $iid, 'title' => $it['title'], 'reason' => 'it is already there']; continue; }
+            if ($it['status'] === 'published') {
+                $dup = $pdo->prepare("SELECT title FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id <> ?");
+                $dup->execute([$target['id'], $it['slug'], $iid]);
+                if (($t = $dup->fetchColumn()) !== false) { $skipped[] = ['id' => $iid, 'title' => $it['title'], 'reason' => 'the URL slug "' . $it['slug'] . '" is already used there by "' . $t . '"']; continue; }
+            }
+            $pdo->prepare("UPDATE collection_items SET collection_id = ?, updated_at = ? WHERE id = ?")->execute([$target['id'], $now, $iid]);
+            // A published item forwards from its old address (the page moves at the next publish)
+            if ($it['status'] === 'published' && (string)$it['col_slug'] !== '') {
+                $is = cc_safe_slug($it['slug']);
+                try {
+                    cc_drop_redirect_from($pdo, '/' . $target['slug'] . '/' . $is . '/');
+                    cc_add_redirect($pdo, '/' . cc_safe_slug($it['col_slug']) . '/' . $is . '/', '/' . $target['slug'] . '/' . $is . '/');
+                } catch (Exception $e) {}
+            }
+        }
+        $done++;
+    }
+    echo json_encode(['success' => true, 'done' => $done, 'skipped' => $skipped, 'removed_files' => $removed]); exit;
 }
 
 if ($action === 'get_parts') {
