@@ -10,7 +10,15 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-13 — First public release
+
+CanvasCore is now free software, released under the GNU Affero General Public License v3.0 or later.
+
 ### Added
+- **License**: `LICENSE` (GNU AGPL v3), with an additional permission (section 7) so the HTML, CSS and JavaScript
+  written into published sites can be used under any terms; see the README. The About dialog shows the license.
+- `SECURITY.md` (how to report vulnerabilities privately, supported versions) and `CONTRIBUTING.md` (bug reports,
+  development setup, pull requests, DCO sign-off). The README states the project status (public preview).
 - **Rename a collection**: a ✎ next to each collection (and "Rename" above its items) changes its name; the address
   (`/blog/`) stays unless you change it too. A new address asks first, and every published item forwards from its
   old URL to the new one after the next publish.
@@ -189,6 +197,12 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   still be saved. Page Info warns as you type, and new pages (blank or from a template) get a free
   slug automatically (`new-page`, `new-page-2`…).
 
+### Changed
+- Manuals updated for this release (media folders, backups and restore, site branding, collection rename and bulk
+  actions, license).
+- Internal development notes (phase notes, per-version release notes, the old versioning note) are no longer part
+  of the repository; release notes are now published as GitHub releases, drafted from this changelog.
+
 ### Fixed
 - Deleting a collection item (or a whole collection) now takes its published page offline at once, like deleting a
   page; before, the HTML stayed online until the next publish. Only files a build wrote are removed, and a deleted
@@ -248,18 +262,6 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 - **Deleting a draft could delete a live page's file** with the same address; deleting the home page left it online.
 - **Publishing** now removes pages that are no longer published (deleted, unpublished, renamed, deleted items),
   reports files it couldn't write instead of "Build successful", and requires a POST with the security token.
-
-### Security
-- SVG uploads with scripts or event handlers are refused, and SVGs in uploads/ can't run scripts when opened.
-- Values that reach published pages are validated or escaped: brand color, font, site suffix, menu settings,
-  form field types, grid columns, style property names, Hero sizes; `javascript:` links hidden behind control
-  characters are removed by the sanitizer.
-- Editors can no longer change the form email recipients or the session timeout (admin settings).
-- Login: 5 wrong passwords in 15 minutes for an account from one address → 15 minutes wait.
-- Public forms: unknown forms refused, at most 8 submissions per 10 minutes per address, no crash on crafted fields;
-  CSV export protects against spreadsheet formulas.
-- API answers never contain PHP warnings; the uploads `.htaccess` no longer breaks images on mod_php hosts;
-  password resets require 8+ characters (inline form instead of a browser prompt).
 - **Editor text was pale**: the canvas inherited the dark editor's light text color; it now starts from the
   same base as the published page (dark text, the site font and brand color from Global Options).
 - **Layers drag & drop**: rows no longer stretch or shrink while dragging; a line shows where the block will
@@ -291,6 +293,18 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   "inherit the theme" option (hover color = brand color) was ignored on the published site even though it
   worked in the preview, and the same applied to disabling the global header/footer
   (`headerEnabled` / `footerEnabled`).
+
+### Security
+- SVG uploads with scripts or event handlers are refused, and SVGs in uploads/ can't run scripts when opened.
+- Values that reach published pages are validated or escaped: brand color, font, site suffix, menu settings,
+  form field types, grid columns, style property names, Hero sizes; `javascript:` links hidden behind control
+  characters are removed by the sanitizer.
+- Editors can no longer change the form email recipients or the session timeout (admin settings).
+- Login: 5 wrong passwords in 15 minutes for an account from one address → 15 minutes wait.
+- Public forms: unknown forms refused, at most 8 submissions per 10 minutes per address, no crash on crafted fields;
+  CSV export protects against spreadsheet formulas.
+- API answers never contain PHP warnings; the uploads `.htaccess` no longer breaks images on mod_php hosts;
+  password resets require 8+ characters (inline form instead of a browser prompt).
 
 ### Removed
 - `jodit-react` and the unused `react-simple-wysiwyg` dependencies.
@@ -839,5 +853,5 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://example.com/canvascore/compare/v0.1.0...HEAD
-[0.1.0]: https://example.com/canvascore/releases/tag/v0.1.0
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/sputlab/CanvasCore/releases/tag/v0.14.0
