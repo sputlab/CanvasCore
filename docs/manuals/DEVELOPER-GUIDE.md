@@ -44,10 +44,10 @@ CanvasCore is a block-based CMS that **publishes static HTML**. It has two halve
   │   renderBlock.mjs  (canvas = site HTML)      │
   │        │  fetch() wrapped by fetchGuard.js    │
   └────────┼─────────────────────────────────────┘
-           │ JSON  (X-CSRF-Token, session cookie)
+           │ JSON  (X-CSRF-Token, CCSESSID session cookie)
            ▼
   canvascore-admin/api.php ──► SQLite (canvascore.sqlite) + settings.json / menu.json
-           │                    in the data dir (../../canvascore-data or canvascore-admin/data)
+           │                    in the data dir (canvascore-data outside the web root, or canvascore-admin/data)
            │
   "Publish" (POST)
            ▼
@@ -91,12 +91,12 @@ canvascore-frontend/         React editor
 | `api.php` | The editor's JSON API: auth, branding, pages, collections and items (incl. bulk actions), parts, masters, templates, media and media folders, menu, settings, users, backup, revisions, redirects |
 | `compiler.php` | `render_block()` (block → HTML), `render_menu_html()`, `cc_cookie_banner_html()`, shared helpers (`cc_int`, `build_inline_style`, `cc_effect_classes`…) |
 | `rebuild_all.php` | Publishes the whole site (pages, collection items, feeds, search index, redirects, sitemap, robots, 404, `.htaccess`), removes stale files |
-| `config.php` | Data dir, session boot, CSRF, client IP, login throttling, rate limits, code surfaces, re-linking, revisions, redirects, unpublishing deleted items/collections, public branding, SVG check, `cc_sanitize_html`, `cc_version`, slugs |
+| `config.php` | Data dir, security headers and the admin `.htaccess`, session boot and account check, CSRF and same-origin check, client IP and trusted proxies, login throttling, rate limits, code surfaces, content sanitizing on save (`cc_sanitize_blocks`), editor redaction, re-linking, revisions, redirects, reserved slugs, unpublishing deleted items/collections, public branding, SVG check, `cc_sanitize_html`, `cc_version`, slugs |
 | `media.php` | Image optimization (WebP copies in `uploads/_cc/`, `srcset` on publish), the media metadata (`media.json`), media library folders (`media-folders.json`) and where images are used |
 | `backup.php` | Whole-site backup as a ZIP, its checks and restore, saved copies and safety copies in `backups/` |
 | `migrations.php` | Versioned DB migrations and content migrations |
-| `submit_form.php` | Public endpoint for form submissions (rate-limited, recipients from `forms.json`) |
-| `install.php` | Setup wizard (locks itself once installed) |
+| `submit_form.php` | Public endpoint for form submissions (rate-limited; recipient, fields and success message from `forms.json`) |
+| `install.php` | Setup wizard: setup key, requirements (including the HTTP check of the data folder), first account; locks itself once installed |
 | `blocks.json` | Block defaults (`_baseStyles` + `types`), shared with the editor |
 | `starters.json` | Starter page templates |
 | `master.html` | HTML shell of every published page (`{{PAGE_CONTENT}}`, `{{MAIN_MENU}}`, `{{EFFECTS_CSS}}`…) |
@@ -107,16 +107,18 @@ canvascore-frontend/         React editor
 
 | Path | Purpose |
 | --- | --- |
-| `vite.config.js` | Injects `__APP_VERSION__`, `__APP_BUILD__`, `__BLOCK_DEFS__`, `__EFFECTS_CSS__` from `../canvascore-admin/` |
+| `vite.config.js` | Injects `__APP_VERSION__`, `__APP_BUILD__`, `__BLOCK_DEFS__`, `__EFFECTS_CSS__` from `../canvascore-admin/`; the `canvascore-editor-csp` plugin adds the editor's Content Security Policy (`script-src 'self'`) and `referrer` / `robots` metas to the **built** `index.html` (not in the dev server, which needs inline scripts) |
+| `public/menu-preview.html` | Menu Builder live preview: a page of its own, loaded in a sandboxed iframe (`allow-scripts`, no same origin) and fed the menu HTML by `postMessage`, so the menu's scripts run there and not under the editor's CSP |
 | `scripts/bump.mjs` | `prebuild` hook: increments `build` in `version.json`, syncs `package.json` version |
 | `.oxlintrc.json` | Lint config (react + oxc plugins) |
-| `src/main.jsx` | Entry: imports `apiClient.js` first (installs the fetch guard), then the CSS and `<App />` |
+| `src/main.jsx` | Entry: imports `apiClient.js` first (installs the fetch guard), then the CSS and `<App />`; refuses to render inside a frame (`window.top !== window.self`) |
 | `src/App.jsx` | Auth gate, view switch (`currentView`), overlays (session, drafts, toasts, dialogs) |
 | `src/store/useStore.js` | The Zustand store: auth, pages, block tree, history, masters, templates |
 | `src/render/renderBlock.mjs` | Canonical JS renderer (`renderBlock`, `blockRoot`, `buildInlineStyle`, `ccInt`, `escapeHtml`) |
 | `src/render/effects.mjs` | Effect catalogs and `effectClasses()` / `buttonHover()` |
 | `src/editor/blockCatalog.js` | Block names, icons, categories, keywords; `CONTAINER_TYPES` |
 | `src/editor/RichText.jsx`, `commands.js`, `cleanHtml.js` | Rich text editor (in-place regions, toolbar, paste cleanup) |
+| `src/utils/safeHtml.js` | `safeHtml(html)`: DOMPurify (`dompurify`, pinned to an exact version) with CanvasCore's config. **Every** HTML string the editor puts into its own DOM (canvas, version history preview, rich text fields, `insertHtml`, Edit HTML) goes through it; returns `''` when there is no DOM |
 | `src/editor/layerDrop.js`, `previewEffects.js` | Layers drop positions; "Preview animation" on the canvas |
 | `src/editor/placeholder.js` | `placeholderImage(w, h)`: built-in placeholder image as a `data:` SVG (no outside service) |
 | `src/editor/mediaInfo.js` | Media library / picker helpers (`formatBytes`) |
@@ -138,13 +140,13 @@ canvascore-frontend/         React editor
 | `src/session/` | Session manager, fetch guard, local draft backups and trackers |
 | `src/ui/` | UI kit (`kit.jsx`, `kit.css`), `global.css`, `notify.js` + `toast.jsx`, `dialog.js` + `dialogHost.jsx`, `branding.js` (`useBrandingHead()`, `brandIconUrl()`) + `BrandLogo.jsx` (site favicon as the admin logo) |
 | `src/menu/menuThemes.js` | Menu defaults, themes, effect groups (mirrored in `compiler.php`) |
-| `tests/` | The 11 test suites (10 Node, plus `server.php` in PHP) and the `render_php.php` / `render_menu.php` CLI helpers |
+| `tests/` | The 12 test suites (10 Node, plus `server.php` and `security.php` in PHP) and the `render_php.php` / `render_menu.php` CLI helpers |
 
 ## 3. Local development
 
-Requirements: Node.js ≥ 20 (developed with 24), npm, PHP ≥ 8 with `pdo_sqlite` (`dom` recommended,
-the sanitizer falls back to regexes without it; `gd` with WebP support for the optimized image copies, skipped
-without it). The PHP CLI must be on `PATH` for the tests.
+Requirements: Node.js ≥ 20 (developed with 24), npm, PHP ≥ 8 with `pdo_sqlite` and `dom` (`zip` for backups,
+`curl` for `test:security`; `gd` with WebP support for the optimized image copies, skipped without it). The PHP
+CLI must be on `PATH` for the tests.
 
 ```bash
 cd canvascore-frontend
@@ -171,10 +173,21 @@ npx vite build --watch --outDir ../canvascore-admin
 
 `npx vite build` does **not** run the `prebuild` hook, so the build number is not bumped. Vite won't empty
 an `outDir` outside the project root, so the PHP files stay untouched; the emitted `index.html`, `assets/`,
-`favicon.svg` and `icons.svg` are git-ignored in `canvascore-admin/`. Open
-`http://127.0.0.1:8000/canvascore-admin/install.php` once, then `http://127.0.0.1:8000/canvascore-admin/`.
-Data goes to `../canvascore-data` next to the repository (outside it) when writable. Note that `php -S`
-ignores `.htaccess`.
+`favicon.svg` and `icons.svg` are git-ignored in `canvascore-admin/` (the build also emits `menu-preview.html`). Data goes to
+`../canvascore-data` next to the repository (outside it) when writable. Note that `php -S` ignores `.htaccess`
+(the `canvascore-admin/.htaccess` that `api.php` writes is git-ignored too).
+
+**First account.** There is no `admin`/`admin` any more: until an account exists, `api.php` answers 503
+`not_installed`. Open `http://127.0.0.1:8000/canvascore-admin/install.php` once, paste the setup key from
+`../canvascore-data/install-key.txt`, then use `http://127.0.0.1:8000/canvascore-admin/`. Without the wizard,
+create an account in an existing database by hand and mark the site installed:
+
+```bash
+cd ../canvascore-data
+HASH=$(php -r 'echo password_hash("dev-password-1", PASSWORD_DEFAULT);')
+sqlite3 canvascore.sqlite "INSERT INTO admin (username, password_hash, role, must_change_pw, session_gen) VALUES ('dev', '$HASH', 'admin', 0, 0);
+  INSERT OR REPLACE INTO cc_meta (key, value) VALUES ('installed_at', datetime('now'));"
+```
 
 **B. Vite dev server with HMR + a local proxy.** Run `PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8000` at the repo root as above and
 add a proxy to your local `vite.config.js` (**don't commit it**):
@@ -186,7 +199,10 @@ server: { proxy: {
 } },
 ```
 
-Session and CSRF cookies use path `/`, so they work through the proxy. Publishing writes the site one
+The session cookie (`CCSESSID`) uses path `/`, so it works through the proxy (the CSRF token lives in memory,
+not in a cookie). Sign-in and every POST must look same-origin (`Origin` / `Sec-Fetch-Site`): keep the proxy's
+default of passing the browser's `Host` through (no `changeOrigin`). The dev server doesn't add the editor's CSP,
+so check CSP-sensitive changes in a build. Publishing writes the site one
 level above `canvascore-admin/`, i.e. the repo root.
 
 ### Lint
@@ -197,7 +213,7 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 
 ### Tests
 
-`npm test` runs the 11 suites in sequence (each exits non-zero on failure):
+`npm test` runs the 12 suites in sequence (each exits non-zero on failure):
 
 | Script | File | Covers |
 | --- | --- | --- |
@@ -211,7 +227,8 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 | `test:menu` | `tests/menu.mjs` | Menu effect catalog in sync with `compiler.php`, every theme/effect rendered by PHP, escaping |
 | `test:rich-text` | `tests/rich-text.mjs` | Paste cleanup, in-place editing keeps layout, toolbars, tidy on blur |
 | `test:ui` | `tests/ui-shell.mjs` | Sidebar, Pages screen, editor top bar and shortcuts, Add panel, property tabs, effects, Layers, dialogs, media library (folders, selection, uploads), site branding and About, Backup page, Collections (rename, bulk actions) |
-| `test:server` | `tests/server.php` (`php tests/server.php`) | Server helpers through the real PHP code: code surfaces kept on editors' saves, re-linking after a slug change, client IP behind trusted proxies, SVG upload check, sanitizer, `cc_int`, slider arrows and reduced motion, form fallbacks and field types, revision history, image copies and `srcset`, redirects (chains, loops, `.htaccess` block, redirect page), cookie banner, Site Search block, public branding, media folders and image usage, backup and restore (contents, refused files, newer versions, safety copies), deleted collections and items going offline |
+| `test:server` | `tests/server.php` (`php tests/server.php`) | Server helpers through the real PHP code: security helpers (rich-text styles and links, `cc_sanitize_blocks`, active URLs, reserved slugs, redirect targets, CSS colors/lengths, image URLs, `build_inline_style`), migration 8 on an old database (default account removed, installed flag, stored rich text cleaned, `session_gen` and unique names), code surfaces kept on editors' saves, re-linking after a slug change, client IP behind trusted proxies, SVG upload check, sanitizer, `cc_int`, slider arrows and reduced motion, form fallbacks and field types, revision history, image copies and `srcset`, redirects (chains, loops, `.htaccess` block, redirect page), cookie banner, Site Search block, public branding, media folders and image usage, backup and restore (contents, refused files, newer versions, safety copies), deleted collections and items going offline |
+| `test:security` | `tests/security.php` (`php tests/security.php`) | Security regressions over real HTTP: installs a fresh copy of `canvascore-admin/` in a temporary folder, serves it with PHP's built-in server and replays the attacks of the 0.14.0 security review (no default account, setup key, sessions, CSRF and login CSRF, throttling, roles, sanitizing, SVGs, reserved addresses, forms…); they must all fail. Needs the PHP CLI with `pdo_sqlite`, `dom`, `zip` and `curl` |
 
 How they work:
 
@@ -246,21 +263,28 @@ the contents of `dist/` are copied into `canvascore-admin/`.
 
 ### Storage locations
 
-`cc_data_dir()` (`config.php`) picks `../../canvascore-data` (outside the web root, preferred) or
-`canvascore-admin/data/`, migrating files between them if needed. It contains:
+`cc_data_dir()` (`config.php`) keeps an existing database where it is. For a new one it picks the first
+writable folder outside the web root (`DOCUMENT_ROOT`, via `cc_doc_root()` / `cc_path_inside()`) among
+`dirname(DOCUMENT_ROOT)/canvascore-data-<sub-folder>` (only when the site is in a sub-folder of the web root; one
+folder per site),
+`../../canvascore-data` and `canvascore-admin/data/`, falling back to any writable one. Data in
+`canvascore-admin/data/` is moved out (DB, `settings.json`, `menu.json`, `forms.json`) as soon as a folder outside
+the web root can be written. It contains:
 
 | File | Content |
 | --- | --- |
 | `canvascore.sqlite` | All structured content (tables below) |
 | `settings.json` | Global Options: `brandColor`, `fontFamily`, `siteName`, `siteSuffix`, `siteUrl`, `faviconUrl`, `defaultOgImage`, `robotsAllow`, `menuInheritTheme`, `headerEnabled`, `footerEnabled`, `cookieBanner` (`{ enabled, text, acceptLabel, declineLabel, privacyLabel, privacyUrl, position }`), `adminEmail`, `emailFrom`, `emailSubject`, `sessionTimeoutMinutes`, `trustedProxies` (the last five are admin-only: `get_settings` leaves them out for editors and an editor's save keeps the stored values) |
 | `menu.json` | `{ "items": [...], "settings": {...} }`, nested items (`children`), legacy flat format still read |
-| `forms.json` | Written by each publish: form id → recipient, so addresses never reach the client |
+| `forms.json` | Written by each publish: form id → `{ to, labels, success }` (recipient, field labels in order, success message), so addresses never reach the client and `submit_form.php` accepts only `field_0…field_N-1` with those labels. Older registries (id → recipient string) are still read |
 | `media.json` | Media metadata per uploaded file name: `alt`, `w`, `h`, `bytes`, `variants` (widths of the WebP copies), `optimized`, `folder` (media library folder path such as `Products/Shoes`, `''` = none; see `media.php`) |
 | `media-folders.json` | Array of media folder paths, so empty folders exist too (parents of listed folders are implied) |
 | `backups/` | Backup ZIPs: `backup-…zip` (kept by hand), `before-restore-…zip` (safety copies, newest 5), `download-…zip` and `upload-….part` (temporary, removed after an hour); deny-all `.htaccess` |
 | `published_files.json` | Manifest of files the last successful publish wrote (`…/index.html` and `…/feed.xml`, relative to the site root); used to delete pages and feeds no longer published |
-| `login_attempts.json`, `rate_*.json` | Login throttling and form rate limits |
+| `login_attempts.json`, `rate_*.json` | Login throttling (at most 5000 keys) and form rate limits |
 | `sessions/` | PHP session files (dedicated folder) |
+| `install-key.txt`, `.install.lock` | Setup key and lock of `install.php` (the key file is deleted after installing) |
+| `quarantine/` | SVGs moved out of `uploads/` by the one-time recheck after updating to 0.14.1 (`cc_meta` key `svg_recheck_v1`) |
 
 Outside the data dir, in the site root, a publish also writes `search-index.json` (the Site Search index,
 public by design), and uploads get their optimized copies in `uploads/_cc/`.
@@ -283,8 +307,11 @@ public by design), and uploads get their optimized copies in `uploads/_cc/`.
 - **`redirects`** (migration 7: `from_path` primary key, `to_path, auto, created_at`): old addresses that
   forward elsewhere. Paths are site paths with slashes (`/old-page/`, `/blog/old-post/`); `to_path` may also be a
   full `http(s)://` address. `auto = 1` for redirects made by a rename, `0` for ones added in Global Options.
-- **`admin`** (users: `username, password_hash, role` admin/editor, `must_change_pw`), **`form_submissions`**,
-  **`cc_meta`** (key/value, holds the applied `db_schema`).
+- **`admin`** (users: `id, username, password_hash, role` admin/editor, `must_change_pw`, `session_gen`; migration 8
+  adds a unique `NOCASE` index on `username` and `session_gen`, bumped by a password change or reset to end the
+  account's other sessions), **`form_submissions`** (at most `CC_FORM_MAX_ROWS` = 20000 are stored),
+  **`cc_meta`** (key/value: the applied `db_schema`, `installed_at`, `dummy_hash` for timing-safe sign-in,
+  `svg_recheck_v1`).
 
 ### Page states
 
@@ -298,12 +325,15 @@ Saving a draft of a published page (`save_page` without `publish`) creates a row
 `is_draft_copy = 1`, `parent_id = <live id>`, and sets the live row to `modified`; the response's `new_id`
 is the copy, which the editor switches to. Further draft saves update the copy. Publishing the copy writes
 its content onto the parent (status `published`), deletes the copy and returns the parent id.
-`discard_draft` deletes the copies and resets the parent to `published`. `get_pages` returns only non-copy
+`discard_draft` only acts on a live page (`published`/`modified`, not a copy): it deletes its copies and resets a
+`modified` parent to `published`; anything else is left alone, so it can never publish a page. `get_pages` returns only non-copy
 rows, with the latest copy attached as `draft_copy` for `modified` pages.
 
 `is_home` is exclusive (`apply_home()` in `api.php`) and only touched when the client sends the key.
-Slugs are unique site-wide among live pages, collections and system folders (`cc_slug_owner()`), enforced
-on publish; drafts may share a slug.
+Slugs are unique site-wide among live pages and collections (`cc_slug_owner()`), enforced on publish; drafts may
+share a slug. `cc_reserved_slugs()` (`canvascore-admin` and the admin folder's real name, `uploads`,
+`canvascore-data`, `data`) are refused by `save_page` even for drafts, and by collections and redirects;
+`rebuild_all.php`, `cc_unpublish_files()` and the manifest cleanup never write into or delete from them.
 
 **Slug changes.** Publishing a page under a new slug calls `relink_slug_change()` (`api.php`), which:
 
@@ -353,12 +383,14 @@ undoable change.
 
 `api.php` runs `cc_migrate($pdo)` and `cc_migrate_content($pdo)` on every request (`migrations.php`).
 
-**DB schema** (currently 7; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`): add a numbered closure
+**DB schema** (currently 8; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
+unique user names, old default account removed, pre-wizard sites marked installed, stored content sanitized): add a
+numbered closure
 to `cc_db_migrations()`, then bump `db_schema` in `version.json` and note it in the CHANGELOG. Each migration
 runs once, in order, in a transaction, and the number is recorded in `cc_meta`.
 
 ```php
-8 => function ($pdo) {
+9 => function ($pdo) {
     cc_add_col($pdo, 'pages', 'canonical_url', "TEXT DEFAULT ''");   // idempotent, no exception
 },
 ```
@@ -381,7 +413,8 @@ must return the same structure, classes and inline styles for every block. The c
 
 Differences that are allowed (and ignored by the parity test):
 
-- **Rich text** is passed through raw in JS; PHP runs it through `cc_sanitize_html()`.
+- **Rich text** is passed through raw in JS (the canvas then runs the whole block HTML through `safeHtml()`);
+  PHP runs it through `cc_sanitize_html()`.
 - `<script>` nodes (slider arrows/autoplay, lightbox, counters, site search…) are emitted **only by the PHP
   compiler**; the JS renderer leaves them out (they wouldn't run on the canvas anyway) and the parity test
   drops every `<script>` before comparing.
@@ -414,7 +447,8 @@ parents behave like on the site.
 
 | JS (`renderBlock.mjs`) | PHP (`compiler.php`) | Rule |
 | --- | --- | --- |
-| `buildInlineStyle(styles)` | `build_inline_style($styles)` | camelCase → kebab-case; skips `''`, `null`, `animation`, keys not matching `/^[a-zA-Z][a-zA-Z0-9-]*$/`, object/array values; values HTML-escaped |
+| `buildInlineStyle(styles)` | `build_inline_style($styles)` | camelCase → kebab-case; skips `''`, `null`, `animation`, keys not matching `/^[a-zA-Z][a-zA-Z0-9-]*$/`, object/array values, and values containing `; { } < > \`, `expression(`, `javascript:` or `vbscript:`; values HTML-escaped |
+| `ccImgUrl(u)` / `ccCssUrl(u)` | `cc_img_url($u)` / `cc_css_url($u)` | image address: `http(s)`, a path or a `data:image/(png\|jpeg\|gif\|webp\|avif);` URL, any other scheme → `''`; the CSS variant also percent-encodes quotes, parentheses, backslashes and `< >` (Hero background, Gallery images) |
 | `ccInt(v, def, min, max)` | `cc_int($v, $def, $min, $max)` | leading integer like `parseInt` (`"7px"` → 7), clamped, default otherwise |
 | `escapeHtml(s)` | `htmlspecialchars()` | every attribute and plain-text value |
 | `ccColor`, `ccNum`, `ccFmtNum`, `ccExtUrl`, `ccLines`, `ccBr`, `ccInitials`, `ccEnc` | `cc_color`, `cc_num`, `cc_fmt_num`, `cc_ext_url`, `cc_lines`, `cc_br`, `cc_initials`, `cc_enc` | twins for the content blocks |
@@ -426,10 +460,23 @@ Escaping rules:
 - Enumerated values (form field types, effects, layouts) are checked against an allowlist; numbers go
   through `ccInt`/`cc_int` or `ccNum`/`cc_num`; colors through `ccColor`/`cc_color`.
 - `customCss` replaces `__THIS__` with `#<id>` and strips `</style` / `</script`.
-- Rich text is **only** made safe on the server: `cc_sanitize_html()` (`config.php`) is a DOM allowlist of
+- Rich text is made safe on the server: `cc_sanitize_html()` (`config.php`) is a DOM allowlist of
   tags and attributes, strips event handlers and `javascript:`/`vbscript:` URLs (including ones hidden by
-  control characters) and has a regex fallback without `ext-dom`. Any new rich-text field must be wrapped in
-  it in `compiler.php`.
+  control characters), limits inline styles to `CC_STYLE_PROPS` (`cc_sanitize_style()`: no positioning, `url()`,
+  escapes or expressions), keeps `target` only as `_blank`/`_self` (adding `rel="noopener noreferrer"` to
+  `_blank`) and `id` only as a plain name. Without `ext-dom` it keeps only basic formatting tags with **no**
+  attributes (the installer requires `dom`). It runs at publish time in `compiler.php` **and at save time**:
+  `cc_sanitize_blocks()` cleans the fields listed in `CC_RICH_FIELDS` (and blanks active URLs anywhere in
+  `content` via `cc_scrub_urls()`, except `code`/`customCss`/`customJs`) in `save_page`, `save_item`, `save_part`,
+  `save_master`, `save_template`, and `cc_sanitize_all_content()` runs after a restore or import and in migration 8.
+  A new rich-text field must be wrapped in `cc_sanitize_html()` in `compiler.php` **and** added to
+  `CC_RICH_FIELDS`.
+- In the editor, every HTML string inserted into the DOM goes through `safeHtml()` (`src/utils/safeHtml.js`,
+  DOMPurify), and the built editor's CSP allows no inline script: never use `dangerouslySetInnerHTML` /
+  `innerHTML` without it.
+- Non-admins don't receive a `FORM`'s `email`: the read actions that return `content_json` (`get_pages`,
+  `get_item`, `get_parts`, `get_masters`, `get_templates`, `get_revision`) pass it through `cc_redact_content_json()`
+  for them. A new read action returning content must do the same.
 - Non-admins can't add or change "code surfaces" (`HTML.code`, `customCss`/`customJs`, a `FORM`'s `email`), but
   they no longer wipe an admin's code either: `cc_keep_code_surfaces($blocks, $previous)` restores those fields
   from the stored version, matched by block id, in `save_page`, `save_item`, `save_part`, `save_master` and
@@ -454,13 +501,16 @@ The CSS lives in `canvascore-admin/effects.css`:
 
 ## 6. Publishing pipeline (`rebuild_all.php`)
 
-A POST to `rebuild_all.php` (login + CSRF, session released right away) rebuilds the whole site in one pass:
+A POST to `rebuild_all.php` (login + CSRF, an account that still exists and has no pending forced password change
+via `cc_session_account()`, session released right away) rebuilds the whole site in one pass:
 
 1. **Setup**: settings, menu HTML, header/footer parts, safe brand color/font/suffix, `$media_meta =
    cc_media_meta_all()`, and `$cookie_html = cc_cookie_banner_html($settings['cookieBanner'])`.
-2. **`$write($path, $content)`**: every output file goes through this closure. It creates folders, records a
-   failure in `$failed`, and adds the path (relative to the site root) to `$written`. Use it for any new output
-   file, so the file is reported when it can't be written and lands in the manifest.
+2. **`$write($path, $content)`**: every output file goes through this closure. It refuses (as a failure) any path
+   outside the site folder, with `..`, not matching plain `[A-Za-z0-9._-]` segments ending in `.html`, `.xml`,
+   `.json` or `.txt`, or inside a reserved folder; otherwise it creates folders, records a failure in `$failed`,
+   and adds the path (relative to the site root) to `$written`. Use it for any new output file, so the file is
+   reported when it can't be written and lands in the manifest.
 3. **Feeds** (only when `siteUrl` is set: feeds need absolute links): `$feeds` holds every collection with
    published, non-archived items; `$feed_links` is the `<link rel="alternate" type="application/rss+xml">` list
    added to every page's head.
@@ -468,26 +518,31 @@ A POST to `rebuild_all.php` (login + CSRF, session released right away) rebuilds
    `<link rel="canonical">` (when the absolute address is known), `<meta name="robots" content="noindex">`,
    the feed links before `</head>`, the cookie banner before `</body>` (`{{BASE_URL}}` substituted), then
    `cc_optimize_images()` (`srcset` of the WebP copies, lazy loading, `fetchpriority="high"` on the first image).
-5. **Pages** (`published`/`modified`, live rows only): rendered into `master.html`, written to `/<slug>/index.html`
+5. **Pages** (`published`/`modified`, live rows only; a reserved slug is skipped with a warning, and `bg_color` /
+   `boxed_width` go through `cc_css_color()` / `cc_css_length()`): rendered into `master.html`, written to `/<slug>/index.html`
    and/or the root `index.html` (home routing). Pages without `noindex` go into the sitemap and the search
    index (`{ t, u, d, x }`: title, URL, description or first 160 characters, first 3000 characters of plain text).
 6. **Collection items** (published) at `/<collection>/<item>/index.html`; non-archived ones go into the search
    index and their collection's feed.
 7. **RSS**: `/<collection>/feed.xml` per feed, newest 50 items by `date` (or `updated_at`).
 8. **Search index**: `search-index.json` at the site root, read by the Site Search block's script.
-9. **Redirects**: for each row of `redirects`, if a page was written at `from_path` in this build the row is
+9. **Redirects**: each row is validated again with `cc_redirect_path()` / `cc_redirect_target()` (invalid ones
+   are skipped with a warning); if a page was written at `from_path` in this build the row is
    deleted (the page wins); otherwise a small page from `cc_redirect_page_html()` is written at the old address
    (works on any host) and a rule is collected for Apache.
-10. `forms.json` (form recipients), `sitemap.xml`, `robots.txt`, `404.html` (finished with `noindex`).
+10. `forms.json` (`{ to, labels, success }` per form, from `cc_form_registry()`), `sitemap.xml`, `robots.txt`,
+    `404.html` (finished with `noindex`).
 11. **`.htaccess`** at the site root: `cc_htaccess_with_redirects()` replaces the marked
     `# BEGIN/END CanvasCore redirects` block with `Redirect 301` lines and leaves everything else (e.g. the
     `ErrorDocument 404` line) as it is; the file is only rewritten when it changed.
 12. **Manifest cleanup**: when nothing failed, files listed in the previous `published_files.json` but not
     written now are deleted, only if they match `…/index.html` or `…/feed.xml` (never the root `index.html`),
-    and their emptied folders removed. Then the manifest is replaced with `$written`.
+    and their emptied folders removed (never inside a reserved folder). Then the manifest is replaced with
+    `$written`.
 
 The response is `{ success:false }` with the first unwritten file when anything failed, otherwise "Build
-successful: N pages published", plus removed pages and non-fatal `$warnings` (feeds, collections, redirects).
+successful: N pages published", plus removed pages and non-fatal `$warnings` (feeds, collections, redirects,
+reserved addresses). An exception is logged (`CanvasCore publish: …`) and answered with a generic message.
 
 ## 7. Server helpers
 
@@ -498,15 +553,24 @@ successful: N pages published", plus removed pages and non-fatal `$warnings` (fe
 | `cc_keep_code_surfaces(&$blocks, $previous)` | Editors' saves: restores `HTML.code`, `customCss`/`customJs` and `FORM.email` from the stored blocks (array or JSON), matched by id; new blocks get none. Replaces `cc_strip_code_surfaces()` for page/item/part/master (and template) saves |
 | `cc_relink_node(&$node, $oldUrl, $newUrl, $oldBase, $newBase)` | Walks decoded JSON: link fields (`url`, `btnUrl`, `buttonUrl`, `href`, `link`) equal to `old/index.html` become `new/index.html`; `{{BASE_URL}}old/` inside any string becomes `{{BASE_URL}}new/`. Returns whether anything changed. Used by `relink_slug_change()` in `api.php` for all content tables and the menu |
 | `cc_add_revision($pdo, $owner, $title, $content_json, $kind)` | Records a version (see [Revisions](#revisions)) |
-| `cc_client_ip($trustedOverride = null)` | The visitor's address. If `REMOTE_ADDR` is in `trustedProxies` (Global Options › Security), returns the nearest untrusted valid IP from `X-Forwarded-For`; otherwise `REMOTE_ADDR`, so the header can't be faked. The argument sets the proxy list (tests) |
-| `cc_redirect_path($p)` / `cc_redirect_target($t)` | Normalize and validate: a path becomes lowercase `/a/b/` (the home `/` can't be a source); a target may also be `/` or a full `http(s)://` address. `null` when invalid |
+| `cc_client_ip($trustedOverride = null)` | The visitor's address. If `REMOTE_ADDR` is in `cc_trusted_proxies()` (Global Options › Security), returns the nearest untrusted valid IP from `X-Forwarded-For`; otherwise `REMOTE_ADDR`, so the header can't be faked. The argument sets the proxy list (tests) |
+| `cc_is_https()` | `HTTPS` from the server; `X-Forwarded-Proto` / `X-Forwarded-SSL` only when `REMOTE_ADDR` is a trusted proxy |
+| `cc_security_headers()` | Anti-framing, `nosniff`, `Referrer-Policy`, COOP headers for every PHP response of the admin; `$GLOBALS['CC_HT_ADMIN']` is the matching `canvascore-admin/.htaccess` (headers for the static editor page, `menu-preview.html` exception, deny rules for library files and JSON), written by `ensure_admin_htaccess()` from `api.php` and `install.php` (left alone once an admin replaces it with a file of their own) |
+| `cc_session_start()` / `cc_boot_session()` / `cc_session_login($user)` / `cc_session_logout()` | Session `CCSESSID` (strict mode, no trans-sid). `cc_boot_session()` resumes a session only when the cookie is present (visitors never get one) and enforces the inactivity limit and the 7-day absolute limit (`started`); `cc_session_login()` regenerates the id and stores `user_id`, `username`, `role`, `gen`, `csrf` |
+| `cc_session_account($pdo)` | The signed-in account row, re-read on every request: logs the session out when the account is gone, renamed, or its `session_gen` changed; refreshes `role` from the database |
+| `cc_issue_csrf()` / `cc_verify_csrf_or_die()` / `cc_same_origin_request()` | Per-session token in `X-CSRF-Token` (no cookie copy; an old `cc_csrf` cookie is deleted) plus an `Origin` / `Sec-Fetch-Site` check; 403 otherwise |
+| `cc_redirect_path($p)` / `cc_redirect_target($t)` | Normalize and validate: a path becomes lowercase `/a/b/` (the home `/`, `..` and reserved folders can't be a source); a target may also be `/` or a full `http(s)://` address without spaces, `"`, `< >`, backslashes or control characters. `null` when invalid |
+| `cc_reserved_slugs()` / `cc_slug_reserved($slug)` | CanvasCore's own top-level folders (admin folder name, `canvascore-admin`, `uploads`, `canvascore-data`, `data`) |
+| `cc_css_color($v, $default)` / `cc_css_length($v, $default)` | A hex/`rgb(a)()`/named color, or a number with `px`, `%`, `rem`, `em`, `vw`; anything else → default (page `bg_color`, `boxed_width`) |
+| `cc_sanitize_blocks(&$blocks)` / `cc_sanitize_content_json($json)` / `cc_sanitize_all_content($pdo)` | Save-time cleaning of a block list or single block (rich-text fields of `CC_RICH_FIELDS`, `cc_scrub_urls()` for active URLs, children recursively); the last one rewrites every stored content table |
+| `cc_redact_blocks(&$blocks)` / `cc_redact_content_json($json)` | Blank `FORM.content.email` in what editors receive |
 | `cc_add_redirect($pdo, $from, $to, $auto = 1)` | Upserts a redirect, **collapsing chains** (rows pointing to `$from` now point to `$to`) and **avoiding loops** (any redirect from `$to` is deleted: something lives there now; self-redirects removed) |
 | `cc_drop_redirect_from($pdo, $path)` | Deletes the redirect from an address a published page now owns |
 | `cc_redirect_page_html($href)` | The static page written at an old address: `noindex`, canonical, meta refresh and a `location.replace()` that keeps query and hash |
 | `cc_htaccess_with_redirects($existing, $rules)` | Returns `.htaccess` content with the marked redirects block replaced (or removed when there are no rules) |
 | `cc_rate_allow($bucket, $key, $max, $window)` | Sliding-window rate limit in `rate_<bucket>.json` (file lock); `submit_form.php` uses `('forms', cc_client_ip(), 8, 600)` |
-| `cc_login_wait($username)` / `cc_login_result($username, $ok)` / `cc_login_key()` | Login throttling per account + client IP in `login_attempts.json`: 5 failures in 15 minutes → 15 minutes wait |
-| `cc_svg_is_safe($path)` | Refuses SVG uploads with scripts, event handlers, `javascript:` links, `foreignObject`, entities |
+| `cc_login_begin($username)` / `cc_login_result($username, $ok)` / `cc_login_wait($username)` / `cc_login_keys()` | Login throttling in `login_attempts.json` (file lock, at most `CC_LOGIN_MAX_KEYS` = 5000 entries). `cc_login_begin()` counts the attempt **before** the password check, atomically, and returns the seconds to wait: 5 per account + IP / 15 min, 20 per IP / 15 min, 100 per account / hour, each → 15 minutes wait. A success clears the account + IP key and takes one off the others. `change_own_password` uses it for the current password too |
+| `cc_svg_is_safe($path)` | Allowlist check of an SVG (`CC_SVG_ELEMENTS`, editor metadata namespaces in `CC_SVG_INERT_NS`): no other namespaces (HTML, MathML), no event handlers, `xml:base`, animation attributes except on `animateTransform`, `href`/`src` only to `#id` (and raster `data:` / `http(s)` for `<image>`/`<feImage>`), CSS without `@import`, escapes or `url()` other than `url(#id)`, no processing instructions or entities; false without `ext-dom`. Also used by the one-time recheck in `api.php` that moves failing old uploads to `quarantine/` |
 | `cc_unpublish_files($data_dir, $prefix, $extra = [])` | Takes generated files offline at once: deletes the `…/index.html` / `…/feed.xml` under `$prefix` (`blog/` or `blog/post/`) that are in `published_files.json` (or in `$extra`), removes the emptied folders and updates the manifest. Never touches other files. Site root from `$GLOBALS['CC_SITE_ROOT']` (tests) |
 | `cc_unpublish_item($pdo, $data_dir, $item)` | A deleted published item: `cc_unpublish_files()` for its folder, unless another published item of the collection owns the same address. Used by `delete_item` and `bulk_items` `delete`; `delete_collection` unpublishes the collection folder |
 | `cc_public_branding($settings)` | What `api.php?action=branding` may return before sign-in: `siteName` (max 120 characters) and `faviconUrl` (dropped unless `http(s)://`, root-relative or a plain relative path) |
@@ -711,8 +775,8 @@ selected block is deleted; `duplicateBlock` and `pasteBlock` select the new bloc
 `src/apiClient.js` (first import in `main.jsx`) calls `installSession()` (`session/runtime.js`), which
 replaces `window.fetch` with `createGuardedFetch()` (`session/fetchGuard.js`):
 
-- adds `X-CSRF-Token` to relative requests (token from `window.__CC_CSRF`, set by `check_auth`/`login`, or
-  the `cc_csrf` cookie);
+- adds `X-CSRF-Token` to relative requests (token from `window.__CC_CSRF`, set by `check_auth`, `login` and
+  `change_own_password`; it is kept only in memory, never in a cookie);
 - for `api.php` / `rebuild_all.php` (except `login`, `logout`, `check_auth`, `session_status`, `version`):
   a **401** shows the login on top of the app (`SessionExpiredOverlay`, app kept mounted and `inert`), waits
   for re-login and **retries once**; a **403** whose message mentions CSRF refreshes the token and retries.
@@ -754,10 +818,16 @@ sends `keepalive` at most once a minute and only after user activity, warns befo
 
 - **Routing**: `?action=<name>`; a flat sequence of `if ($action === '…' && $_SERVER['REQUEST_METHOD'] === 'POST') { …; exit; }`
   blocks. Unknown actions fall through to `{"success":false,"message":"Invalid action."}`.
-- **Order at the top**: JSON headers, `display_errors` off (warnings go to the log, never into JSON), DB
-  open + migrations, then: POST without a session → **401** (`cc_unauthorized()`), CSRF check on every
-  POST except `login` (`cc_verify_csrf_or_die()`, **403**), public actions (`version`, `branding`, `session_status`,
-  `check_auth`, `login`, `logout`), the **auth gate**, `cc_session_touch()`, `session_write_close()` for GET.
+- **Order at the top**: JSON headers and `cc_security_headers()`, `display_errors` off (warnings go to the log,
+  never into JSON; `config.php` turns it off for every web request), the admin `.htaccess`, DB open + migrations
+  (a failure answers a generic 500 and logs the details), the one-time SVG recheck, then: **503** `not_installed`
+  for everything except `branding`, `session_status`, `check_auth` until `cc_is_installed()`, POST without a
+  session → **401** (`cc_unauthorized()`), CSRF + same-origin check on every POST except `login`
+  (`cc_verify_csrf_or_die()`, **403**), public actions (`branding`, `session_status`, `check_auth`, `login` (JSON
+  `Content-Type` and same origin only), `logout`), the **auth gate** (`cc_session_account()`; `$account` is the
+  row and `$is_admin` comes from it, never from the session), the forced password change (**403**
+  `must_change_pw` for everything except `change_own_password`, `keepalive`, `version`), `cc_session_touch()`,
+  `version` (signed-in only), `session_write_close()` for GET.
 - **Admin-only**: add the action to the `in_array($action, [...]) && !$is_admin` list near the top (users,
   backup actions, submissions), or check `$is_admin` inside the handler (collections, redirects, admin-only settings
   fields). Data an editor must not see is removed from read responses too: `get_settings` drops `adminEmail`,
@@ -780,7 +850,8 @@ Recently added actions:
 | `save_redirect` / `delete_redirect` | POST `{ from, to }` / `{ from }` | Admins only; validated with `cc_redirect_path()` / `cc_redirect_target()`, saved through `cc_add_redirect(…, 0)`; effective at the next publish |
 | `save_media_meta` | POST `{ name, alt }` | Alt text of a library image (max 300 characters) in `media.json` |
 | `optimize_media` | POST | Makes the WebP copies of images not yet optimized, in ~20 s batches: returns `{ done, remaining }`; call again while `remaining > 0` |
-| `change_own_password` | POST `{ current, password }` | Any role, own account; `current` is required unless `must_change_pw` is set (the forced first change); 8+ characters, not `admin`; clears `must_change_pw` |
+| `change_own_password` | POST `{ current, password }` | Any role, own account; `current` is required unless `must_change_pw` is set (the forced first change) and counts toward login throttling; 8+ characters, not `admin`, not the username, not the current one; clears `must_change_pw`, bumps `session_gen` (other sessions end), regenerates the session id and returns the new `csrf` |
+| `add_user` / `delete_user` / `force_password` | POST | Admins. Usernames `^[A-Za-z0-9._@-]{3,32}$`, unique `NOCASE`; the last admin and your own account can't be deleted; `force_password` refuses your own id and bumps the target's `session_gen` |
 | `branding` | GET | **Public** (no sign-in): `{ siteName, faviconUrl }` from `cc_public_branding()`, nothing else from the settings |
 | `get_media_folders` | GET | Array of folder paths (`cc_media_folders()`) |
 | `media_folder_create` / `media_folder_rename` / `media_folder_delete` | POST `{ path }` / `{ from, to }` / `{ path }` | Any signed-in user; returns `{ success, folders }` |
@@ -820,14 +891,14 @@ instead of claiming success.
 `canvascore-admin/version.json` is the single source of truth, read by PHP (`cc_version()`) and Vite:
 
 ```json
-{ "app": "0.14.0", "db_schema": 7, "content_schema": 1, "build": 28, "built": "2026-10-13T08:08:55.709Z" }
+{ "app": "0.14.1", "db_schema": 8, "content_schema": 1, "build": 28, "built": "2026-10-13T08:08:55.709Z" }
 ```
 
 - `build`/`built` are bumped by `scripts/bump.mjs` on every `npm run build` (it also syncs `version` in
   `package.json` / `package-lock.json` with `app`). The sidebar (`AdminLayout.jsx`) shows
-  `CanvasCore v<app> · build <n>` (from `api.php?action=version`) and warns when the editor's built-in
+  `CanvasCore v<app> · build <n>` (from `api.php?action=version`, signed-in users only) and warns when the editor's built-in
   `app` version differs from the server's (reload needed after an update).
-- Every published page carries `<meta name="generator" content="CanvasCore x.y.z">`.
+- Every published page carries `<meta name="generator" content="CanvasCore">`, deliberately without the version.
 
 Three versions live in that file: `app` (the product, SemVer), `db_schema` (the last DB migration) and
 `content_schema` (the saved block format). Bump `db_schema` / `content_schema` together with a new migration (see

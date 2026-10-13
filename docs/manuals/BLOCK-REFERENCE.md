@@ -233,7 +233,7 @@ Raw HTML code, for example an embed from another service.
 The large banner at the top of a page: title, subtitle, buttons, optional background image.
 
 **Background & Titles**
-- **Hero Background Image**: paste an address or pick from the media library. It covers the whole hero.
+- **Hero Background Image**: paste an address or pick from the media library. It covers the whole hero. The address must be a web address (`https://…`), a path on the site or an embedded PNG/JPG/GIF/WebP/AVIF image; anything else is ignored.
 - **Main Title** and **Subtitle**: formatted text (simple toolbar).
 
 **Hero Buttons**: one card per button, with move up/down and remove.
@@ -316,7 +316,7 @@ A form visitors fill in. Submissions are sent by email.
 
 **Form Settings**
 - **Form Title**: formatted text. Default "Contact Us".
-- **Receiving Email** (admins only): where submissions go. Leave blank to use the site's global email. Editors do not see this field, and their saves keep the address the admin set.
+- **Receiving Email** (admins only): where submissions go. Leave blank to use the site's global email. Editors do not see this field (the server doesn't send it to them), and their saves keep the address the admin set.
 - **Submit Button Text**: default "Send".
 - **Message after sending**: shown to the visitor once the message has been sent. Default "Sent!".
 
@@ -332,6 +332,8 @@ A form visitors fill in. Submissions are sent by email.
 - New forms have Name, Email and Message, all required.
 - Empty texts fall back to the defaults: an empty **Submit Button Text** shows "Send Message", an empty **Message after sending** shows "Sent!".
 - The form includes a hidden anti-spam trap; you do not need to set anything.
+- The server accepts only the fields defined here, with these labels, and always shows this **Message after sending**: after changing the fields, the message or the receiving email, publish the site so the change applies to new submissions.
+- Each answer can be up to 5,000 characters, and a whole submission up to 64 KB.
 
 ---
 
@@ -408,7 +410,7 @@ A slideshow of images, one at a time.
 A grid of photos. Clicking one opens it full screen (lightbox).
 
 **Gallery Images**: one card per image, with move up/down and remove.
-- Image URL (or the media button), **Alt text (accessibility / SEO)**, **Caption (shown in lightbox / under image)**.
+- Image URL (or the media button), **Alt text (accessibility / SEO)**, **Caption (shown in lightbox / under image)**. As for the Hero background, only web addresses, site paths and embedded raster images are used.
 - **+ Add image from media** or **+ Add empty slot (paste URL)**.
 
 **Gallery Settings**
