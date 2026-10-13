@@ -3,6 +3,11 @@
 Block-based CMS that generates **static HTML** sites: a React visual editor (drag & drop)
 and a PHP + SQLite backend that compiles pages into `.html` files ready to serve.
 
+> **Status: public preview (0.x).** CanvasCore is feature-complete for everyday sites and well tested, but until
+> 1.0 the API and data formats may still change between minor versions (database and content migrations run
+> automatically on update). Take a backup before updating, and please
+> [report what you find](https://github.com/sputlab/CanvasCore/issues).
+
 ## Manuals
 
 - [User Guide](docs/manuals/USER-GUIDE.md): building and editing the site
@@ -14,7 +19,7 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 
 ```
 .
-├── docs/                  Manuals (docs/manuals/), changelog, release notes and phase notes (PHASE-*.md)
+├── docs/                  Manuals (docs/manuals/) and changelog (CHANGELOG.md)
 ├── canvascore-admin/      PHP backend (runs on the server, in the site's admin folder)
 │   ├── api.php            Editor JSON API (auth, pages, media, menu, users…)
 │   ├── compiler.php       PHP block renderer → HTML
@@ -77,4 +82,31 @@ add a deny rule).
 ## Versioning
 
 Semantic versioning; the version lives in `canvascore-admin/version.json` and is read
-by both PHP and Vite. Changelog and release notes are in [`docs/`](docs/CHANGELOG.md).
+by both PHP and Vite. See the [changelog](docs/CHANGELOG.md) and the
+[GitHub releases](https://github.com/sputlab/CanvasCore/releases).
+
+## Contributing and security
+
+Bug reports, ideas and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Please report security
+vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+Community: [Discord](https://discord.gg/sD8KMc2kN) · Bugs and suggestions: bug@sputlab.com
+
+## License
+
+Copyright © 2026 Sputlab.
+
+CanvasCore is free software: you can redistribute it and/or modify it under the terms of the
+[GNU Affero General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; see the license for details.
+
+In short: you can use CanvasCore for any purpose, including commercial sites. If you modify it and let other people
+use your modified version over a network (for example, hosting the editor for clients), you must offer them its
+source code under the same license. The sites and content you build with CanvasCore are yours and are not covered
+by the AGPL.
+
+**Additional permission (AGPL section 7):** the HTML, CSS and JavaScript that CanvasCore writes into a published
+site (the page markup, `effects.css` and the block scripts included in published pages) may be used, copied,
+modified and distributed as part of that site under terms of your choice, without the AGPL's requirements applying
+to the site. This permission does not cover the editor or the backend in `canvascore-admin/`.

@@ -2,7 +2,7 @@
 // header/footer, redirects, optionally version history and form messages), Global Options, the menu and
 // every uploaded image. It can be downloaded or kept on the server, and restored from either. Before a
 // restore the server saves a safety copy of the current site (listed here), so a restore can be undone.
-// Old .json backups (before 0.13) can still be imported. Server side: canvascore-admin/backup.php.
+// Old .json backups (before 0.14) can still be imported. Server side: canvascore-admin/backup.php.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { DatabaseBackup, Upload, Download, AlertTriangle, Server, RotateCcw, Trash2, ShieldCheck, Archive, CheckCircle2 } from 'lucide-react';

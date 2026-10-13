@@ -1,0 +1,52 @@
+# Security policy
+
+## Supported versions
+
+CanvasCore is in public preview (`0.x`). Security fixes go into the **latest release** only; please update to it
+before reporting.
+
+| Version | Supported |
+| --- | --- |
+| Latest 0.x release | ✅ |
+| Older releases | ❌ |
+
+## Reporting a vulnerability
+
+**Please do not open a public issue, pull request or Discord message for security problems.**
+
+Report them privately, either way:
+
+- through GitHub: **Security › Report a vulnerability** on the
+  [CanvasCore repository](https://github.com/sputlab/CanvasCore/security/advisories/new);
+- by email to **bug@sputlab.com** with "SECURITY" in the subject.
+
+Include what you can:
+
+- the CanvasCore version (sidebar footer, or `canvascore-admin/version.json`);
+- PHP version and web server (Apache, Nginx…);
+- steps to reproduce, or a proof of concept;
+- the impact as you see it (who can do what, signed in or not).
+
+## What happens next
+
+- We aim to confirm receipt within **3 working days** and to give a first assessment within **10 working days**.
+- We will keep you informed while we work on a fix, and agree with you on when to publish details.
+- Fixed issues are listed under **Security** in [docs/CHANGELOG.md](docs/CHANGELOG.md) and in the GitHub release
+  notes. If you wish, you will be credited.
+
+CanvasCore is maintained in spare time by a small team: there is no bug bounty.
+
+## Scope
+
+In scope: the code in this repository: the PHP backend in `canvascore-admin/` (editor API, compiler, publishing,
+media, form submissions, backups, installer) and the editor in `canvascore-frontend/`.
+
+Out of scope: problems that need an already compromised server or administrator account, the configuration of your
+own hosting (see the [Administrator Guide](docs/manuals/ADMIN-GUIDE.md) for the recommended setup), and
+third-party dependencies (report those upstream, though we are glad to hear about ones that affect CanvasCore).
+
+## Hardening your installation
+
+The [Administrator Guide](docs/manuals/ADMIN-GUIDE.md) covers it. The short version: delete `install.php` after
+setup, keep the data folder outside the web root (or deny access to it on Nginx), use HTTPS, give editors the
+Editor role rather than Admin, and keep CanvasCore up to date.
