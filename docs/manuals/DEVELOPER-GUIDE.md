@@ -5,7 +5,9 @@ locally, and the conventions the code follows. Paths are relative to the reposit
 
 Related manuals: [User Guide](USER-GUIDE.md) (using the editor), [Block Reference](BLOCK-REFERENCE.md)
 (every block and its settings), [Administrator Guide](ADMIN-GUIDE.md) (install, hosting, accounts, backups).
-Release history: [CHANGELOG.md](../CHANGELOG.md).
+Release history: [CHANGELOG.md](../CHANGELOG.md) and GitHub Releases. Contributing: [CONTRIBUTING.md](../../CONTRIBUTING.md)
+(pull requests, sign-off, license of contributions). Security reports: [SECURITY.md](../../SECURITY.md) (privately,
+never in a public issue).
 
 **Contents**
 
@@ -15,7 +17,7 @@ Release history: [CHANGELOG.md](../CHANGELOG.md).
 4. [Data model](#4-data-model) (storage, tables, page states, revisions, redirects, migrations)
 5. [Rendering](#5-rendering)
 6. [Publishing pipeline](#6-publishing-pipeline-rebuild_allphp)
-7. [Server helpers](#7-server-helpers) (`config.php`, `compiler.php`, `media.php`)
+7. [Server helpers](#7-server-helpers) (`config.php`, `compiler.php`, `media.php`, `backup.php`)
 8. [Adding a new block](#8-adding-a-new-block)
 9. [Editor state](#9-editor-state-srcstoreusestorejs)
 10. [Saving and sessions](#10-saving-and-sessions)
@@ -71,9 +73,13 @@ identical by an automated parity test rather than by sharing code across runtime
 ## 2. Repository layout
 
 ```
-README.md                    Overview, requirements, deploy
-docs/                        CHANGELOG.md, RELEASE-NOTES-x.y.z.md, VERSIONING.md, PHASE-*.md, SAVE-FIX.md
+README.md                    Overview, requirements, deploy, license
+LICENSE                      GNU AGPL v3 text (CanvasCore is AGPL-3.0-or-later)
+CONTRIBUTING.md              How to report bugs and send pull requests
+SECURITY.md                  Supported versions, private vulnerability reporting
+docs/                        CHANGELOG.md, manuals/
 docs/manuals/                These manuals
+docs/dev/                    Local-only internal notes (git-ignored, not in the repository)
 canvascore-admin/            PHP backend (deployed into the site's admin folder)
 canvascore-frontend/         React editor
 ```
@@ -82,11 +88,12 @@ canvascore-frontend/         React editor
 
 | File | Purpose |
 | --- | --- |
-| `api.php` | The editor's JSON API: auth, pages, items, parts, masters, templates, media, menu, settings, users, backup, revisions, redirects |
+| `api.php` | The editor's JSON API: auth, branding, pages, collections and items (incl. bulk actions), parts, masters, templates, media and media folders, menu, settings, users, backup, revisions, redirects |
 | `compiler.php` | `render_block()` (block → HTML), `render_menu_html()`, `cc_cookie_banner_html()`, shared helpers (`cc_int`, `build_inline_style`, `cc_effect_classes`…) |
 | `rebuild_all.php` | Publishes the whole site (pages, collection items, feeds, search index, redirects, sitemap, robots, 404, `.htaccess`), removes stale files |
-| `config.php` | Data dir, session boot, CSRF, client IP, login throttling, rate limits, code surfaces, re-linking, revisions, redirects, SVG check, `cc_sanitize_html`, `cc_version`, slugs |
-| `media.php` | Image optimization (WebP copies in `uploads/_cc/`, `srcset` on publish) and the media metadata (`media.json`) |
+| `config.php` | Data dir, session boot, CSRF, client IP, login throttling, rate limits, code surfaces, re-linking, revisions, redirects, unpublishing deleted items/collections, public branding, SVG check, `cc_sanitize_html`, `cc_version`, slugs |
+| `media.php` | Image optimization (WebP copies in `uploads/_cc/`, `srcset` on publish), the media metadata (`media.json`), media library folders (`media-folders.json`) and where images are used |
+| `backup.php` | Whole-site backup as a ZIP, its checks and restore, saved copies and safety copies in `backups/` |
 | `migrations.php` | Versioned DB migrations and content migrations |
 | `submit_form.php` | Public endpoint for form submissions (rate-limited, recipients from `forms.json`) |
 | `install.php` | Setup wizard (locks itself once installed) |
@@ -113,17 +120,23 @@ canvascore-frontend/         React editor
 | `src/editor/layerDrop.js`, `previewEffects.js` | Layers drop positions; "Preview animation" on the canvas |
 | `src/editor/placeholder.js` | `placeholderImage(w, h)`: built-in placeholder image as a `data:` SVG (no outside service) |
 | `src/editor/mediaInfo.js` | Media library / picker helpers (`formatBytes`) |
+| `src/editor/upload.js` | `uploadImage(file, { folder, onProgress })` and `postForm(action, form, { onProgress })`: XHR uploads with progress and the CSRF header, retried once through `fetch` on 401/403 |
+| `src/editor/useUploader.js` | `useUploader(onFinished)`: upload queue (one file at a time) with per-file progress and result; rendered by `UploadPanel.jsx` |
 | `src/components/VisualEditor.jsx` | Page editor: top bar, save/publish, shortcuts, side panels |
 | `src/components/RevisionHistory.jsx` | Version history panel (History button): list, preview and restore of saved versions |
 | `src/components/RedirectsCard.jsx` | Global Options › Redirects (list, add, delete; admins change them) |
 | `src/components/ChangePasswordDialog.jsx` | "Change your own password" dialog (sidebar key icon) |
+| `src/components/AboutDialog.jsx` | "About CanvasCore" (the ⓘ next to the version): version, website, GitHub, Discord, bug email, donations |
+| `src/components/MediaManager.jsx`, `MoveToFolderDialog.jsx`, `UploadPanel.jsx` | Media library: folders, selection and bulk actions, sorting, "Move to…" dialog, upload progress panel (also used by `MediaPickerModal.jsx`) |
+| `src/components/ImageUrlField.jsx` | Image address field with Upload (with progress), Library and preview (Global Options › Favicon / Default social image) |
+| `src/components/Backup.jsx` | Backup page: make/download/keep backups, list saved and safety copies, chunked upload and restore, legacy `.json` import |
 | `src/components/Canvas.jsx`, `SortableBlock.jsx` | Canvas and the per-block frame (DnD, selection, in-place text) |
 | `src/components/PropertyPanel.jsx` | Content / Style / Advanced tabs for the selected block |
 | `src/components/panel/` | `StyleTab`, `AdvancedTab`, `PageSettings`, `fields.jsx`, `helpers.js`, `constants.js` |
 | `src/components/panel/blocks/` | One Content panel per block (e.g. `FlexRowPanel.jsx`, `SearchPanel.jsx`); `index.js` maps type → panel (`CONTENT_PANELS`) |
 | `src/components/*.jsx` | Admin screens: PageManager, Collections, Templates, MediaManager, MediaPickerModal, MenuBuilder, GlobalSettings, UserManager, Submissions, Backup, AdminLayout… |
 | `src/session/` | Session manager, fetch guard, local draft backups and trackers |
-| `src/ui/` | UI kit (`kit.jsx`, `kit.css`), `global.css`, `notify.js` + `toast.jsx`, `dialog.js` + `dialogHost.jsx` |
+| `src/ui/` | UI kit (`kit.jsx`, `kit.css`), `global.css`, `notify.js` + `toast.jsx`, `dialog.js` + `dialogHost.jsx`, `branding.js` (`useBrandingHead()`, `brandIconUrl()`) + `BrandLogo.jsx` (site favicon as the admin logo) |
 | `src/menu/menuThemes.js` | Menu defaults, themes, effect groups (mirrored in `compiler.php`) |
 | `tests/` | The 11 test suites (10 Node, plus `server.php` in PHP) and the `render_php.php` / `render_menu.php` CLI helpers |
 
@@ -197,8 +210,8 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 | `test:starters` | `tests/starters.mjs` | `starters.json`: known types, real content fields, unique ids, renders in JS and PHP |
 | `test:menu` | `tests/menu.mjs` | Menu effect catalog in sync with `compiler.php`, every theme/effect rendered by PHP, escaping |
 | `test:rich-text` | `tests/rich-text.mjs` | Paste cleanup, in-place editing keeps layout, toolbars, tidy on blur |
-| `test:ui` | `tests/ui-shell.mjs` | Sidebar, Pages screen, editor top bar and shortcuts, Add panel, property tabs, effects, Layers, dialogs |
-| `test:server` | `tests/server.php` (`php tests/server.php`) | Server helpers through the real PHP code: code surfaces kept on editors' saves, re-linking after a slug change, client IP behind trusted proxies, SVG upload check, sanitizer, `cc_int`, slider arrows and reduced motion, form fallbacks and field types, revision history, image copies and `srcset`, redirects (chains, loops, `.htaccess` block, redirect page), cookie banner, Site Search block |
+| `test:ui` | `tests/ui-shell.mjs` | Sidebar, Pages screen, editor top bar and shortcuts, Add panel, property tabs, effects, Layers, dialogs, media library (folders, selection, uploads), site branding and About, Backup page, Collections (rename, bulk actions) |
+| `test:server` | `tests/server.php` (`php tests/server.php`) | Server helpers through the real PHP code: code surfaces kept on editors' saves, re-linking after a slug change, client IP behind trusted proxies, SVG upload check, sanitizer, `cc_int`, slider arrows and reduced motion, form fallbacks and field types, revision history, image copies and `srcset`, redirects (chains, loops, `.htaccess` block, redirect page), cookie banner, Site Search block, public branding, media folders and image usage, backup and restore (contents, refused files, newer versions, safety copies), deleted collections and items going offline |
 
 How they work:
 
@@ -208,7 +221,9 @@ How they work:
   directly and prints the same `✓` / `✗` checks. It never touches the real data dir: files go to temp dirs
   (`sys_get_temp_dir()`), databases are in-memory SQLite (`new PDO('sqlite::memory:')`, tables created by
   running the real closures from `cc_db_migrations()`), and the media metadata file is redirected with
-  `$GLOBALS['CC_MEDIA_META_FILE']`, which `cc_media_meta_file()` honours. `cc_client_ip()` takes the trusted
+  `$GLOBALS['CC_MEDIA_META_FILE']`, which `cc_media_meta_file()` honours. The same goes for
+  `CC_MEDIA_FOLDERS_FILE` (media folders), `CC_BACKUP_DATA_DIR`, `CC_UPLOADS_DIR` and `CC_BACKUP_DIR` (backup and
+  restore) and `CC_SITE_ROOT` (`cc_unpublish_files()`). `cc_client_ip()` takes the trusted
   proxy list as an argument for the same reason.
 - **Component tests** (`panels-ui`, `rich-text`, `session-ui`, `ui-shell`) create a `JSDOM`, expose its
   globals on `globalThis`, start Vite in middleware mode (`createServer({ server: { middlewareMode: true } })`)
@@ -240,7 +255,9 @@ the contents of `dist/` are copied into `canvascore-admin/`.
 | `settings.json` | Global Options: `brandColor`, `fontFamily`, `siteName`, `siteSuffix`, `siteUrl`, `faviconUrl`, `defaultOgImage`, `robotsAllow`, `menuInheritTheme`, `headerEnabled`, `footerEnabled`, `cookieBanner` (`{ enabled, text, acceptLabel, declineLabel, privacyLabel, privacyUrl, position }`), `adminEmail`, `emailFrom`, `emailSubject`, `sessionTimeoutMinutes`, `trustedProxies` (the last five are admin-only: `get_settings` leaves them out for editors and an editor's save keeps the stored values) |
 | `menu.json` | `{ "items": [...], "settings": {...} }`, nested items (`children`), legacy flat format still read |
 | `forms.json` | Written by each publish: form id → recipient, so addresses never reach the client |
-| `media.json` | Media metadata per uploaded file name: `alt`, `w`, `h`, `bytes`, `variants` (widths of the WebP copies), `optimized` (see `media.php`) |
+| `media.json` | Media metadata per uploaded file name: `alt`, `w`, `h`, `bytes`, `variants` (widths of the WebP copies), `optimized`, `folder` (media library folder path such as `Products/Shoes`, `''` = none; see `media.php`) |
+| `media-folders.json` | Array of media folder paths, so empty folders exist too (parents of listed folders are implied) |
+| `backups/` | Backup ZIPs: `backup-…zip` (kept by hand), `before-restore-…zip` (safety copies, newest 5), `download-…zip` and `upload-….part` (temporary, removed after an hour); deny-all `.htaccess` |
 | `published_files.json` | Manifest of files the last successful publish wrote (`…/index.html` and `…/feed.xml`, relative to the site root); used to delete pages and feeds no longer published |
 | `login_attempts.json`, `rate_*.json` | Login throttling and form rate limits |
 | `sessions/` | PHP session files (dedicated folder) |
@@ -297,7 +314,10 @@ on publish; drafts may share a slug.
   the stored JSON don't matter), writing back only the rows that changed.
 
 A published collection item whose slug changes gets the same redirect treatment in `save_item`
-(`/<collection>/<old>/` → `/<collection>/<new>/`).
+(`/<collection>/<old>/` → `/<collection>/<new>/`). Renaming a collection's slug (`save_collection` with a new `slug`,
+in a transaction) adds `/<old-col>/<item>/` → `/<new-col>/<item>/` for each of its published items, and moving a
+published item to another collection (`bulk_items` `move`) adds its own redirect (after dropping any redirect from
+the destination address). The files move at the next publish; the stale ones are removed by the manifest cleanup.
 
 ### Revisions
 
@@ -487,6 +507,9 @@ successful: N pages published", plus removed pages and non-fatal `$warnings` (fe
 | `cc_rate_allow($bucket, $key, $max, $window)` | Sliding-window rate limit in `rate_<bucket>.json` (file lock); `submit_form.php` uses `('forms', cc_client_ip(), 8, 600)` |
 | `cc_login_wait($username)` / `cc_login_result($username, $ok)` / `cc_login_key()` | Login throttling per account + client IP in `login_attempts.json`: 5 failures in 15 minutes → 15 minutes wait |
 | `cc_svg_is_safe($path)` | Refuses SVG uploads with scripts, event handlers, `javascript:` links, `foreignObject`, entities |
+| `cc_unpublish_files($data_dir, $prefix, $extra = [])` | Takes generated files offline at once: deletes the `…/index.html` / `…/feed.xml` under `$prefix` (`blog/` or `blog/post/`) that are in `published_files.json` (or in `$extra`), removes the emptied folders and updates the manifest. Never touches other files. Site root from `$GLOBALS['CC_SITE_ROOT']` (tests) |
+| `cc_unpublish_item($pdo, $data_dir, $item)` | A deleted published item: `cc_unpublish_files()` for its folder, unless another published item of the collection owns the same address. Used by `delete_item` and `bulk_items` `delete`; `delete_collection` unpublishes the collection folder |
+| `cc_public_branding($settings)` | What `api.php?action=branding` may return before sign-in: `siteName` (max 120 characters) and `faviconUrl` (dropped unless `http(s)://`, root-relative or a plain relative path) |
 
 ### `compiler.php`
 
@@ -512,6 +535,33 @@ memory limit can't handle the image). The original is never changed.
 | `cc_optimize_images($html, $uploads_url, $meta = null)` | Publish time: adds `srcset`/`sizes` to `<img>`s of uploaded files that have copies, `loading="lazy"` (except the first image, which gets `fetchpriority="high"`), `decoding="async"` |
 | `cc_media_forget($uploads_dir, $name)` | Deletes a file's copies and metadata (`delete_media`) |
 | `cc_media_meta_all()` / `cc_media_meta_update($fn)` | Read / locked update of `media.json`; `cc_media_meta_file()` honours `$GLOBALS['CC_MEDIA_META_FILE']` (tests) |
+| `cc_media_folder_path($p)` | Normalizes a folder path (`" Products / Shoes "` → `"Products/Shoes"`); `''` = no folder, `null` = invalid (max 5 levels, segments of 1–50 letters, digits, spaces, `_ . ( ) & -`, no `.`/`..`) |
+| `cc_media_folders()` | All folders, sorted: those in `media-folders.json`, those used in `media.json`, and every parent of them |
+| `cc_media_folder_create($path)` / `cc_media_folder_rename($from, $to)` / `cc_media_folder_delete($path)` | Folder operations. Rename moves sub-folders and images' `folder` along (refused when the target exists or is inside the source); delete moves its images to the parent folder and deletes no file |
+| `cc_media_move($names, $folder)` | Sets `folder` for the given files (creating the folder). **Folders are labels**: files never move on disk, so image URLs never change |
+| `cc_media_usage($pdo, $names)` | Where each file is used: searches the stored content of pages, draft copies (`Page draft`), items (incl. `cover_image`), `site_parts`, `master_components`, and `settings.json` / `menu.json`, by bare file name; returns `name => ["Page: Home", …]` |
+
+### `backup.php`
+
+Loaded by `api.php`. A backup is a ZIP with `manifest.json` (`format: "canvascore-backup"`, `format_version`
+`CC_BACKUP_FORMAT` = 1, `app`, `build`, `db_schema`, `content_schema`, `created_at`, `kind`, `site_name`,
+`includes`, `counts`, `uploads`), `db/<table>.json` (every row of `CC_BACKUP_TABLES`: `pages` incl. draft copies,
+`templates`, `master_components`, `site_parts`, `collections`, `collection_items`, `redirects`; plus the optional
+`page_revisions` and `form_submissions`), `data/<file>.json` (`CC_BACKUP_DATA_FILES`: `settings.json`, `menu.json`,
+`media.json`, `media-folders.json`) and `uploads/…` (images only, stored uncompressed). The `admin` and `cc_meta`
+tables are never included.
+
+| Function | What it does |
+| --- | --- |
+| `cc_backup_create($pdo, $dest, $opts)` | Writes the ZIP (`history`, `submissions`, `kind`); returns the manifest or throws |
+| `cc_backup_inspect($path)` | Opens and checks a ZIP without changing anything: manifest, only allowed entries (`cc_backup_upload_path_ok()`: image extensions, plain names, no `..`), not newer than this install (`format_version`, `db_schema`), enough disk space |
+| `cc_backup_restore($pdo, $path)` | Reads and validates every table and data file first; unpacks images into `.cc-restore-…` next to `uploads/`, drops unsafe SVGs / non-images, swaps the folders (`.cc-old-uploads-…` kept until the end); replaces the tables in one transaction (optional tables only when present; columns intersected with the current schema, so older backups load) and puts the old uploads back on failure; then writes settings (keeping the current `trustedProxies`), menu and media data, and runs `cc_migrate_content()` |
+| `cc_backup_safety_copy($pdo)` | `before-restore-…zip` of the current site; keeps the newest `CC_BACKUP_KEEP_SAFETY` (5) |
+| `cc_backup_list()` / `cc_backup_name_ok()` / `cc_backup_cleanup()` | Saved backups with their manifest info; strict file name check; removes temporary `download-*.zip` / `upload-*.part` older than an hour |
+| `cc_backup_max_upload()` / `cc_backup_slug($name)` | Smaller of `upload_max_filesize` and `post_max_size` (chunk size for the client); download file name from the site name |
+
+When adding a content table or a data file that belongs to the site, add it to `CC_BACKUP_TABLES` /
+`CC_BACKUP_DATA_FILES` (both creation and the restore whitelist use them), and to the tests in `tests/server.php`.
 
 ## 8. Adding a new block
 
@@ -565,7 +615,10 @@ compiler. Whether it gets a Content tab depends only on `CONTENT_PANELS` (e.g. `
 
 One Zustand store holds auth, the current view (`currentView`: `manager`, `editor`, `menu`, `media`,
 `settings`, `users`, `templates`, `submissions`, `collections`, `backup`), `viewport`, the page list,
-`activePage`, the block tree and session/draft flags. Components read it with `useStore()` /
+`activePage`, the block tree and session/draft flags. `branding` (`{ siteName, faviconUrl }`) is loaded by
+`fetchBranding()` (public `api.php?action=branding`, awaited before the first screen so the sign-in page doesn't
+change after it appears) and updated by `setBranding()` when Global Options are saved; `useBrandingHead()` keeps the
+tab title (`<site name> · Admin`) and favicon in step. Components read it with `useStore()` /
 selectors; non-React code uses `useStore.getState()` / `setState()`.
 
 **Tree helpers** (module-private, immutable): `updateNode`, `removeNode`, `insertNode`, `findNodeById`,
@@ -703,10 +756,10 @@ sends `keepalive` at most once a minute and only after user activity, warns befo
   blocks. Unknown actions fall through to `{"success":false,"message":"Invalid action."}`.
 - **Order at the top**: JSON headers, `display_errors` off (warnings go to the log, never into JSON), DB
   open + migrations, then: POST without a session → **401** (`cc_unauthorized()`), CSRF check on every
-  POST except `login` (`cc_verify_csrf_or_die()`, **403**), public actions (`version`, `session_status`,
+  POST except `login` (`cc_verify_csrf_or_die()`, **403**), public actions (`version`, `branding`, `session_status`,
   `check_auth`, `login`, `logout`), the **auth gate**, `cc_session_touch()`, `session_write_close()` for GET.
 - **Admin-only**: add the action to the `in_array($action, [...]) && !$is_admin` list near the top (users,
-  backup, submissions), or check `$is_admin` inside the handler (collections, redirects, admin-only settings
+  backup actions, submissions), or check `$is_admin` inside the handler (collections, redirects, admin-only settings
   fields). Data an editor must not see is removed from read responses too: `get_settings` drops `adminEmail`,
   `emailFrom`, `emailSubject`, `sessionTimeoutMinutes` and `trustedProxies` for non-admins, and `save_settings`
   keeps their stored values.
@@ -728,9 +781,26 @@ Recently added actions:
 | `save_media_meta` | POST `{ name, alt }` | Alt text of a library image (max 300 characters) in `media.json` |
 | `optimize_media` | POST | Makes the WebP copies of images not yet optimized, in ~20 s batches: returns `{ done, remaining }`; call again while `remaining > 0` |
 | `change_own_password` | POST `{ current, password }` | Any role, own account; `current` is required unless `must_change_pw` is set (the forced first change); 8+ characters, not `admin`; clears `must_change_pw` |
+| `branding` | GET | **Public** (no sign-in): `{ siteName, faviconUrl }` from `cc_public_branding()`, nothing else from the settings |
+| `get_media_folders` | GET | Array of folder paths (`cc_media_folders()`) |
+| `media_folder_create` / `media_folder_rename` / `media_folder_delete` | POST `{ path }` / `{ from, to }` / `{ path }` | Any signed-in user; returns `{ success, folders }` |
+| `media_move` | POST `{ names, folder }` | Sets the folder of existing files (`''` = none); returns `{ moved, folders }` |
+| `media_usage` | POST `{ names }` | `{ usage: { name: ["Page: Home", …] } }` (`cc_media_usage()`), shown before deleting |
+| `bulk_items` | POST `{ op, ids, collection_id? }` | Any signed-in user. `op`: `move`, `archive`, `unarchive`, `delete`; max 1000 ids. Returns `{ done, skipped: [{ id, title, reason }], removed_files }`. `move` skips items already in the target and published items whose slug is taken by a published item there, and adds redirects for moved published items |
+| `backup_info` | GET | `{ zip, max_upload, backups }` (admins) |
+| `backup_create` | POST `{ history, submissions, temp }` | `temp: true` makes a one-time `download-…zip`; otherwise a `backup-…zip` kept in `backups/`. Errors come back as JSON before any download starts |
+| `backup_download` | GET `?name=` | Streams a saved backup (or a `download-…` one, deleted after sending, named after the site) |
+| `backup_delete` | POST `{ name }` | Deletes a saved backup or safety copy |
+| `backup_upload_chunk` | POST multipart `{ id, index, chunk }` | Appends a piece to `backups/upload-<id>.part` (`id`: 16 hex characters; index 0 starts the file) |
+| `backup_restore` / `backup_restore_saved` | POST `{ upload, size }` / `{ name }` | One at a time (`.restore.lock`): inspect, safety copy, `cc_backup_restore()`. Returns `{ success, message, counts, skipped, safety, backups }`; the client then republishes |
 
-`upload_media` now also returns `meta` (from `cc_media_process()`), `get_media` returns `alt, w, h, bytes,
-optimized, variants` per file (the `_cc` folder isn't listed), and `delete_media` calls `cc_media_forget()`.
+`upload_media` also returns `meta` (from `cc_media_process()`) and accepts an optional `folder` field;
+`get_media` returns `folder, mtime, alt, w, h, bytes, optimized, variants` per file (the `_cc` folder isn't listed);
+`delete_media` accepts `{ name }` or `{ names: [...] }` and calls `cc_media_forget()` for each.
+`save_collection` (admins) renames: without an explicit `slug` the address is kept; it returns `{ id, name, slug,
+moved }`. `delete_collection` and `delete_item` take the published files offline at once and return `removed_files`.
+`export_site` / `import_site` (the pre-0.14 `.json` format) remain; the editor only uses `import_site`, for old
+backups.
 
 ```php
 if ($action === 'save_thing' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -750,7 +820,7 @@ instead of claiming success.
 `canvascore-admin/version.json` is the single source of truth, read by PHP (`cc_version()`) and Vite:
 
 ```json
-{ "app": "0.13.0", "db_schema": 7, "content_schema": 1, "build": 21, "built": "2026-10-12T12:39:30.176Z" }
+{ "app": "0.14.0", "db_schema": 7, "content_schema": 1, "build": 28, "built": "2026-10-13T08:08:55.709Z" }
 ```
 
 - `build`/`built` are bumped by `scripts/bump.mjs` on every `npm run build` (it also syncs `version` in
@@ -759,12 +829,26 @@ instead of claiming success.
   `app` version differs from the server's (reload needed after an update).
 - Every published page carries `<meta name="generator" content="CanvasCore x.y.z">`.
 
-Cutting a release (see also [VERSIONING.md](../VERSIONING.md)):
+Three versions live in that file: `app` (the product, SemVer), `db_schema` (the last DB migration) and
+`content_schema` (the saved block format). Bump `db_schema` / `content_schema` together with a new migration (see
+[Migrations](#migrations)); a content migration runs on the next request, `cc_migrate_content()` rewrites the stored
+`content_json` (of `pages`, today) and stamps the new `content_schema`, and rows saved afterwards are already at the
+current version.
 
-1. Set `app` (SemVer; while `0.x`, MINOR = features, PATCH = fixes).
+Cutting a release:
+
+1. Set `app` in `version.json` (SemVer; while `0.x`, MINOR = new features or format changes, PATCH = fixes only;
+   1.0.0 once the API and formats are stable).
 2. Move `[Unreleased]` in `docs/CHANGELOG.md` (Keep a Changelog format) to a dated `## [x.y.z] - YYYY-MM-DD` section.
-3. Write `docs/RELEASE-NOTES-x.y.z.md` (summary, files changed, update steps).
-4. `npm test`, lint, `npm run build`, deploy.
+3. `npm test` and `npm run lint` (zero warnings).
+4. `npm run build`, and commit the bumped `version.json` on its own.
+5. Tag the release `vX.Y.Z` and publish a GitHub release whose notes are that CHANGELOG section (plus update steps
+   when needed). There are no release-notes files in the repository.
+
+Contributions from outside follow [CONTRIBUTING.md](../../CONTRIBUTING.md) (focused pull requests, tests and a
+CHANGELOG line, `Signed-off-by` per the DCO, contributions licensed AGPL-3.0-or-later). Vulnerabilities are reported
+privately as described in [SECURITY.md](../../SECURITY.md) (bug@sputlab.com or GitHub private vulnerability
+reporting); only the latest 0.x release gets security fixes.
 
 Git workflow used in this repository:
 
@@ -776,3 +860,5 @@ Git workflow used in this repository:
 - Never commit generated output: `dist/`, the editor build copied into `canvascore-admin/`, the data dir and
   the published site at the repo root are all git-ignored. A new root-level file must be whitelisted in
   `.gitignore`.
+- Internal working notes (phase notes, old release notes, design notes) go in `docs/dev/`, which is git-ignored:
+  they stay on your machine. Anything other developers need belongs in these manuals or the CHANGELOG.

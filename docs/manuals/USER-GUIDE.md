@@ -1,6 +1,6 @@
 # CanvasCore User Guide
 
-*For CanvasCore 0.13.0 and the changes that follow it · for editors and administrators*
+*For CanvasCore 0.14.0 · for editors and administrators*
 
 CanvasCore is where you build and update your website. You put pages together from ready-made blocks (text, images, buttons, galleries, forms and more), see them exactly as visitors will, and publish them when they're ready. Your work stays private as a draft until you publish it, unsaved changes are backed up on your device, and every saved version of a page is kept for a while, so a lost connection, an expired session or a wrong edit doesn't cost you your work. This guide covers day-to-day work. For the full list of blocks, see the [Block Reference](BLOCK-REFERENCE.md). For installation, accounts and server settings, see the [Administrator Guide](ADMIN-GUIDE.md).
 
@@ -36,7 +36,7 @@ Your role is shown under your name at the bottom of the sidebar.
 
 ### Signing in
 
-1. Open the CanvasCore address your administrator gave you.
+1. Open the CanvasCore address your administrator gave you. The sign-in screen shows your site's name and icon (its favicon), once they are set in **Global Options**.
 2. Enter your **Username** and **Password**.
 3. Click **Login**.
 
@@ -65,14 +65,14 @@ If the current password is wrong, or the two new ones don't match, the box tells
 
 ### The sidebar
 
-Every screen except the page editor has a sidebar on the left. On a narrow screen, open it with the menu button at the top left.
+Every screen except the page editor has a sidebar on the left. On a narrow screen, open it with the menu button at the top left. The top of the sidebar shows your site's name and icon, and the browser tab says "*Site name* · Admin". Both come from **Global Options** (see [Site identity & SEO](#site-identity--seo)); without a favicon, the default CanvasCore icon is shown.
 
 - **Publish Site**: rebuilds and publishes the whole site (see [Publish vs Publish Site](#publish-vs-publish-site)).
 - **Content**: **Pages**, **Collections**, **Templates**, **Media**.
 - **Site**: **Menu**, **Global Options**.
 - **Administration** (admins only): **Submissions**, **Accounts**, **Backup**.
 
-At the bottom you see your name, your role, two icons (the key, **Change your password**, and the arrow leaving a box, **Log out**) and the CanvasCore version. If it says "Editor v… / server v…: reload the page after updating", CanvasCore was just updated. Reload the page in your browser.
+At the bottom you see your name, your role, two icons (the key, **Change your password**, and the arrow leaving a box, **Log out**) and the CanvasCore version. The **ⓘ** next to the version opens **About CanvasCore**: the version and build, and links to the CanvasCore website, the source code on GitHub, the Discord community, the address for bugs and suggestions (bug@sputlab.com) and the donation page. If it says "Editor v… / server v…: reload the page after updating", CanvasCore was just updated. Reload the page in your browser.
 
 ### Session expiry
 
@@ -389,8 +389,8 @@ This tab holds the block's own settings: its texts, images, links, items and lay
 **Choosing an image.** Click the blue image button (**Choose from the media library**) next to an image field. The **Choose an image** window opens:
 
 - Each image shows its size in pixels and its file size.
-- Type in **Search by name or description…** to find an image.
-- Click **Upload** to add new images. You can choose several files at once.
+- Type in **Search by name or description…** to find an image, or pick a folder in the list next to it (**All images**, **Not in a folder** or one of your folders). The newest images come first.
+- Click **Upload** to add new images. You can choose several files at once. They go into the folder you picked, and the upload progress panel shows how each one went.
 - Click an image to use it. Press **Esc**, or click **×**, to close without choosing.
 
 If the image has a description in the Media Library and the block's description (alt text) field is still empty, the description is filled in for you. A description you've already typed in the block is never replaced.
@@ -489,10 +489,11 @@ Each time the site is rebuilt, CanvasCore also updates the sitemap, the list the
 - **Renaming** a page's address (slug) takes effect when you publish it. When you do:
   - Links to the page are updated for you everywhere: in buttons, menus and links inside text, on other pages, collection items, the global header and footer and global masters.
   - **The old address keeps working.** Visitors and search engines that use it are sent on to the new address (a "redirect"), so bookmarks and search results don't break.
-- **Renaming a published collection item** works the same way: its old address forwards to the new one after you publish.
+- **Renaming a published collection item** works the same way: its old address forwards to the new one after you publish. So do moving items to another collection and changing a collection's address (see [Collections](#9-collections)).
+- **Deleting** a published collection item, or a whole collection, also takes its pages off the site right away.
 - If you later publish a page at an address that used to forward somewhere, the page wins and the redirect is removed.
 - Administrators can see every redirect, and add or remove them, in **Global Options › Redirects** (see [Redirects](#redirects-admins)).
-- Pages and collection items that are no longer published are removed from the site the next time the site is published.
+- Other pages and collection items that are no longer published (for example an item set back to **Draft**) are removed from the site the next time the site is published.
 
 ### Local backups of unsaved work
 
@@ -590,10 +591,29 @@ A collection is a group of similar pages, such as a blog, news or a portfolio. E
 
 Click **Collections** in the sidebar. The left column lists the collections, with the number of items in each. Click one to see its items.
 
-- **Creating or deleting a collection** is for admins only: use **New collection**, type a **Name** and click **Create**. Deleting a collection deletes all its items.
+- **Creating, renaming or deleting a collection** is for admins only: use **New collection**, type a **Name** and click **Create**. Deleting a collection deletes all its items, and their pages and the collection's RSS feed are taken off the site at once.
 - **Adding an item**: click **New Item** (or **Create the first item**).
-- **Editing an item**: click **Edit**, or double-click the row.
-- **Deleting an item**: click the bin and confirm. It disappears from the site the next time the site is published.
+- **Editing an item**: click the pencil icon, or double-click the row.
+- **Deleting an item**: click the bin and confirm. If it was published, its page is taken off the site at once. Collection lists, the site search and the sitemap are updated the next time the site is published: a bar offers **Publish now**.
+
+### Renaming a collection (admins)
+
+Click the pencil next to a collection in the left column, or **Rename** above its items. A form opens with the **Name** and the **Address**.
+
+- Changing only the **Name** changes what you see in the admin and in the Collection List block's choices. The address (for example `/blog/`) stays the same.
+- Changing the **Address** moves every item to a new URL (for example from `/blog/my-post/` to `/news/my-post/`). CanvasCore asks first (**Change address**). After you publish the site, each published item's old address forwards to its new one, so links and search results keep working. A bar offers **Publish now**.
+- **Esc** or **Cancel** closes the form without changes. An address already used by a page or another collection is refused.
+
+### Working on several items at once
+
+Each row has a checkbox. Tick the items you want, or tick the box in the header to select them all. **Shift+click** a second checkbox to select (or unselect) every item in between. A bar then shows how many are selected, with:
+
+- **Move to…** and **Move**: moves the items to another collection. A published item forwards from its old address to the new one after you publish.
+- **Archive** / **Unarchive**: shown when the selection has items that can be archived or unarchived.
+- **Delete**: deletes the selected items after you confirm. Published items are taken off the site at once.
+- **×**: clears the selection.
+
+Some items may be skipped, and a message lists them with the reason. For example, a published item isn't moved when the destination collection already has a published item with the same URL slug: change one of the two slugs first. Lists and the site search are updated when you publish the site, so click **Publish now** in the bar that appears.
 
 ### Editing an item
 
@@ -616,7 +636,7 @@ Items have no hidden draft copy. If you save a published item, the change goes o
 
 ### Archive and unarchive
 
-Click the archive icon on an item's row to archive it, or unarchive it. Archived items show an **Archived** badge. A bar then says "Archive change saved. Public lists update when you publish the site." Click **Publish now** to update the site.
+Click the archive icon on an item's row to archive it, or unarchive it (to do this for several items at once, see [Working on several items at once](#working-on-several-items-at-once)). Archived items show an **Archived** badge. A bar then says "Archive change saved. Public lists update when you publish the site." Click **Publish now** to update the site.
 
 ### The Collection List block
 
@@ -635,14 +655,45 @@ On the canvas you see grey placeholder cards. The real items are filled in when 
 
 ## 10. Media
 
-Click **Media** in the sidebar to open the **Media Library**, where all your images are kept.
+Click **Media** in the sidebar to open the **Media Library**, where all your images are kept. On the left is the list of folders; on the right, the images of the folder you opened.
 
-- **Uploading**: click **Upload Images** and choose one or more files. You can also drag files from your computer and drop them anywhere on the page.
+- **Uploading**: click **Upload Images** and choose one or more files. You can also drag files from your computer and drop them anywhere on the page. New images go into the folder that is open (with **All images** open, they go in no folder).
 - **Accepted files**: JPG, PNG, GIF, WebP, AVIF, SVG, ICO and BMP.
 - **SVG files with scripts** or other active content are refused. Export the SVG again as a plain SVG, or as PNG.
-- **Searching**: type in **Search by file name…**. The line next to it says how many images are shown (for example "12 of 40 images").
+- **Searching**: type in **Search name or description…**. It searches the folder that is open.
+- **Sorting**: choose **Newest first**, **Oldest first**, **Name A–Z**, **Name Z–A**, **Largest first** or **Smallest first**.
 - **Copying an address**: click the copy icon under an image. If your browser blocks copying, the address appears in a box so you can copy it yourself.
-- **Deleting**: click the bin and confirm. **Pages that use the image will show a broken image**, so check first.
+- **Moving to a folder**: click the arrow icon under an image (**Move to a folder**), or drag the image onto a folder.
+- **Deleting**: click the bin. The confirmation tells you where the image is still used (see [Deleting images](#deleting-images)).
+
+### Upload progress
+
+While files upload, a panel at the corner of the screen lists each one with its size and a progress bar, then a green tick or a red warning with the reason (for example "Not an image", or a file the server refused). The title says "Uploading 2 of 5…" and then how many were uploaded and how many failed. The panel stays until you close it with **×**, so you always know what happened. You can't close it while files are still uploading.
+
+### Folders
+
+Folders help you keep a large library tidy, for example **Products**, **Team** or **Blog/2026**.
+
+- **All images** shows every image. **Not in a folder** shows the images that aren't in any folder. Each folder shows how many images it holds, including those in its sub-folders.
+- **New folder** creates a folder inside the open one (or at the top level, with **All images** or **Not in a folder** open). Folders can be nested up to 5 levels. Names can use letters, numbers, spaces and `- _ . ( ) &`, up to 50 characters.
+- Click a folder to open it. Its sub-folders are shown above its images.
+- **Renaming or deleting a folder**: open it, then use the pencil or bin icon next to its name. Deleting a folder **deletes no image**: its images and sub-folders' images move up to the parent folder (or to **Not in a folder**).
+- **Moving images**: drag one image, or a selection, onto a folder in the list on the left or onto a sub-folder; or use **Move to folder…**. In the **Move to…** box you can also pick **+ New folder…** and type a name (use `/` for a folder inside another, for example `Products/Shoes`).
+
+Folders are only labels for finding images in the library. **The image files don't move**, so their addresses don't change and pages that use them keep working when you move or rename things.
+
+### Selecting several images
+
+Tick the checkbox on an image (or click its picture) to select it. **Shift+click** another one to select every image in between. **Select all** selects every image shown. A bar then shows how many are selected, with:
+
+- **Move to folder…**
+- **Copy addresses**: copies the addresses of all selected images, one per line.
+- **Delete**: deletes them together (see below).
+- **×**: clears the selection.
+
+### Deleting images
+
+Before deleting, CanvasCore checks where the images are still used: pages and their drafts, collection items (including cover images), the global header and footer, global masters, Global Options (for example the favicon) and the menu (for example the logo). The confirmation lists those places ("still used: Page: Home, Item: Summer sale…"), or says they aren't used on any page. Places that still use a deleted image show a broken image, so replace the image there first. Deleting can't be undone.
 
 ### What each image shows
 
@@ -665,7 +716,7 @@ Images uploaded before this feature have no copies yet. If there are any, a butt
 
 ### Uploading while editing
 
-You can also upload while editing: the **Choose an image** window has an **Upload** button (see [Content tab](#content-tab)).
+You can also upload while editing: the **Choose an image** window has an **Upload** button and a folder filter (see [Content tab](#content-tab)).
 
 ---
 
@@ -737,10 +788,13 @@ Click **Global Options** in the sidebar for settings that apply to the whole sit
 
 ### Site identity & SEO
 
-- **Site name** and **Site address (for sitemap, social and RSS)**: the full address of your site, for example `https://www.example.com`. The collections' RSS feeds are only made when it's filled in, and search engines use it to know the main address of each page.
+- **Site name**: set at installation. It's also shown on the sign-in screen, at the top of the sidebar and in the browser tab of the admin.
+- **Site address (for sitemap, social and RSS)**: the full address of your site, for example `https://www.example.com`. The collections' RSS feeds are only made when it's filled in, and search engines use it to know the main address of each page.
 - **Page title suffix**: added to every page title in the browser tab (for example " | My Site"). Leave it empty for none.
-- **Favicon address**: the small icon in the browser tab.
-- **Default social image (OG)**: used when a page has no social share image of its own.
+- **Favicon**: the small icon in the browser tab. Use a square image (PNG, SVG or ICO, at least 64×64). It's also used as the logo of the admin (sign-in screen, sidebar, browser tab).
+- **Default social image (OG)**: used when a page has no social share image of its own. 1200×630 works best.
+
+For both, type an address, click **Upload image** (it goes into the Media Library, with its progress on the button) or click **Library** to pick an image you've already uploaded. A small preview shows the image. Click **Save & Publish** to apply it.
 - **Allow search engines to index the site (robots.txt)**.
 
 To hide a single page from search engines, use **Hide this page from search engines** in that page's settings (see [Search engines and sharing](#search-engines-and-sharing-seo--meta-data)).
@@ -800,17 +854,23 @@ These sections appear under **Administration** in the sidebar only for admins. D
 - **Forms**: the **Form** block's **Form Settings** set the **Form Title**, the **Receiving Email** and the **Submit Button Text**, and **Form Fields** lists the fields (for example **Short Text**, **Email**, **Long Text**, **Number**). See the [Block Reference](BLOCK-REFERENCE.md).
 - **Submissions** (**Form Submissions**): messages visitors sent through your forms. You can search them, **Refresh** the list, **Export CSV**, delete single messages or **Clear all**.
 - **Accounts**: **Add a user** with a **Username**, **Password** and **Role**. In the list you can **Change password** or delete an account. You can't delete your own account.
-- **Backup**: **Download backup** saves the pages, menu, settings, global header and footer, masters and templates in one file. Collections and uploaded images are not included. **Import** restores a backup and **replaces** the current site, but user accounts are kept. Download a backup first.
+- **Backup**: **Download backup (.zip)** saves the whole site in one file: pages and their drafts, collections and items, templates, masters, the global header and footer, redirects, Global Options, the menu and every uploaded image (with its description and folder). Version history and form messages are optional. User accounts and passwords are never included. **Keep a copy on the server** stores it on the server instead, where it can later be downloaded, restored or deleted. **Restore** (from a file, or from a copy on the server) **replaces** the whole site with the backup; user accounts are kept, a safety copy of the current site is saved first, and the site is published again afterwards. Older `.json` backups can still be imported.
 
 ---
 
 ## 14. Good to know and troubleshooting
 
 **My changes aren't on the live site.**
-You probably saved a draft. Open the page and click **Publish**. In the page list, **Modified** means there are saved changes that aren't online yet. For archive changes, deleted collection items, a changed global master or new redirects, click **Publish Site**.
+You probably saved a draft. Open the page and click **Publish**. In the page list, **Modified** means there are saved changes that aren't online yet. For archive changes, moved or deleted collection items, a renamed collection, a changed global master or new redirects, click **Publish Site**.
 
 **An image is broken on the site.**
-The image was probably deleted from the Media Library, or its address was typed wrongly. Upload it again and choose it again in the block.
+The image was probably deleted from the Media Library, or its address was typed wrongly. Upload it again and choose it again in the block. Moving an image to another folder never breaks it: folders don't change addresses.
+
+**The sidebar or sign-in screen shows the default icon instead of my favicon.**
+The favicon address in **Global Options** is empty, or the image can't be loaded (deleted, or a wrong address). Choose it again with **Upload image** or **Library** and click **Save & Publish**.
+
+**Some collection items were "skipped" when moving them.**
+The destination collection already has a published item with the same URL slug (or the item was already there). Change the slug of one of them, then move it again.
 
 **I was signed out.**
 Your session expired after inactivity. Sign in again on the **Session expired** screen to carry on where you were. If you had closed or reloaded the tab, sign in and use **Restore** in **Unsaved work found**.

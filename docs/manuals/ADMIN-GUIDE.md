@@ -20,10 +20,11 @@ web root (the folder the domain serves). Replace both with your own values.
 5. [Updating to a new version](#5-updating-to-a-new-version)
 6. [Accounts and roles](#6-accounts-and-roles)
 7. [Publishing](#7-publishing) (what a publish writes, redirects, RSS, site search, cookie banner, images)
-8. [Backup and restore](#8-backup-and-restore)
+8. [Backup and restore](#8-backup-and-restore) (site backup as ZIP, restore, safety copies, server-level backups)
 9. [Forms and email](#9-forms-and-email)
 10. [Security](#10-security)
 11. [Troubleshooting](#11-troubleshooting)
+12. [License](#12-license)
 
 ---
 
@@ -33,16 +34,16 @@ web root (the folder the domain serves). Replace both with your own values.
 |---|---|
 | PHP | **8.0 or newer** (the installer refuses older versions) |
 | PHP extensions (required) | `pdo_sqlite`, `json`, `session` |
-| PHP extensions (recommended) | `dom` (without it rich text is cleaned by a simpler, more conservative fallback sanitizer, and SVG uploads are checked with a simpler test) |
+| PHP extensions (recommended) | `zip` (`ZipArchive`): needed to make and restore site backups on the Backup page (section 8); without it only old `.json` backups can be imported. `dom` (without it rich text is cleaned by a simpler, more conservative fallback sanitizer, and SVG uploads are checked with a simpler test) |
 | PHP extensions (optional) | `gd` **with WebP support** (`imagewebp()`), for image optimization: without it uploaded images are used as they are, with no smaller copies (section 7.7). `exif`, to turn phone photos the right way up in those copies. `mbstring`: CanvasCore has built-in fallbacks for the functions it uses, so forms, the site search and the media library work without it |
 | PHP functions | `mail()` enabled, if you want form notifications by email (submissions are stored either way) |
-| PHP settings | `file_uploads = On`; `upload_max_filesize` / `post_max_size` large enough for your images (and for backup files you import); a `memory_limit` large enough for your photos if you want them optimized (about 5 bytes per pixel: a 12-megapixel photo needs roughly 60 MB free; larger images are skipped) |
+| PHP settings | `file_uploads = On`; `upload_max_filesize` / `post_max_size` large enough for your images (backup ZIPs are uploaded in pieces, so they are not limited by these settings; old `.json` backups are sent in one piece); a `memory_limit` large enough for your photos if you want them optimized (about 5 bytes per pixel: a 12-megapixel photo needs roughly 60 MB free; larger images are skipped) |
 | Web server | Apache 2.4 (with `.htaccess` enabled; `mod_alias` for real 301 redirects) or Nginx + PHP-FPM |
 | HTTPS | Strongly recommended. Without it, passwords and session cookies travel unencrypted |
 | To build the editor | Node.js 20 or newer and npm (on your computer, not on the server) |
 
-The installer (`install.php`) checks the PHP version, the required extensions, `dom`, the
-writable folders, the editor build, `mail()` and HTTPS, and shows each item as OK, warning or
+The installer (`install.php`) checks the PHP version, the required extensions, `zip` and `dom`
+(a warning if missing), the writable folders, the editor build, `mail()` and HTTPS, and shows each item as OK, warning or
 failure before it lets you install. It does **not** check GD/WebP or `mbstring`: to see whether
 GD can write WebP, run `php -r 'var_dump(function_exists("imagewebp"));'` with the same PHP the
 site uses (or look for "WebP Support" in the `gd` section of `phpinfo()`).
@@ -61,13 +62,17 @@ root, and published pages are written to the folder above it (the web root itsel
 │   │                             version history (page_revisions), redirects
 │   ├── settings.json             Global Options
 │   ├── menu.json                 Menu
-│   ├── media.json                Image metadata: description (alt text), size, optimized copies
+│   ├── media.json                Image metadata: description (alt text), size, optimized copies,
+│   │                             media library folder
+│   ├── media-folders.json        Media library folders (also the empty ones)
 │   ├── forms.json                Form registry (form id → recipient), written on publish
 │   ├── published_files.json      Files written by the last successful publish (pages, items,
 │   │                             redirect pages, feed.xml, ...)
 │   ├── login_attempts.json       Login throttling state
 │   ├── rate_forms.json           Form rate-limit state
 │   ├── sessions/                 PHP session files for the editor
+│   ├── backups/                  Site backups kept on the server and safety copies (section 8),
+│   │                             with its own deny-all .htaccess
 │   └── .htaccess                 "Deny all" (safety net)
 └── public/                       Web root
     ├── index.html                Home page               ┐
@@ -102,8 +107,9 @@ Rules to keep in mind:
    - The choice is made automatically on every request. If the outside folder becomes writable
      later, the database and the `settings.json`, `menu.json`, `forms.json` files are copied there
      and the old database file is deleted; the reverse happens if the outside folder stops being
-     writable. Other files are **not** moved: copy `media.json` (image descriptions) and
-     `published_files.json` (stale page cleanup) to the new folder yourself.
+     writable. Other files are **not** moved: copy `media.json` (image descriptions and folders),
+     `media-folders.json`, `published_files.json` (stale page cleanup) and the `backups/` folder
+     to the new folder yourself.
    - To get the recommended layout, create the folder and give the PHP user write access:
      ```bash
      mkdir /var/www/example.com/canvascore-data
@@ -174,11 +180,14 @@ is created with a default account **`admin` / `admin`**. You must choose a new p
 ### 3.5 After installation
 
 1. In **Global Options**, check the site address (needed for RSS feeds and canonical links),
-   the form emails and the session timeout. If the site is behind a reverse proxy or CDN, fill
+   the form emails and the session timeout, and set the **Favicon** (it is also shown as the
+   logo on the sign-in screen and in the admin sidebar). If the site is behind a reverse proxy or CDN, fill
    in **Trusted proxy addresses** (section 4.4). Turn on the **Cookie banner** if the site needs
    one (section 7.6).
 2. Build your homepage, mark it as Home and click **Publish Site**.
 3. Open `https://example.com/` and check that the page and `https://example.com/sitemap.xml` load.
+4. Make a first backup from the **Backup** page (section 8.1) and set up a server-level backup
+   (section 8.3).
 
 ---
 
@@ -192,6 +201,7 @@ CanvasCore writes its own `.htaccess` files; they work only if Apache reads them
 | File | Written when | Content |
 |---|---|---|
 | `canvascore-data/.htaccess` and `canvascore-admin/data/.htaccess` | on every request, if missing or changed | Deny all access |
+| `backups/.htaccess` in the data directory | whenever the Backup page uses the folder | Deny all access |
 | `uploads/.htaccess` | on every image upload, if missing or changed | Deny `.php`, `.phtml`, `.phar`, `.php3`–`.php7`, `.phps`, `.pht`, `.cgi`, `.pl`, `.py`, `.sh`; `php_flag engine off` under mod_php; for `.svg`, the header `Content-Security-Policy: script-src 'none'; sandbox` (needs `mod_headers`) |
 | `.htaccess` in the web root | on every publish | Created with `ErrorDocument 404 /404.html` (with the site's base path) if it does not exist. On every publish CanvasCore rewrites **only** the block between `# BEGIN CanvasCore redirects` and `# END CanvasCore redirects` (one `Redirect 301 /old/ /new/` line per redirect, inside `<IfModule mod_alias.c>`); the block is removed when there are no redirects |
 
@@ -216,7 +226,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
 
-    client_max_body_size 20m;            # image uploads and backup imports
+    client_max_body_size 20m;            # image uploads; backup ZIPs are sent in pieces of up to 8 MB
 
     # Data folder, if it ever falls back inside the web root
     location ^~ /canvascore-admin/data/ { deny all; return 404; }
@@ -300,7 +310,8 @@ Make sure the proxy sets (or appends to) `X-Forwarded-For`.
 The frontend (editor build) and the PHP files form **one release**: always deploy them together.
 An editor build talking to older PHP files (or the reverse) can fail in unexpected ways.
 
-1. **Back up first** (section 8.2): data directory, `uploads/` and the site files.
+1. **Back up first**: download a site backup from the Backup page (section 8.1), or, better
+   before an update, copy the data directory, `uploads/` and the site files (section 8.3).
 2. On your computer, build the new release: `cd canvascore-frontend && npm install && npm run build`.
 3. Upload the new `canvascore-admin/` files, overwriting the old ones (`*.php`, `*.json`,
    `master.html`, `effects.css`, `version.json`).
@@ -324,7 +335,7 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
    older release again.
 7. Ask everyone to **reload any open editor tabs** (a hard refresh, Ctrl/Cmd+Shift+R). A tab
    opened before the update still runs the old editor.
-8. Check the version at the bottom of the sidebar: `CanvasCore v0.13.0 · build 20` (example).
+8. Check the version at the bottom of the sidebar: `CanvasCore v0.14.0 · build 28` (example).
    If an orange line says `Editor vX / server vY: reload the page after updating`, the browser
    is still running the old editor: reload it. If the warning persists after a reload, the new
    `dist/` was not uploaded (or a cache/CDN is serving the old `index.html`).
@@ -334,7 +345,8 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
     **Optimize N older images** to make the smaller copies of the images uploaded before
     (section 7.7), then publish again so pages get the `srcset`.
 
-The release notes (`docs/RELEASE-NOTES-x.y.z.md`) and `docs/CHANGELOG.md` list what changed.
+What changed in each release is listed in `docs/CHANGELOG.md` and in the release notes on
+GitHub Releases.
 
 ---
 
@@ -348,9 +360,10 @@ Accounts are managed in **Accounts** (admins only). There are two roles.
 header/footer and most Global Options, and can run Publish Site. Editors **cannot**:
 
 - see or manage **Accounts** (list, add, delete, reset passwords);
-- use **Backup** (export or import the site);
+- use **Backup** (make, download, restore or delete site backups);
 - see, export or delete form **Submissions**;
-- create or delete **collections** (they can edit the items of existing ones);
+- create, rename or delete **collections** (they can add, edit, move, archive and delete the
+  items of existing ones);
 - add or change **code**. Custom HTML blocks and a block's custom CSS/JS stay **exactly as an
   admin saved them** when an editor saves the page, item, header/footer, master or template
   (matched by block id on the server); an editor can only move or delete those blocks. Custom
@@ -419,7 +432,7 @@ produced by publishing.
 - **Publish** (in the page editor) saves the page as published **and then rebuilds the whole
   site**.
 - **Publish Site** (sidebar) rebuilds the whole site from what is currently published. Saving
-  Global Options, the menu, or importing a backup also triggers it.
+  Global Options or the menu, or restoring a backup, also triggers it.
 - **Save Draft** never changes the live site. Editing a published page keeps the live version
   online until you publish again.
 
@@ -467,6 +480,14 @@ empty. It only ever deletes files that a previous publish wrote, and never the r
 If any file could not be written, nothing is removed and the manifest is not updated, so the
 next successful publish cleans up.
 
+**Deleted collections and items go offline at once.** Deleting a published collection item, or
+a whole collection, removes its pages (and the collection's `feed.xml`) immediately, without
+waiting for a publish, together with the folders left empty. Only files listed in the manifest
+(plus the item's own `index.html` or the collection's `feed.xml`) are removed, and they are
+dropped from the manifest. An item's page is kept if another published item of the collection
+owns the same address. Lists, the site search and the sitemap still change only at the next
+publish.
+
 ### 7.3 Results and errors
 
 - Success: `Build successful: N pages published.` (plus `N old page(s) removed.` when relevant).
@@ -483,7 +504,9 @@ cannot trigger it.
 ### 7.4 Redirects
 
 When a **published** page or collection item gets a new address (slug), CanvasCore records a
-redirect from the old address to the new one, so links and search results keep working. Links
+redirect from the old address to the new one (the same happens for every published item when
+an admin changes a collection's address, and for published items moved to another
+collection), so links and search results keep working. Links
 to it inside pages, items, header/footer, masters and the menu are also updated. Admins see the
 list in **Global Options › Redirects** ("automatic" or "added by hand") and can add their own
 (old address such as `/old-page/`, new address such as `/new-page/` or a full `https://…`) or
@@ -502,7 +525,7 @@ remove one.
 - Removing a redirect deletes its redirect page at the next publish; the old address then
   answers "not found".
 
-Redirects are not part of the Backup export (section 8.1).
+Redirects are included in site backups (section 8.1).
 
 ### 7.5 RSS feeds and site search
 
@@ -562,7 +585,13 @@ depends on the law that applies to you; CanvasCore only provides the mechanism.
   per pixel are needed) is skipped and used as it is. GIF, AVIF, SVG, ICO and BMP files and
   images 480 px wide or less get no copies. In all these cases the image still counts as
   processed (section 11, "Images are not optimized").
-- Deleting an image in Media also deletes its copies and its metadata.
+- Deleting an image in Media also deletes its copies and its metadata. Before deleting, Media
+  lists where the image is still used (pages and drafts, items, header/footer, masters, Global
+  Options, menu).
+- **Folders** in the Media library are labels stored in `media.json` (`folder`) and
+  `media-folders.json`: files always stay directly in `uploads/`, so moving an image to a folder,
+  or renaming or deleting a folder, never changes an image address. Deleting a folder deletes no
+  file.
 
 ### 7.8 Version history
 
@@ -572,48 +601,114 @@ page or item** are kept; older ones are deleted automatically. Users open them w
 **History** button in the editor and can restore one into the editor as an unsaved change.
 
 **Deleting a page or an item also deletes its history.** Version history is in the database,
-so it is included in a full backup (section 8.2) but not in the Backup export.
+so it is included in server-level backups (section 8.3) and, if you tick the option, in site
+backups made on the Backup page (section 8.1).
 
 ---
 
 ## 8. Backup and restore
 
-### 8.1 Export / import from the Backup page (admins)
+There are two ways to back up a site: the **Backup** page in the admin (one ZIP file, made and
+restored from the browser), and a **server-level backup** of the folders (section 8.3), which
+also covers user accounts. Use both: the ZIP for everyday safety and for moving a site, the
+server-level copy before updates and for disaster recovery.
 
-**Export** (Backup → Download backup) downloads `canvascore-site-YYYY-MM-DD.json` with:
+### 8.1 Site backup from the Backup page (admins)
 
-- pages (live versions; unsaved draft copies of published pages are not included),
-- menu, Global Options (including form emails),
-- global header and footer,
-- masters and templates,
-- the **list of names** of the uploaded images (not the images themselves).
+**Backup** in the sidebar (admins only) saves the whole site in one ZIP file. It needs the PHP
+`zip` extension; without it the page says so and only old `.json` backups can be imported.
 
-It does **not** include:
+A backup contains:
 
-- **collections and their items**,
-- **uploaded images** (copy `uploads/` separately),
-- **user accounts**,
-- **form submissions**,
-- **redirects**, **version history** and the "Hide this page from search engines" setting,
-- **image descriptions** and the optimized copies (`media.json`, `uploads/_cc/`).
+- pages (live versions and their unpublished draft copies), collections and their items,
+  templates, masters, the global header and footer, and redirects;
+- Global Options (`settings.json`, including form emails and the session timeout), the menu,
+  and the media library data (`media.json`: descriptions, sizes, folders; `media-folders.json`);
+- every uploaded image in `uploads/`, including the optimized copies in `uploads/_cc/`;
+- optionally, **version history** ("Include the version history of pages and items") and
+  **form messages** ("Include the messages received through forms"). Both are ticked by
+  default;
+- a `manifest.json` with the CanvasCore version, database and content schema, date, site name
+  and counts.
 
-**Import** (Backup → Import a backup file) **replaces** all pages, masters, templates, the
-menu, Global Options and the header/footer with the file's content, then republishes the site.
-Accounts are kept. Collections and submissions are left as they are. It cannot be undone:
-export the current site first.
+It never contains user accounts or passwords, sessions, login/rate-limit state, `forms.json` or
+`published_files.json` (both rebuilt by publishing), files in `uploads/` that are not images,
+or the published HTML (regenerated by publishing).
 
-Use export/import to move content between installations or as a quick content snapshot. It is
-not a complete backup.
+Two buttons:
 
-### 8.2 Full backup (recommended)
+- **Download backup (.zip)**: the server makes the file, the browser downloads it as
+  `<site-name>-backup-YYYY-MM-DD-HHMMSS.zip`, and the server's temporary copy is deleted once
+  sent (or after an hour if the download never starts).
+- **Keep a copy on the server**: the file is stored in `backups/` in the data directory
+  (outside the public site when the data directory is outside the web root; protected by a
+  deny-all `.htaccess` otherwise, see section 4.2 for Nginx), named
+  `backup-YYYYMMDD-HHMMSS-xxxx.zip`.
 
-A complete backup is three folders:
+**Backups on the server** lists the saved copies and the safety copies (section 8.2) with date,
+site name, number of pages, items and image files, size and version. Each can be downloaded,
+restored or deleted. Copies on the server are lost if the server is: download backups and keep
+them elsewhere too. Saved copies are never deleted automatically, so delete old ones to save
+disk space.
+
+A backup contains form messages (if ticked), Global Options with the form email addresses, and
+all images: store downloaded backups as carefully as the site itself.
+
+### 8.2 Restore from a site backup
+
+On the Backup page, restore either a backup saved on the server (**Restore** on its row) or a
+file from your computer (**Restore from a file › Choose a backup file…**). The file can come
+from this site or from another CanvasCore installation, so this is also how you move a site.
+CanvasCore asks you to confirm first.
+
+What happens:
+
+1. **Upload in pieces.** A ZIP from your computer is sent in pieces (up to 8 MB each, smaller
+   when PHP's upload limit is lower), so its size does not depend on `upload_max_filesize` /
+   `post_max_size`. The page shows the progress; keep it open until the restore has finished.
+   Unfinished uploads are cleaned up after an hour.
+2. **Checks, before anything changes.** The file must be a CanvasCore backup; it may only
+   contain the known content tables, the known data files and images (the allowed upload
+   extensions, with plain file names and no path that leaves the folders). Anything else
+   refuses the whole file. A backup made by a **newer** CanvasCore (newer backup format or
+   database schema) is refused: update this site first. Older backups restore normally
+   (unknown columns are ignored). There must be enough free disk space. Only one restore runs at
+   a time.
+3. **Safety copy.** The current site is saved as `before-restore-YYYYMMDD-HHMMSS-xxxx.zip` in
+   `backups/` (with history and form messages). Only the **newest 5** safety copies are kept.
+   If the safety copy cannot be made, nothing is restored. To undo a restore, restore its safety
+   copy.
+4. **Images.** The backup's images are unpacked into a temporary folder next to `uploads/`
+   (`.cc-restore-…`), checked like uploads (SVGs with active content and files that aren't real
+   images are left out and listed in the result), and then swapped with the current `uploads/`
+   folder.
+5. **Content, in one transaction.** Pages, collections and items, templates, masters,
+   header/footer and redirects are replaced. Version history and form messages are replaced only
+   if the backup contains them; otherwise the current ones stay. If anything fails, the
+   transaction is rolled back and the old `uploads/` folder is put back: nothing changes.
+6. **Options.** Global Options, the menu and the media library data are replaced by the
+   backup's. **Trusted proxy addresses** are kept from this server (they describe the server,
+   not the site). User accounts, sessions and login state are never touched.
+7. **Republish.** The editor then republishes the whole site. If that publish reports a
+   problem, click **Publish Site**.
+
+**Old `.json` backups** (made by the Backup page before 0.14) can still be imported with the
+same button. They contain only pages, masters, templates, the menu, Global Options and the
+header/footer: those are replaced; collections, images, redirects and submissions are left as
+they are; accounts are kept. The `.json` file is sent in one request, so it is limited by
+`upload_max_filesize` / `post_max_size`. No safety copy is made for a `.json` import: make a
+ZIP backup first.
+
+### 8.3 Server-level backup
+
+A complete backup of the server side is three folders:
 
 1. **The data directory** (`canvascore-data/` or `canvascore-admin/data/`): the database with
-   everything including collections, accounts, submissions, version history and redirects,
-   plus settings, menu and `media.json` (image descriptions and sizes).
+   everything including collections, **accounts**, submissions, version history and redirects,
+   plus settings, menu, `media.json` and `media-folders.json`. You can exclude `backups/` if
+   you keep those ZIPs elsewhere.
 2. **`uploads/`**: all images. Backing up the `uploads/_cc/` sub-folder (optimized copies) is
-   optional: the copies can be regenerated from the originals (section 8.3).
+   optional: the copies can be regenerated from the originals (section 8.4).
 3. **The site files** (optional, they can be regenerated by publishing): the web root without
    `uploads/` and `canvascore-admin/`.
 
@@ -625,14 +720,14 @@ SITE=/var/www/example.com
 DEST=/backups/example.com/$(date +%F)
 mkdir -p "$DEST"
 sqlite3 "$SITE/canvascore-data/canvascore.sqlite" ".backup '$DEST/canvascore.sqlite'"
-tar czf "$DEST/data.tgz" -C "$SITE" --exclude=canvascore-data/sessions canvascore-data
+tar czf "$DEST/data.tgz" -C "$SITE" --exclude=canvascore-data/sessions --exclude=canvascore-data/backups canvascore-data
 tar czf "$DEST/uploads.tgz" -C "$SITE/public" uploads   # add --exclude=uploads/_cc to skip the copies
 ```
 
 Keep copies off the server. `sqlite3 .backup` is safe while the site is in use; copying the
 `.sqlite` file directly is fine when nobody is editing.
 
-### 8.3 Restore from a full backup
+### 8.4 Restore from a server-level backup
 
 1. Put the release's `canvascore-admin/` in place (section 3.2), without running the installer.
 2. Restore the data directory and `uploads/`; make sure the PHP user owns them and can write.
@@ -731,6 +826,14 @@ What CanvasCore does for you:
   redirects, no accounts, backups or submissions).
 - **Cookie consent**: scripts and embeds marked for consent run only after Accept
   (section 7.6).
+- **Backups**: the Backup page and every backup action are admin-only. Saved backups live in
+  `backups/` inside the data directory (deny-all `.htaccess` as well) and are only sent through
+  the API to a signed-in admin; their names are checked, so no other file can be requested.
+  Backups never contain accounts or passwords. A backup to restore is checked before anything
+  changes (only known tables, data files and images; no paths leaving the folders), images in it
+  go through the same checks as uploads, and a safety copy is made first (section 8.2).
+- **Branding before sign-in**: the only data the admin shows before sign-in is the site name and
+  the favicon address (`api.php?action=branding`), both already public on the site.
 - **Publishing and forms**: publishing requires POST + token; form recipients are only read
   from the server-side registry (no open mail relay).
 
@@ -747,7 +850,9 @@ Recommended hardening:
    your editors work from known locations. Leave `/canvascore-admin/submit_form.php` reachable,
    or the site's forms stop working.
 7. Behind a reverse proxy or CDN, list its addresses in Trusted proxy addresses (section 4.4).
-8. Keep PHP up to date and keep regular off-server backups (section 8.2).
+8. Keep PHP up to date and keep regular off-server backups (sections 8.1 and 8.3). Delete old
+   backup ZIPs you no longer need from the Backup page, and keep downloaded ones somewhere safe:
+   they contain the site's options and, if included, its form messages.
 
 ---
 
@@ -800,7 +905,8 @@ The editor tab is older than the current session (for example after a sign-in in
 or an update). Reload the page.
 
 **Deleted or renamed pages are still online**
-Deleted and unpublished pages are removed on the next successful **Publish Site**. A renamed
+Deleted pages, collections and collection items are removed at once; unpublished pages and items
+are removed on the next successful **Publish Site**. A renamed
 page's old address is meant to stay: it now holds a redirect page (section 7.4); remove the
 redirect in Global Options › Redirects if you don't want it. Files created by an old version
 before the manifest existed, or files you added by hand, are never deleted automatically:
@@ -838,6 +944,32 @@ marked "Hide this page from search engines" and archived items are never in the 
 search finds nothing at all, check that `https://example.com/search-index.json` loads (a CDN or
 a server rule may block or cache it).
 
+**Backup page: "The PHP zip extension is not available on this server"**
+Ask your host to enable the `zip` extension (`ZipArchive`), or install it (`php8.x-zip` on
+Debian/Ubuntu) and restart PHP. The installer shows it as a warning. Until then only old `.json`
+backups can be imported; use a server-level backup (section 8.3).
+
+**Restoring a backup fails**
+- "This backup was made by a newer version of CanvasCore": update this site to that version (or
+  newer) first, then restore.
+- "This ZIP is not a CanvasCore backup" / "The backup contains a file that is not allowed": the
+  file was not made by the Backup page, or was changed afterwards. Use an unmodified backup.
+- "Not enough free disk space…": the images are unpacked next to `uploads/` before the old ones
+  are removed, so the server needs room for both for a moment. Free some space (old backups in
+  `backups/` too).
+- "A piece of the file did not arrive (larger than this server accepts)": a limit in front of PHP
+  is smaller than PHP's own upload limit. On Nginx, raise `client_max_body_size` to at least 8m
+  (section 4.2).
+- "Another restore is running": wait for it to finish; only one restore runs at a time.
+- "Could not save a safety copy of the current site first": nothing was restored. Check the free
+  disk space and that PHP can write to the data directory's `backups/` folder.
+- "The uploads folder could not be replaced": PHP must be able to rename `uploads/` and create
+  folders in the web root. Nothing was changed.
+- If the connection drops during a restore, the server finishes it anyway. Wait a minute, reload
+  the Backup page and check the site: the safety copy of the previous site is listed there if you
+  need to go back. Then click **Publish Site**, because the automatic republish is started by the
+  browser after the restore.
+
 **Version mismatch warning in the sidebar**
 `Editor vX / server vY: reload the page after updating`: reload the tab (hard refresh). If it
 persists, upload the new `dist/` contents into `canvascore-admin/` and make sure no cache or CDN
@@ -853,3 +985,23 @@ log. Its location depends on the server: typically `/var/log/apache2/error.log`,
 `/var/log/nginx/error.log` or `/var/log/php8.x-fpm.log`, or the "Error log" section of your
 hosting panel. `php -i | grep error_log` shows the configured file. Installer errors are logged
 with the prefix `CanvasCore install:`.
+
+---
+
+## 12. License
+
+CanvasCore is free software, licensed under the GNU Affero General Public License, version 3 or
+later (AGPL-3.0-or-later); the full text is in [LICENSE](../../LICENSE). In practice, for site
+operators (this is a summary, not legal advice):
+
+- **Running CanvasCore unmodified**, for your own sites or for clients, commercial or not, needs
+  nothing more from you.
+- **If you modify CanvasCore** and let other people use the modified admin over a network (for
+  example, you host the editor for clients), AGPL section 13 requires you to offer those users
+  the source code of your modified version, under the same license.
+- **Your published sites and content are your own.** The README grants an additional permission
+  under AGPL section 7: the HTML, CSS and JavaScript that CanvasCore writes into a published site
+  (page markup, `effects.css`, the scripts of blocks in published pages) may be used, modified and
+  distributed as part of that site under any terms. The editor and the `canvascore-admin/`
+  backend are not covered by that permission. See the License section of the
+  [README](../../README.md#license).
