@@ -94,7 +94,7 @@ Community: [Discord](https://discord.gg/sD8KMc2kN) · Bugs and suggestions: bug@
 
 ## License
 
-Copyright © 2026 Sputlab.
+Copyright © 2026 Stefano Soranzio.
 
 CanvasCore is free software: you can redistribute it and/or modify it under the terms of the
 [GNU Affero General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the
