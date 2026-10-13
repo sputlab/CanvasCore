@@ -10,6 +10,8 @@
 // Restoring replaces the site's content, images and options with the backup's; user accounts, sessions and
 // server-specific options (trusted proxies) are kept. Before a restore a safety copy of the current site is
 // saved on the server (data dir /backups), so a restore can always be undone.
+// Library file: included by the endpoints, never opened directly
+if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
 
@@ -177,6 +179,14 @@ function cc_backup_restore($pdo, $path) {
         $rowsByTable[$t] = $rows;
     }
     if (!isset($rowsByTable['pages'])) { $zip->close(); return ['success' => false, 'message' => 'The backup has no pages: nothing was changed.']; }
+    // Redirects end up in the site's .htaccess and as pages at their old address: only well-formed ones are restored
+    if (isset($rowsByTable['redirects'])) {
+        $rowsByTable['redirects'] = array_values(array_filter(array_map(function ($r) {
+            if (!is_array($r)) return null;
+            $from = cc_redirect_path($r['from_path'] ?? ''); $to = cc_redirect_target($r['to_path'] ?? '');
+            return ($from && $to && $from === ($r['from_path'] ?? null)) ? array_merge($r, ['from_path' => $from, 'to_path' => $to]) : null;
+        }, $rowsByTable['redirects'])));
+    }
     $dataFiles = [];
     foreach (CC_BACKUP_DATA_FILES as $f) {
         $raw = $zip->getFromName('data/' . $f);
@@ -235,6 +245,7 @@ function cc_backup_restore($pdo, $path) {
                 if ($t !== 'pages' || empty($row['is_draft_copy'])) $counts[$t]++;
             }
         }
+        cc_sanitize_all_content($pdo);   // restored rich text is cleaned like a new save
         $pdo->commit();
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
@@ -267,11 +278,12 @@ function cc_backup_restore($pdo, $path) {
 
 // Backups saved on the server: "backup-…zip" (saved by hand) and "before-restore-…zip" (safety copies).
 // "download-…zip" is made for one download and deleted once sent (or after an hour, see cc_backup_cleanup).
-function cc_backup_name_ok($name, $download = false) { return is_string($name) && preg_match('/^(backup|before-restore' . ($download ? '|download' : '') . ')-\d{8}-\d{6}(-[a-f0-9]{4})?\.zip$/', $name); }
+function cc_backup_name_ok($name, $download = false) { return is_string($name) && preg_match('/^(backup|before-restore' . ($download ? '|download' : '') . ')-\d{8}-\d{6}(-[a-f0-9]{4}|-[a-f0-9]{32})?\.zip$/', $name); }
 function cc_backup_cleanup() {
     foreach (array_merge(glob(cc_backup_dir() . '/download-*.zip') ?: [], glob(cc_backup_dir() . '/upload-*.part') ?: []) as $f) if (filemtime($f) < time() - 3600) @unlink($f);
 }
-function cc_backup_new_name($prefix) { return $prefix . '-' . date('Ymd-His') . '-' . bin2hex(random_bytes(2)) . '.zip'; }
+// The random part makes a backup's name impossible to guess (128 bits), should the data folder ever be reachable
+function cc_backup_new_name($prefix) { return $prefix . '-' . date('Ymd-His') . '-' . bin2hex(random_bytes(16)) . '.zip'; }
 function cc_backup_list() {
     $dir = cc_backup_dir(); $out = [];
     foreach (glob($dir . '/*.zip') ?: [] as $f) {
@@ -283,7 +295,7 @@ function cc_backup_list() {
                   'site_name' => is_array($m) ? (string)($m['site_name'] ?? '') : '', 'app' => is_array($m) ? (string)($m['app'] ?? '') : '',
                   'counts' => is_array($m) ? ($m['counts'] ?? []) : [], 'uploads' => is_array($m) ? ($m['uploads'] ?? []) : []];
     }
-    usort($out, function ($a, $b) { return ($b['created'] <=> $a['created']) ?: strcmp(substr($b['name'], -24), substr($a['name'], -24)); });
+    usort($out, function ($a, $b) { return ($b['created'] <=> $a['created']) ?: strcmp(preg_match('/\d{8}-\d{6}/', $b['name'], $mb) ? $mb[0] : '', preg_match('/\d{8}-\d{6}/', $a['name'], $ma) ? $ma[0] : ''); });
     return $out;
 }
 // Safety copy of the current site, kept on the server; only the newest CC_BACKUP_KEEP_SAFETY are kept

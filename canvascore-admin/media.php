@@ -7,6 +7,8 @@
 //  - Metadata per file in the data dir (media.json): alt text, size in pixels and bytes, available copies.
 //  - On publish, cc_optimize_images() gives every uploaded <img> of a page a srcset of those copies
 //    (phones download a small file), lazy loading and async decoding (except the first image, likely on screen).
+// Library file: included by the endpoints, never opened directly
+if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
 require_once __DIR__ . '/config.php';
 
 const CC_IMG_WIDTHS = [480, 960, 1600];

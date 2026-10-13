@@ -46,6 +46,39 @@ check('an SVG with an event handler is refused', !cc_svg_is_safe($tmp));
 @unlink($tmp);
 check('javascript: hidden behind a control character is removed', strpos(cc_sanitize_html("<a href=\"\x1fjavascript:alert(1)\">x</a>"), 'javascript') === false);
 
+echo "\nSECURITY HELPERS\n";
+check('rich text styles keep typography, drop positioning, url() and expressions', cc_sanitize_style('color:red; position:fixed; background:url(x); width:expression(1); text-align:center') === 'color: red; text-align: center');
+check('rich text: a link to a new tab gets rel=noopener', strpos(cc_sanitize_html('<a href="https://x.com" target="_blank">x</a>'), 'rel="noopener noreferrer"') !== false);
+check('rich text: event handlers, scripts and svg are gone', cc_sanitize_html('<p onclick="x()">a</p><script>x()</script><svg onload=x()></svg>') === '<p>a</p>');
+$b = [['type' => 'TEXT', 'content' => ['text' => '<img src=x onerror=alert(1)>']], ['type' => 'SECTION', 'content' => [], 'children' => [['type' => 'TABS', 'content' => ['items' => [['content' => '<b onmouseover=x>t</b>']]]]]],
+      ['type' => 'BUTTON', 'content' => ['url' => " java\tscript:alert(1)"]], ['type' => 'HTML', 'content' => ['code' => '<a href="javascript:void(0)">admin</a>']]];
+cc_sanitize_blocks($b);
+check('saved blocks: rich text cleaned, nested too', strpos(json_encode($b), 'onerror') === false && strpos(json_encode($b), 'onmouseover') === false);
+$arr = [['type' => 'TEXT', 'content' => ['text' => ['<img src=x onerror=1>']]], ['type' => 'TABS', 'content' => ['items' => [['content' => ['<b onclick=1>x</b>']]]]]];
+cc_sanitize_blocks($arr);
+check('saved blocks: a rich-text field sent as an array instead of text is dropped (never stored unchecked)', $arr[0]['content']['text'] === '' && $arr[1]['content']['items'][0]['content'] === '');
+check('saved blocks: active URLs blanked, an admin\'s Custom HTML untouched', $b[2]['content']['url'] === '' && $b[3]['content']['code'] === '<a href="javascript:void(0)">admin</a>');
+check('reserved folders: no page, collection or redirect there', cc_slug_reserved('canvascore-admin') && cc_slug_reserved('Uploads') && cc_redirect_path('/canvascore-admin/') === null && cc_redirect_path('/blog/x/') === '/blog/x/');
+check('redirect targets: no spaces, line breaks or backslashes', cc_redirect_target("https://e.com/a\nb") === null && cc_redirect_target('https://e.com/a b') === null && cc_redirect_target('https://e.com/a') === 'https://e.com/a');
+check('CSS values: colors and lengths only', cc_css_color('red;}x{', '#fff') === '#fff' && cc_css_color('#123abc', '#fff') === '#123abc' && cc_css_length('1200px', 'x') === '1200px' && cc_css_length('1px;}', 'd') === 'd');
+check('image URLs: javascript: and data:text are dropped, http(s), paths and raster data kept', cc_img_url(" JAVA\tSCRIPT:x") === '' && cc_img_url('data:text/html,x') === '' && cc_img_url('/uploads/a.png') === '/uploads/a.png' && cc_img_url('data:image/png;base64,AA') !== '');
+check('inline styles of blocks: one value per property', build_inline_style(['color' => 'red; position:fixed', 'marginTop' => '4px']) === 'margin-top: 4px; ');
+
+echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
+require_once __DIR__ . '/../../canvascore-admin/migrations.php';
+$mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);
+$mdb = new PDO('sqlite:' . $mf); $mdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+cc_migrate($mdb);
+$mdb->exec("DROP INDEX IF EXISTS idx_admin_username"); $mdb->exec("DELETE FROM cc_meta WHERE key = 'installed_at'"); cc_meta_set($mdb, 'db_schema', 7);
+$mdb->prepare("INSERT INTO admin (username, password_hash, role, must_change_pw) VALUES ('admin', ?, 'admin', 1), ('owner', ?, 'admin', 0)")->execute([password_hash('admin', PASSWORD_DEFAULT), password_hash('Owner-pass-1', PASSWORD_DEFAULT)]);
+$mdb->exec("INSERT INTO pages (id, title, slug, clean_slug, content_json, status) VALUES ('p', 'P', 'p', 'p', '[{\"type\":\"TEXT\",\"content\":{\"text\":\"<img src=x onerror=alert(1)>ok\"}}]', 'draft')");
+cc_migrate($mdb);
+check('the old default admin/admin account is removed once a real account exists', $mdb->query("SELECT group_concat(username) FROM admin")->fetchColumn() === 'owner');
+check('a site set up before the wizard counts as installed', (bool)cc_is_installed($mdb));
+check('rich text already stored is cleaned', strpos((string)$mdb->query("SELECT content_json FROM pages WHERE id = 'p'")->fetchColumn(), 'onerror') === false);
+check('accounts get a session generation, and user names become unique', cc_col_exists($mdb, 'admin', 'session_gen') && (bool)$mdb->query("SELECT 1 FROM sqlite_master WHERE name = 'idx_admin_username'")->fetchColumn());
+$mdb = null; @unlink($mf);
+
 echo "\nBLOCK OUTPUT\n";
 check('whole numbers like parseInt', cc_int('7px', 2, 1, 12) === 7 && cc_int('abc', 2, 1, 12) === 2 && cc_int(99, 2, 1, 12) === 12);
 $sl = render_block(['id' => 'sl', 'type' => 'SLIDER', 'styles' => [], 'content' => ['effect' => 'fade', 'autoplay' => false, 'images' => [['src' => 'a.jpg'], ['src' => 'b.jpg']]]]);
@@ -165,7 +198,7 @@ $bdb->exec("INSERT INTO pages (id, title, slug, clean_slug, content_json, status
 $bdb->exec("INSERT INTO pages (id, parent_id, title, slug, clean_slug, content_json, status, is_draft_copy) VALUES ('p1-draft', 'p1', 'Home', 'index', 'index', '[1]', 'draft', 1)");
 $bdb->exec("INSERT INTO collections (id, name, slug) VALUES ('c1', 'Blog', 'blog')");
 $bdb->exec("INSERT INTO collection_items (id, collection_id, title, slug, cover_image) VALUES ('i1', 'c1', 'First post', 'first-post', '/uploads/photo.png')");
-$bdb->exec("INSERT INTO redirects (from_path, to_path) VALUES ('old', 'about')");
+$bdb->exec("INSERT INTO redirects (from_path, to_path) VALUES ('/old/', '/about/')");
 $bdb->exec("INSERT INTO page_revisions (owner, title, content_json, kind, author) VALUES ('p1', 'Home', '[]', 'draft', 'ann')");
 $bdb->exec("INSERT INTO form_submissions (form_id, page, data_json) VALUES ('f1', 'Home', '{\"name\":\"Bob\"}')");
 $adminsBefore = (int)$bdb->query("SELECT COUNT(*) FROM admin")->fetchColumn();

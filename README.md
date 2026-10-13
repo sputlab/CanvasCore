@@ -25,8 +25,8 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 │   ├── compiler.php       PHP block renderer → HTML
 │   ├── rebuild_all.php    Publishes the whole site into the parent folder
 │   ├── submit_form.php    Public endpoint for form submissions
-│   ├── install.php        Setup wizard (delete after use)
-│   ├── config.php         Session, CSRF, data dir, HTML sanitizer
+│   ├── install.php        Setup wizard with setup key (delete after use)
+│   ├── config.php         Session, CSRF, data dir, security headers, HTML/SVG sanitizers
 │   ├── migrations.php     DB schema and content migrations
 │   ├── blocks.json        Block defaults (shared with the editor)
 │   ├── starters.json      Starter page templates
@@ -34,14 +34,16 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 │   └── version.json       Single source of the version (app, db_schema, build)
 └── canvascore-frontend/   React 19 + Vite + Zustand editor
     ├── src/               Components, store, session handling, JS block renderer
-    ├── tests/             JS↔PHP parity, blocks, session and panel tests
+    ├── public/            Icons and menu-preview.html (sandboxed Menu Builder preview), copied into the build
+    ├── tests/             JS↔PHP parity, blocks, session, panel, server and security tests
     └── scripts/bump.mjs   Increments the build number in version.json
 ```
 
 ## Requirements
 
 - Node.js ≥ 20 (developed with 24) and npm
-- PHP ≥ 8 with `pdo_sqlite` (`dom` recommended for the sanitizer); the PHP CLI is also needed for the tests
+- PHP ≥ 8 with `pdo_sqlite` and `dom` (`zip` for backups); the PHP CLI is also needed for the tests
+  (`test:security` also needs `curl`)
 
 ## Development
 
@@ -50,7 +52,7 @@ cd canvascore-frontend
 npm install
 npm run dev        # editor in development (needs a PHP server for api.php: see the Developer Guide)
 npm run lint       # oxlint
-npm test           # JS↔PHP parity, blocks, content, session, UI
+npm test           # JS↔PHP parity, blocks, content, session, UI, server, security
 npm run build      # build into dist/ (increments the build in canvascore-admin/version.json)
 ```
 
@@ -61,19 +63,23 @@ npm run build      # build into dist/ (increments the build in canvascore-admin/
    `canvascore-admin` (published forms post to `canvascore-admin/submit_form.php`).
 3. Copy the contents of `canvascore-frontend/dist/` into that folder.
 4. Open `install.php` in the browser (e.g. `https://www.example.com/canvascore-admin/install.php`): it checks the
-   server requirements and creates the database, the administrator account (replacing the default
-   `admin` / `admin`), the base settings and, if you like, a homepage from a starter. It leaves you
-   signed in to the editor.
+   server requirements (including that the data folder can't be downloaded from the web) and writes a
+   **setup key** to `install-key.txt` in the data folder. Open that file with FTP or your hosting file manager
+   and paste the key into the wizard: this proves you control the server, so nobody else can install first.
+   The wizard then creates the database, the first administrator account, the base settings and, if you like,
+   a homepage from a starter, deletes the key file and leaves you signed in to the editor.
 5. Delete `install.php` (the wizard offers a button for it). Once installation is complete the
    file locks itself anyway.
 
-Without the wizard, the first login is `admin` / `admin` and a password change is required.
+There is no default account: until the wizard has run, the editor's sign-in screen points to `install.php`.
 
 The published site is written to the folder **above** `canvascore-admin/`
 (`index.html`, one folder per slug, `sitemap.xml`, `robots.txt`, `404.html`, `uploads/`).
-Data (SQLite DB, settings, sessions) goes to `../../canvascore-data` if writable,
-otherwise to `canvascore-admin/data/` (protected by `.htaccess` on Apache only: on Nginx
-add a deny rule).
+Data (SQLite DB, settings, sessions) goes to a `canvascore-data` folder outside the web root if one can be
+written (next to the site folder, or next to the web root when the site is in a sub-folder of it), otherwise to
+`canvascore-admin/data/`. On Apache, `.htaccess` files written automatically deny access to the data and to the
+backend's library files and add security headers to the admin folder; on Nginx add the equivalent rules by hand
+(see the [Administrator Guide](docs/manuals/ADMIN-GUIDE.md#42-nginx)).
 
 > Locally, the root of this repository is that same web root: the `.gitignore`
 > ignores everything at the root except the files listed explicitly, so generated

@@ -10,6 +10,65 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-13 — Security release
+
+A full security review of the backend and the editor before the repository went public. **Update as soon as
+possible.** After updating everyone signs in again once (the session cookie changed), and on Nginx the new rules in
+the Administrator Guide §4 should be added.
+
+### Security
+- **Stored XSS from an editor to an admin (critical)**: rich text is now cleaned when it is saved, not only when it is
+  published, for every role and everywhere it is stored (pages, collection items, header/footer, masters, templates,
+  version history; restored backups and imports too; existing content is cleaned once when updating). The editor runs
+  under a strict Content Security Policy (scripts only from its own files) and every piece of HTML it shows goes
+  through DOMPurify, so content can never run code in the admin.
+- **No default `admin`/`admin` account**: it gave full access to anyone between uploading the files and running the
+  installer, and the forced password change was only checked by the browser. The API now answers "not installed"
+  until `install.php` has run; the installer asks for a **setup key** written to `install-key.txt` in the data folder
+  (proof of access to the server), runs under a lock and requires the DOM extension. A forced password change is
+  enforced by the server. The old default account is deleted once a real account exists.
+- **An editor could replace, delete or redirect the admin panel** by publishing a page at `/canvascore-admin/` through
+  "discard draft". CanvasCore's own folders (`canvascore-admin`, `uploads`, `canvascore-data`, `data`) are now
+  reserved for pages, collections and redirects; "discard draft" only reverts real drafts; publishing never writes
+  into or deletes from those folders, and every file it writes stays inside the site folder.
+- **Data folder of sites installed in a sub-folder** (`example.com/site/`) was inside the web root while the
+  installer reported it outside: new installations put it next to the web root, and the installer now checks over
+  HTTP whether the data folder can be downloaded (installation is refused if it can).
+- **Sessions end with the account**: deleting an account, resetting a password or changing your own ends the other
+  open sessions at once; the role is always read from the database; sessions last at most a week.
+- **Sign-in**: attempts are counted before the password is checked (parallel requests can't exceed the limit), with
+  limits per account and address, per address and per account; unknown user names take as long as wrong passwords;
+  the attempts file can't grow without limit. The login only accepts JSON from the same site (no login CSRF).
+- **CSRF**: the token is tied to the session (the script-readable `cc_csrf` cookie is gone) and requests marked as
+  coming from another site, or with a foreign `Origin`, are refused.
+- **SVG uploads**: checked against an allowlist of drawing elements and attributes (animated links, embedded HTML or
+  MathML, external references, `@import` and processing instructions are refused). SVGs uploaded before that fail
+  the new check are moved to `quarantine/` in the data folder on the first request after updating.
+- **Backups**: restored redirects are validated (a crafted backup could inject `.htaccess` directives or write files
+  outside the site); backup names carry 128 random bits.
+- **Forms**: only the form's own fields are stored and mailed, with size limits per field and per submission, a cap
+  on stored submissions, the success message from the form's settings (never from the visitor), and no error details
+  for visitors. The form CSV export also protects column names against spreadsheet formulas.
+- **Clickjacking and headers**: the admin can't be framed by another site (`X-Frame-Options`, CSP `frame-ancestors`,
+  plus a check in the editor itself); `canvascore-admin/.htaccess` is written automatically with the security headers
+  and denies the library files and JSON data; library PHP files answer 404 when opened directly.
+- **Other**: editors no longer receive a form's own receiving email; Gallery and Hero image URLs, page colors and
+  widths and block style values are validated (no `javascript:` links or CSS breakouts); inline styles in rich text
+  are limited to typography and box properties; links opening a new tab get `rel="noopener"`; without the DOM
+  extension rich text keeps only plain formatting tags; anonymous visitors get no session; the version is shown to
+  signed-in users only (and no longer in published pages' generator tag); errors are never displayed, only logged;
+  `X-Forwarded-Proto` is trusted only from trusted proxies; user names are unique and checked; the last admin can't be
+  deleted; uploads never overwrite an existing file.
+
+### Added
+- `npm run test:security` (`tests/security.php`): installs a fresh copy, serves it with PHP's built-in server and
+  replays every attack from the review over HTTP. Part of `npm test`.
+
+### Changed
+- The Menu Builder's live preview runs in its own sandboxed page (`menu-preview.html`), so the editor's policy can
+  forbid inline scripts.
+- DB migration 8 (`admin.session_gen`, unique user names). New dependency: `dompurify` 3.4.16.
+
 ## [0.14.0] - 2026-10-13 — First public release
 
 CanvasCore is now free software, released under the GNU Affero General Public License v3.0 or later.
@@ -853,5 +912,6 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.14.1...HEAD
+[0.14.1]: https://github.com/sputlab/CanvasCore/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/sputlab/CanvasCore/releases/tag/v0.14.0

@@ -8,6 +8,7 @@ import { readExpiredNotice, clearExpiredNotice } from '../session/drafts';
 export default function Login() {
   const { login } = useStore();
   const siteName = useStore((s) => s.branding.siteName);
+  const installed = useStore((s) => s.installed);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -48,8 +49,9 @@ export default function Login() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <Field label="Username"><Input value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g. admin" required autoComplete="username" autoFocus style={{ minHeight: 40 }} /></Field>
+          <Field label="Username"><Input value={username} onChange={e => setUsername(e.target.value)} required autoComplete="username" autoFocus style={{ minHeight: 40 }} /></Field>
           <Field label="Password"><Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required autoComplete="current-password" style={{ minHeight: 40 }} /></Field>
+          {!installed && <p role="status" style={{ color: '#fde68a', fontSize: 13, textAlign: 'center', background: '#451a03', padding: 10, borderRadius: 6, border: '1px solid #b45309', margin: '4px 0 12px' }}>CanvasCore is not set up yet: open <a href="install.php" style={{ color: '#fde68a' }}>install.php</a> to create the administrator account.</p>}
           {error && <p role="alert" style={{ color: '#fca5a5', fontSize: 13, textAlign: 'center', background: '#450a0a', padding: 10, borderRadius: 6, border: '1px solid #7f1d1d', margin: '4px 0 12px' }}>{error}</p>}
           <Button type="submit" variant="primary" size="lg" block disabled={loading} style={{ marginTop: 6 }}>
             {loading ? 'Please wait…' : <>Login <LogIn size={18} aria-hidden="true" /></>}

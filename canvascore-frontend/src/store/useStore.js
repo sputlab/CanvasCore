@@ -157,6 +157,7 @@ export const useStore = create((set, get) => ({
   userRole: 'editor',
   username: null,
   mustChangePw: false,
+  installed: true,           // false until install.php has run (the sign-in screen then points to it)
   appVersion: (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''),
   appBuild: (typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 0),
   serverVersion: null,
@@ -178,9 +179,9 @@ export const useStore = create((set, get) => ({
 
   fetchVersion: async () => {
     try {
-      const res = await fetch('api.php?action=version');
+      const res = await fetch('api.php?action=version');   // signed-in users only
       const data = await res.json();
-      set({ serverVersion: data });
+      if (data && data.app) set({ serverVersion: data });
     } catch { /* noop */ }
   },
 
@@ -200,6 +201,7 @@ export const useStore = create((set, get) => ({
       if (data.csrf) window.__CC_CSRF = data.csrf;
       setDraftUser(data.authenticated ? (data.username || null) : null);
       set({
+        installed: data.installed !== false,
         isAuthenticated: data.authenticated, userRole: data.role, username: data.username || null, mustChangePw: !!data.must_change_pw,
         sessionExpiresAt: data.authenticated && data.expires_in != null ? Date.now() + data.expires_in * 1000 : null,
         sessionTimeout: data.timeout ?? null,
@@ -208,7 +210,7 @@ export const useStore = create((set, get) => ({
   },
   login: async (username, password) => {
     try {
-      const res = await fetch('api.php?action=login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      const res = await fetch('api.php?action=login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
       const data = await res.json();
       if (data.success) {
         if (data.csrf) window.__CC_CSRF = data.csrf;
@@ -225,7 +227,7 @@ export const useStore = create((set, get) => ({
   // another user's unsaved work and must neither inherit it nor write its backups into the other account.
   reauth: async (username, password) => {
     try {
-      const res = await fetch('api.php?action=login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      const res = await fetch('api.php?action=login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
       const data = await res.json();
       if (!data.success) return data;
       const expected = get().expiredUser;
@@ -258,7 +260,7 @@ export const useStore = create((set, get) => ({
     try {
       const res = await fetch('api.php?action=change_own_password', { method: 'POST', body: JSON.stringify({ password }) });
       const data = await res.json();
-      if (data.success) set({ mustChangePw: false });
+      if (data.success) { if (data.csrf) window.__CC_CSRF = data.csrf; set({ mustChangePw: false }); get().fetchVersion(); }
       return data;
     } catch { return { success: false, message: 'Server error' }; }
   },

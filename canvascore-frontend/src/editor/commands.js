@@ -1,6 +1,7 @@
 // Rich text editor: toolbars, formats and the commands behind the buttons (shared by RichText.jsx).
 import { useCallback, useRef } from 'react';
 import { cleanPastedHtml, textToHtml, TABLE_STYLE, CELL_STYLE } from './cleanHtml';
+import { safeHtml } from '../utils/safeHtml';
 
 // Toolbars: 'basic' for titles and short texts, 'full' for body text.
 export const TOOLSETS = {
@@ -32,6 +33,7 @@ export const exec = (cmd, value = null) => { try { return document.execCommand(c
 
 // Inserts HTML at the caret; falls back to a Range insert where the browser refuses insertHTML
 export function insertHtml(html) {
+  html = safeHtml(html);
   if (exec('insertHTML', html)) return true;
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount) return false;
@@ -144,7 +146,7 @@ export function tableHtml(rows, cols, header) {
 }
 
 // Replaces the edited text (HTML source dialog)
-export function setRegionHtml(region, html) { if (region) region.innerHTML = html; }
+export function setRegionHtml(region, html) { if (region) region.innerHTML = safeHtml(html); }
 
 export const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 

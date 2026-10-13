@@ -33,8 +33,8 @@ web root (the folder the domain serves). Replace both with your own values.
 | Item | Requirement |
 |---|---|
 | PHP | **8.0 or newer** (the installer refuses older versions) |
-| PHP extensions (required) | `pdo_sqlite`, `json`, `session` |
-| PHP extensions (recommended) | `zip` (`ZipArchive`): needed to make and restore site backups on the Backup page (section 8); without it only old `.json` backups can be imported. `dom` (without it rich text is cleaned by a simpler, more conservative fallback sanitizer, and SVG uploads are checked with a simpler test) |
+| PHP extensions (required) | `pdo_sqlite`, `json`, `session`, `dom` (`php-xml` on some systems: rich text and SVG uploads are checked with it; without it SVGs are refused and rich text loses its links, images and formatting attributes) |
+| PHP extensions (recommended) | `zip` (`ZipArchive`): needed to make and restore site backups on the Backup page (section 8); without it only old `.json` backups can be imported |
 | PHP extensions (optional) | `gd` **with WebP support** (`imagewebp()`), for image optimization: without it uploaded images are used as they are, with no smaller copies (section 7.7). `exif`, to turn phone photos the right way up in those copies. `mbstring`: CanvasCore has built-in fallbacks for the functions it uses, so forms, the site search and the media library work without it |
 | PHP functions | `mail()` enabled, if you want form notifications by email (submissions are stored either way) |
 | PHP settings | `file_uploads = On`; `upload_max_filesize` / `post_max_size` large enough for your images (backup ZIPs are uploaded in pieces, so they are not limited by these settings; old `.json` backups are sent in one piece); a `memory_limit` large enough for your photos if you want them optimized (about 5 bytes per pixel: a 12-megapixel photo needs roughly 60 MB free; larger images are skipped) |
@@ -42,8 +42,9 @@ web root (the folder the domain serves). Replace both with your own values.
 | HTTPS | Strongly recommended. Without it, passwords and session cookies travel unencrypted |
 | To build the editor | Node.js 20 or newer and npm (on your computer, not on the server) |
 
-The installer (`install.php`) checks the PHP version, the required extensions, `zip` and `dom`
-(a warning if missing), the writable folders, the editor build, `mail()` and HTTPS, and shows each item as OK, warning or
+The installer (`install.php`) checks the PHP version, the required extensions (including `dom`),
+`zip` (a warning if missing), the writable folders, whether the data folder can be downloaded from
+the web (section 2), the editor build, `mail()` and HTTPS, and shows each item as OK, warning or
 failure before it lets you install. It does **not** check GD/WebP or `mbstring`: to see whether
 GD can write WebP, run `php -r 'var_dump(function_exists("imagewebp"));'` with the same PHP the
 site uses (or look for "WebP Support" in the `gd` section of `phpinfo()`).
@@ -65,12 +66,15 @@ root, and published pages are written to the folder above it (the web root itsel
 │   ├── media.json                Image metadata: description (alt text), size, optimized copies,
 │   │                             media library folder
 │   ├── media-folders.json        Media library folders (also the empty ones)
-│   ├── forms.json                Form registry (form id → recipient), written on publish
+│   ├── forms.json                Form registry (form id → recipient, field labels, success
+│   │                             message), written on publish
 │   ├── published_files.json      Files written by the last successful publish (pages, items,
 │   │                             redirect pages, feed.xml, ...)
 │   ├── login_attempts.json       Login throttling state
 │   ├── rate_forms.json           Form rate-limit state
 │   ├── sessions/                 PHP session files for the editor
+│   ├── install-key.txt           Setup key for the installer (deleted once installed, section 3.3)
+│   ├── quarantine/               SVGs uploaded before 0.14.1 that fail the current check (section 5)
 │   ├── backups/                  Site backups kept on the server and safety copies (section 8),
 │   │                             with its own deny-all .htaccess
 │   └── .htaccess                 "Deny all" (safety net)
@@ -89,25 +93,33 @@ root, and published pages are written to the folder above it (the web root itsel
     │   └── _cc/                  Optimized WebP copies (480/960/1600 px), made on upload
     └── canvascore-admin/         The editor (PHP backend + built React app)
         ├── index.html, assets/   Editor build (from canvascore-frontend/dist/)
+        ├── menu-preview.html     Menu Builder live preview (sandboxed)
         ├── api.php, rebuild_all.php, submit_form.php, config.php, ...
+        ├── .htaccess             Security headers and access rules (Apache, written automatically)
         └── version.json          Version of the installed release
 ```
 
 Rules to keep in mind:
 
 1. **Keep the folder name `canvascore-admin`.** Published forms post to
-   `canvascore-admin/submit_form.php`, and that name is reserved as a URL. Renaming the folder
-   breaks the site's forms.
+   `canvascore-admin/submit_form.php`, and that name is reserved as a URL (like `uploads`,
+   `canvascore-data` and `data`, section 7.1). Renaming the folder breaks the site's forms.
 2. **The admin folder must sit directly in the web root.** Publishing writes to its parent folder.
    If the site lives in a sub-path (for example `example.com/site/`), put `canvascore-admin`
    inside `site/`; links are generated relative to that path.
-3. **Data directory.** CanvasCore uses `canvascore-data/` two levels above `canvascore-admin`
-   (that is, next to the web root, outside it) **if PHP can write there**. Otherwise it falls
-   back to `canvascore-admin/data/`, inside the web root, protected only by a `.htaccess` file.
-   - The choice is made automatically on every request. If the outside folder becomes writable
-     later, the database and the `settings.json`, `menu.json`, `forms.json` files are copied there
-     and the old database file is deleted; the reverse happens if the outside folder stops being
-     writable. Other files are **not** moved: copy `media.json` (image descriptions and folders),
+3. **Data directory.** CanvasCore keeps its data outside the web root whenever PHP can write
+   there. A new installation uses `canvascore-data/` two levels above `canvascore-admin` (that is,
+   next to the web root, outside it). If the site lives in a sub-folder of the web root
+   (`example.com/site/`), that folder would still be inside the web root, so a folder next to the
+   web root itself is used instead, named after the sub-folder (`canvascore-data-site/`; two sites in
+   different sub-folders never share one). The web root comes from the server's `DOCUMENT_ROOT`. Only when no folder outside the web root can be written does CanvasCore fall
+   back to `canvascore-admin/data/`, inside the web root, protected by a deny-all `.htaccess` on
+   Apache (on Nginx, add the rules of section 4.2). The installer then tests over HTTP whether the
+   folder can be downloaded, and refuses to install if it can.
+   - An existing database stays where it is. If it is in `canvascore-admin/data/` and a folder
+     outside the web root becomes writable later, the database and the `settings.json`,
+     `menu.json`, `forms.json` files are copied there and the old database file is deleted.
+     Other files are **not** moved: copy `media.json` (image descriptions and folders),
      `media-folders.json`, `published_files.json` (stale page cleanup) and the `backups/` folder
      to the new folder yourself.
    - To get the recommended layout, create the folder and give the PHP user write access:
@@ -144,7 +156,7 @@ Rules to keep in mind:
 
 1. Upload the whole `canvascore-admin/` folder into the web root, keeping its name:
    `/var/www/example.com/public/canvascore-admin/`.
-2. Copy the **contents** of `canvascore-frontend/dist/` (`index.html`, `assets/`, icons) into
+2. Copy the **contents** of `canvascore-frontend/dist/` (`index.html`, `assets/`, icons, `menu-preview.html`) into
    that same `canvascore-admin/` folder.
 3. Create the data folder outside the web root as shown in section 2 (recommended).
 4. Make sure PHP can write to the web root and to `uploads/` (it is created on first upload).
@@ -152,30 +164,38 @@ Rules to keep in mind:
 ### 3.3 Run the setup wizard
 
 1. Open `https://example.com/canvascore-admin/install.php`.
-2. Review the requirements list. Failures (red) must be fixed before you can continue; warnings
-   (for example "Data folder inside the web root", "mail() unavailable", "Not using HTTPS") let you
+2. Review the requirements list. Failures (red) must be fixed before you can continue: for
+   example a missing `dom` extension, a data folder PHP cannot write, or a data folder inside the
+   web root that **can be downloaded** by anyone (the installer writes a random test file there and
+   requests it from the server itself). Warnings (for example "Data folder inside the web root"
+   when it is protected or could not be checked, "mail() unavailable", "Not using HTTPS") let you
    install but should be fixed soon.
-3. Fill in the form:
+3. **Setup key.** The wizard writes a random key to `install-key.txt` in the data folder (the
+   page shows the folder's path). Open that file with your hosting file manager or FTP/SFTP and
+   paste its content into the **Setup key** field. This proves you have access to the server's
+   files, so nobody who finds a freshly uploaded site can install it before you.
+4. Fill in the form:
    - **Site name** (up to 120 characters) and **site address** (for example
      `https://www.example.com`; used for the sitemap, `robots.txt` and social sharing tags).
-   - **Administrator username**: 3–32 characters, letters, digits, `.`, `-`, `_`, `@`.
+   - **Administrator username**: 3–32 characters, letters, digits, `.`, `-`, `_`, `@`. The field
+     starts empty: choose a name that is hard to guess, not `admin`.
    - **Password**: at least 8 characters, not `admin` and not equal to the username.
    - **Email for forms** (optional): the default recipient of form submissions.
    - **Starter** (optional): creates a homepage from a template, saved as a **draft**.
-4. Submit. The wizard creates the database, replaces the default `admin`/`admin` account with
-   yours, saves the settings and signs you in to the editor.
-5. **Delete `install.php`.** The wizard offers a button for it. If the automatic deletion fails,
+5. Submit. The wizard creates the database and your administrator account, saves the settings,
+   deletes `install-key.txt` and signs you in to the editor. Only one installation can run at a
+   time; if something fails, the page says so and the details are in the server error log
+   (prefix `CanvasCore install:`).
+6. **Delete `install.php`.** The wizard offers a button for it. If the automatic deletion fails,
    remove the file by FTP/SSH. Once the site is installed the wizard locks itself anyway (it
    only offers to delete itself), but it should not stay on the server.
 
-### 3.4 First login without the wizard
+### 3.4 No default account
 
-If you skip the wizard and open `https://example.com/canvascore-admin/` directly, the database
-is created with a default account **`admin` / `admin`**. You must choose a new password
-(8 or more characters, not `admin`) before you can do anything else.
-
-> Do this immediately after uploading: until the password is changed, anyone who reaches the
-> login page first can sign in with the default credentials. Using the wizard avoids this window.
+There is no default login: the first account is the one you create in the wizard. If you open
+`https://example.com/canvascore-admin/` before running it, the sign-in screen says
+"CanvasCore is not set up yet" with a link to `install.php`, and the API answers everything except
+the sign-in screen's own checks with HTTP 503 (`not_installed`).
 
 ### 3.5 After installation
 
@@ -202,7 +222,8 @@ CanvasCore writes its own `.htaccess` files; they work only if Apache reads them
 |---|---|---|
 | `canvascore-data/.htaccess` and `canvascore-admin/data/.htaccess` | on every request, if missing or changed | Deny all access |
 | `backups/.htaccess` in the data directory | whenever the Backup page uses the folder | Deny all access |
-| `uploads/.htaccess` | on every image upload, if missing or changed | Deny `.php`, `.phtml`, `.phar`, `.php3`–`.php7`, `.phps`, `.pht`, `.cgi`, `.pl`, `.py`, `.sh`; `php_flag engine off` under mod_php; for `.svg`, the header `Content-Security-Policy: script-src 'none'; sandbox` (needs `mod_headers`) |
+| `canvascore-admin/.htaccess` | on every request to `api.php` or `install.php`, if missing or changed (only while it is CanvasCore's own file) | Security headers for everything in the admin folder, including the editor page (`X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Cross-Origin-Opener-Policy: same-origin`; needs `mod_headers`), except `menu-preview.html`, which the editor frames itself (`SAMEORIGIN` / `frame-ancestors 'self'`). Denies the library files `config.php`, `compiler.php`, `migrations.php`, `media.php`, `backup.php` and any `.json`, `.md`, `.sqlite`, `.log`, `.zip`, `.part`, `.lock` file |
+| `uploads/.htaccess` | on every image upload (and restore), if missing or changed | Deny `.php`, `.phtml`, `.phar`, `.php3`–`.php7`, `.phps`, `.pht`, `.cgi`, `.pl`, `.py`, `.sh`; `php_flag engine off` under mod_php; `X-Content-Type-Options: nosniff`; for `.svg`, the header `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'none'; sandbox` (needs `mod_headers`) |
 | `.htaccess` in the web root | on every publish | Created with `ErrorDocument 404 /404.html` (with the site's base path) if it does not exist. On every publish CanvasCore rewrites **only** the block between `# BEGIN CanvasCore redirects` and `# END CanvasCore redirects` (one `Redirect 301 /old/ /new/` line per redirect, inside `<IfModule mod_alias.c>`); the block is removed when there are no redirects |
 
 If you already have a root `.htaccess` (HTTPS rules, your own redirects), CanvasCore keeps
@@ -210,6 +231,12 @@ everything outside its marked block as it is; it does not add the `ErrorDocument
 existing file, so add `ErrorDocument 404 /404.html` yourself. Do not edit inside the marked
 block: it is replaced on the next publish. Manage redirects in Global Options › Redirects
 instead (section 7.4).
+
+`canvascore-admin/.htaccess` is kept up to date while it is CanvasCore's own (its first line is
+`# CanvasCore: written automatically…`). If you replace it with a file of your own (for example to
+add HTTP basic auth), CanvasCore leaves it alone: copy CanvasCore's rules into it, or the security
+headers and deny rules are lost. Whatever the server, the library files (`config.php`, `compiler.php`,
+`migrations.php`, `media.php`, `backup.php`) answer 404 when opened directly.
 
 ### 4.2 Nginx
 
@@ -228,16 +255,46 @@ server {
 
     client_max_body_size 20m;            # image uploads; backup ZIPs are sent in pieces of up to 8 MB
 
-    # Data folder, if it ever falls back inside the web root
-    location ^~ /canvascore-admin/data/ { deny all; return 404; }
+    # Data folders, should they ever be inside the web root (at any depth)
+    location ~ /canvascore-data(/|$) { deny all; return 404; }
 
     # Hidden files (.htaccess, .cc_wtest_*)
     location ~ /\. { deny all; return 404; }
 
-    # Uploads: never execute scripts, and sandbox SVGs
+    # Admin: security headers, no access to the data fallback, library files and JSON
+    location ^~ /canvascore-admin/ {
+        add_header X-Frame-Options "DENY" always;
+        add_header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "same-origin" always;
+
+        location ^~ /canvascore-admin/data/ { deny all; return 404; }
+        location ~ /\. { deny all; return 404; }
+        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup)\.php$ { deny all; return 404; }
+        location ~ ^/canvascore-admin/[^/]+\.(json|md|sqlite|log|zip|part|lock)$ { deny all; return 404; }
+
+        # The Menu Builder's live preview is framed by the editor itself
+        location = /canvascore-admin/menu-preview.html {
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header Content-Security-Policy "frame-ancestors 'self'; base-uri 'none'; object-src 'none'" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Referrer-Policy "same-origin" always;
+        }
+
+        location ~ \.php$ {
+            include snippets/fastcgi-php.conf;
+            fastcgi_pass unix:/run/php/php8.3-fpm.sock;   # adjust to your PHP version
+        }
+    }
+
+    # Uploads: never execute scripts, no MIME sniffing, and sandbox SVGs
     location ^~ /uploads/ {
+        add_header X-Content-Type-Options "nosniff" always;
         location ~* \.(php|phtml|phar|php[3-7]|phps|pht|cgi|pl|py|sh)$ { deny all; return 404; }
-        location ~* \.svg$ { add_header Content-Security-Policy "script-src 'none'; sandbox"; }
+        location ~* \.svg$ {
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'none'; sandbox" always;
+        }
     }
 
     location / {
@@ -259,8 +316,12 @@ server {
 }
 ```
 
-The `^~` prefix makes the uploads and data rules win over the `\.php$` location, so a script
-uploaded under another name can never reach PHP-FPM.
+The `^~` prefix makes the admin and uploads blocks win over the server-level `\.php$` location,
+so a script uploaded under another name can never reach PHP-FPM; that is also why the admin
+block has its own `\.php$` location. Inside a block, regular-expression locations are tried in
+order, so keep the deny rules above it. `add_header` inside a `location` replaces the headers of
+the outer block, which is why the preview's block repeats all four. If the site lives in a
+sub-folder (`example.com/site/`), prefix the paths: `/site/canvascore-admin/`, `/site/uploads/`.
 
 **Redirects on Nginx.** Nginx ignores the `.htaccess` block of 301s. The old addresses still
 work, because publishing also writes a small redirect page at each old address (it sends the
@@ -280,7 +341,9 @@ Repeat this when the list changes (renaming a published page or item adds a redi
 
 1. Install a certificate (Let's Encrypt or your host's panel) and redirect HTTP to HTTPS.
 2. Behind a proxy or load balancer that terminates TLS, make sure it sends
-   `X-Forwarded-Proto: https`: CanvasCore uses it to mark the session cookie `Secure`.
+   `X-Forwarded-Proto: https` (or `X-Forwarded-SSL: on`) and list its address in Trusted proxy
+   addresses (section 4.4): CanvasCore uses the header to mark the session cookie `Secure`, and
+   believes it only from a listed proxy.
 3. Set the site address in Global Options to the `https://` URL and publish again, so the
    sitemap, canonical links, RSS feeds and sharing tags use it.
 
@@ -297,8 +360,8 @@ Only valid IP addresses are kept; ranges (CIDR) are not accepted, so list each a
 
 - When a request comes **from a listed address**, CanvasCore reads `X-Forwarded-For` and uses
   the nearest address in it that is not a listed proxy as the visitor's address.
-- From any other address, `X-Forwarded-For` is ignored, so a visitor cannot fake their address
-  by sending the header.
+- From any other address, `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-SSL` are
+  ignored, so a visitor cannot fake their address or the connection's security by sending them.
 - Leave the field empty when nothing sits in front of the server.
 
 Make sure the proxy sets (or appends to) `X-Forwarded-For`.
@@ -323,27 +386,54 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
    should not stay on the server).
 6. Open the editor. **Database migrations run automatically** on the first request: each
    pending schema step is applied in order, in a transaction, and recorded in the `cc_meta`
-   table (key `db_schema`). There is nothing to run by hand. The current schema is **7**
+   table (key `db_schema`). There is nothing to run by hand. The current schema is **8**
    (`db_schema` in `version.json`); the most recent steps are:
 
    | Migration | Adds |
    |---|---|
    | 6 | `page_revisions` table: version history of pages and collection items (section 7.8) |
    | 7 | `redirects` table (old addresses → new ones, section 7.4) and the `pages.noindex` column ("Hide this page from search engines") |
+   | 8 | Security (0.14.1): the `admin.session_gen` column (section 6), user names unique regardless of case (when no two existing names differ only in case), the old default `admin`/`admin` account deleted once another account exists (a site set up before the wizard then counts as installed), and the rich text already stored cleaned like new saves |
 
    Back up the data directory before updating: a migration cannot be undone by installing the
    older release again.
 7. Ask everyone to **reload any open editor tabs** (a hard refresh, Ctrl/Cmd+Shift+R). A tab
    opened before the update still runs the old editor.
-8. Check the version at the bottom of the sidebar: `CanvasCore v0.14.0 · build 28` (example).
+8. Check the version at the bottom of the sidebar: `CanvasCore v0.14.1 · build 29` (example).
+   The version is shown only to signed-in users (sidebar and About).
    If an orange line says `Editor vX / server vY: reload the page after updating`, the browser
    is still running the old editor: reload it. If the warning persists after a reload, the new
    `dist/` was not uploaded (or a cache/CDN is serving the old `index.html`).
-9. Click **Publish Site** so every page is regenerated with the new release (the version is
-   written into each page as `<meta name="generator" content="CanvasCore x.y.z">`).
+9. Click **Publish Site** so every page is regenerated with the new release. Published pages
+   carry `<meta name="generator" content="CanvasCore">` without a version number, so check the
+   version in the editor, not in the pages.
 10. Optional, after updating from a release without image optimization: in **Media**, click
     **Optimize N older images** to make the smaller copies of the images uploaded before
     (section 7.7), then publish again so pages get the `srcset`.
+
+**Updating from 0.14.0 or earlier to 0.14.1** (security release). Besides the steps above:
+
+- The PHP `dom` extension is now required (section 1).
+- Everyone signs in again once: the session cookie is now called `CCSESSID`.
+- If the site still had only the old default `admin`/`admin` account, the editor now says
+  "CanvasCore is not set up yet": upload `install.php` again and run it with the setup key
+  (section 3.3). Otherwise the `admin`/`admin` account, if present, is deleted.
+- On the first request, SVG images uploaded earlier that fail the stricter check are moved from
+  `uploads/` to `quarantine/` in the data directory (each one is logged in the server error log).
+  Pages that used them show a missing image: export those files again as plain SVG or PNG and
+  upload them.
+- On Nginx, add the new rules of section 4.2 (admin security headers, library files, data
+  folders). On Apache, `canvascore-admin/.htaccess` and the new `uploads/.htaccess` are
+  written automatically at the first request to the editor.
+- A site in a sub-folder of the web root (`example.com/site/`) keeps its data where it is: in
+  `canvascore-data/` next to the site folder, which is inside the web root. On Apache its
+  deny-all `.htaccess` protects it; on Nginx add the `canvascore-data` rule of section 4.2. To
+  move it out, copy the whole folder next to the web root with the sub-folder's name (for
+  `example.com/site/`: `/var/www/example.com/canvascore-data-site`, if the web root is
+  `/var/www/example.com/public`), make it writable by PHP and delete the old one: an existing
+  database there is found first.
+- Publish the site (step 9): the form registry then lists each form's fields and success message
+  (section 9).
 
 What changed in each release is listed in `docs/CHANGELOG.md` and in the release notes on
 GitHub Releases.
@@ -377,18 +467,28 @@ header/footer and most Global Options, and can run Publish Site. Editors **canno
 - add, change or remove **redirects** (Global Options › Redirects is shown to admins only;
   renaming a page or item still adds its redirect automatically).
 
+The role is read from the database on every request, and a session ends at its next request
+when its account is deleted or its password is reset or changed elsewhere. Sessions also end
+after the inactivity timeout (section 10) and, at the latest, **7 days** after signing in.
+
+Usernames have 3–32 characters (letters, digits, `.`, `_`, `-`, `@`) and are unique regardless
+of case: `Anna` and `anna` are the same account, and either spelling signs in.
+
 ### 6.1 Change your own password
 
 Every user, whatever the role, can change their own password: click the **key icon** next to
 Logout in the sidebar, enter the **current password** and the new one twice (8 or more
-characters, not `admin`). The current password is required for every voluntary change; only
-the forced change right after signing in (new account, reset, default `admin`) asks for the new
-password alone.
+characters, not `admin`, not your username, and different from the current one). The current
+password is required for every voluntary change, and wrong ones count like wrong sign-ins
+(section 10). Only the forced change right after signing in (new account, reset) asks for the
+new password alone; until it is done the server refuses everything else for that account.
+Changing your password signs your account out in every other browser; the one you are using
+stays signed in.
 
 ### 6.2 Add a user
 
 1. Go to **Accounts**.
-2. Enter a username, a temporary password (**at least 8 characters**: the server refuses
+2. Enter a username (see the rules above), a temporary password (**at least 8 characters**: the server refuses
    shorter ones) and the role (Editor or Admin), then add the account.
 3. Give the credentials to the person through a safe channel. At their first sign-in they must
    choose a new password (8 or more characters).
@@ -400,14 +500,18 @@ person's pages are kept).
 
 1. In **Accounts**, choose the password action on the user's row.
 2. Enter the new password twice (at least 8 characters).
-3. The user signs in with it and is asked to choose a new one immediately.
+3. The account is signed out everywhere at once. The user signs in with the new password and
+   is asked to choose a new one immediately.
+
+This is for other accounts: to change your own password, use section 6.1.
 
 ### 6.4 Delete a user
 
 1. In **Accounts**, click delete on the row and confirm.
-2. The person can no longer sign in; the pages they wrote stay.
+2. The person can no longer sign in, and any session they have open ends at its next request;
+   the pages they wrote stay.
 
-You cannot delete your own account, so there is always at least one admin left (you).
+You cannot delete your own account, and the last admin account cannot be deleted.
 
 ### 6.5 Lost the only admin password
 
@@ -417,10 +521,10 @@ There is no "forgot password" email. With shell access to the server:
 cd /var/www/example.com/canvascore-data          # or public/canvascore-admin/data
 cp canvascore.sqlite canvascore.sqlite.bak
 HASH=$(php -r 'echo password_hash("Temporary-Pass-2026", PASSWORD_DEFAULT);')
-sqlite3 canvascore.sqlite "UPDATE admin SET password_hash='$HASH', must_change_pw=1 WHERE username='admin';"
+sqlite3 canvascore.sqlite "UPDATE admin SET password_hash='$HASH', must_change_pw=1, session_gen=session_gen+1 WHERE username='yourname';"
 ```
 
-Replace `admin` with the actual username. Sign in with the temporary password and choose a new one.
+Replace `yourname` with the actual username (`session_gen` signs out any open session). Sign in with the temporary password and choose a new one.
 
 ---
 
@@ -465,8 +569,16 @@ Every page and item also gets, in its HTML:
 - for uploaded images, a `srcset` of the optimized copies, lazy loading and async decoding
   (section 7.7).
 
-A URL can belong to only one live page, collection or system folder (`uploads`,
-`canvascore-admin`): publishing a page on a URL already in use is refused with a message.
+A URL can belong to only one live page or collection: publishing a page on a URL already in use
+is refused with a message. CanvasCore's own folders are **reserved**: `canvascore-admin` (and the
+admin folder's actual name), `uploads`, `canvascore-data` and `data` can't be used by a page (not
+even a draft), a collection or a redirect. Publishing never writes into or deletes from them; a
+page or collection that has such an address anyway (for example from an old database) is skipped
+with a warning.
+
+Every page, feed and data file the publisher writes stays inside the site folder, with a plain
+name (`.html`, `.xml`, `.json` or `.txt`); anything else counts as a file that could not be
+written.
 
 ### 7.2 Removal of stale pages
 
@@ -496,7 +608,10 @@ publish.
 - `Publish incomplete: N file(s) could not be written (check the folder permissions on the server), e.g. about/index.html.`
   This also covers `sitemap.xml`, `robots.txt`, `404.html`, feeds, `search-index.json` and
   `forms.json`. See section 11.
-- `PHP Error: ...` / `Database not found.` / `master.html missing!`: see section 11.
+- `Not published: "Title" uses the reserved address /uploads/` (or a collection) and
+  `Skipped an invalid redirect.` appear among the warnings (sections 7.1 and 7.4).
+- `Publishing failed because of a server error. Details are in the server error log.` /
+  `Database not found.` / `master.html missing!`: see section 11.
 
 Publishing only accepts a POST with the session's security token: a link or another website
 cannot trigger it.
@@ -512,8 +627,11 @@ list in **Global Options › Redirects** ("automatic" or "added by hand") and ca
 (old address such as `/old-page/`, new address such as `/new-page/` or a full `https://…`) or
 remove one.
 
-- Chains collapse (A → B then B → C becomes A → C) and loops are avoided. The home page cannot
-  be redirected.
+- Chains collapse (A → B then B → C becomes A → C) and loops are avoided. The home page and
+  CanvasCore's reserved folders (section 7.1) cannot be redirected. A full address must be
+  `http(s)://…` without spaces, line breaks or backslashes.
+- Redirects are checked again at every publish (an invalid one is skipped with a warning) and
+  when a backup is restored (invalid ones are dropped).
 - Publishing a page or item at an old address cancels its redirect.
 - Redirects take effect at the next publish. Each one becomes:
   - a small **redirect page** at the old address (`old-page/index.html`), which works on every
@@ -643,7 +761,8 @@ Two buttons:
 - **Keep a copy on the server**: the file is stored in `backups/` in the data directory
   (outside the public site when the data directory is outside the web root; protected by a
   deny-all `.htaccess` otherwise, see section 4.2 for Nginx), named
-  `backup-YYYYMMDD-HHMMSS-xxxx.zip`.
+  `backup-YYYYMMDD-HHMMSS-<32 random hex characters>.zip`. The random part (128 bits) makes the
+  name impossible to guess; copies with the shorter names of older versions are still listed.
 
 **Backups on the server** lists the saved copies and the safety copies (section 8.2) with date,
 site name, number of pages, items and image files, size and version. Each can be downloaded,
@@ -674,7 +793,7 @@ What happens:
    database schema) is refused: update this site first. Older backups restore normally
    (unknown columns are ignored). There must be enough free disk space. Only one restore runs at
    a time.
-3. **Safety copy.** The current site is saved as `before-restore-YYYYMMDD-HHMMSS-xxxx.zip` in
+3. **Safety copy.** The current site is saved as `before-restore-YYYYMMDD-HHMMSS-<random>.zip` in
    `backups/` (with history and form messages). Only the **newest 5** safety copies are kept.
    If the safety copy cannot be made, nothing is restored. To undo a restore, restore its safety
    copy.
@@ -683,8 +802,9 @@ What happens:
    images are left out and listed in the result), and then swapped with the current `uploads/`
    folder.
 5. **Content, in one transaction.** Pages, collections and items, templates, masters,
-   header/footer and redirects are replaced. Version history and form messages are replaced only
-   if the backup contains them; otherwise the current ones stay. If anything fails, the
+   header/footer and redirects are replaced (redirects that are not well formed are dropped).
+   Version history and form messages are replaced only if the backup contains them; otherwise
+   the current ones stay. Restored rich text is cleaned like a new save (section 10). If anything fails, the
    transaction is rolled back and the old `uploads/` folder is put back: nothing changes.
 6. **Options.** Global Options, the menu and the media library data are replaced by the
    backup's. **Trusted proxy addresses** are kept from this server (they describe the server,
@@ -758,26 +878,29 @@ Keep copies off the server. `sqlite3 .backup` is safe while the site is in use; 
 - **Subject**: *Default subject*, otherwise "New submission from your website".
 
 Recipients are never sent to the browser: on publish, CanvasCore writes `forms.json` in the
-data directory (form id → recipient) and `submit_form.php` reads it. **After changing a form's
-recipient, publish the site** so the registry is updated.
+data directory (form id → recipient, the labels of the form's fields and its success message)
+and `submit_form.php` reads it. **After changing a form's recipient, fields or success message,
+publish the site** so the registry is updated.
 
-If no valid recipient is found, the visitor sees "Form is not configured: set a valid receiving
-email in Global Options." (the submission is still stored).
+If no valid recipient is found, the submission is still stored and the visitor sees a generic
+"Thank you: your message was received.": check **Submissions** after setting up a form.
 
 ### 9.2 Sending
 
 Email is sent with PHP's `mail()`, as plain text. It needs a working mail setup on the server
-(sendmail/postfix, or the host's mail service). If `mail()` is disabled or fails, the visitor
-sees "Error sending email. Please check the server mail configuration." and the submission is
-still saved in the database.
+(sendmail/postfix, or the host's mail service). If `mail()` is disabled or fails, the
+submission is still saved in the database, the visitor sees the generic "Thank you: your message
+was received." (never server details) and the failure is logged in the server error log
+(`CanvasCore form: mail() failed for form …`).
 
 ### 9.3 Submissions
 
-Every accepted submission is stored before the email is attempted. Admins see them in
+Every accepted submission is stored before the email is attempted, up to **20,000** stored
+submissions: beyond that, new ones are only emailed until you delete old ones. Admins see them in
 **Submissions** (the latest 1000 in the list), can search, delete one or clear all, and
 export **CSV** (all submissions, one column per field label). In the CSV, values starting with
-`=`, `+`, `-`, `@`, tab or carriage return are prefixed with `'` so that spreadsheets do not run
-them as formulas.
+`=`, `+`, `-`, `@`, tab or carriage return (column names included) are prefixed with `'` so that
+spreadsheets do not run them as formulas.
 
 ### 9.4 Spam protection
 
@@ -786,10 +909,16 @@ them as formulas.
 - **Rate limit**: at most **8 submissions every 10 minutes per IP address**; beyond that the
   visitor gets "Too many messages sent in a short time." (HTTP 429). Behind a reverse proxy or
   CDN, set the trusted proxy addresses (section 4.4), or all visitors share one limit.
-- **Unknown forms refused**: a submission naming a form that is not in the published registry
-  is rejected ("This form is no longer available."). This check is active once the site has been
-  published with at least one form.
-- Only `POST` is accepted; field values are length-limited when stored.
+- **Unknown forms refused**: a submission naming a form that is not in the published registry,
+  or arriving before the site has been published with a form, is rejected ("This form is no
+  longer available.").
+- **Only the form's own fields**: only the fields the form defines are stored and mailed, with
+  the labels set on the site; anything else a visitor sends is ignored. The success message also
+  comes from the form's settings, never from the visitor.
+- **Limits**: only `POST` is accepted; at most 64 KB per submission ("The message is too long."),
+  5,000 characters per field and 50 fields; an empty form is refused.
+- The form endpoint starts no session, sends no `X-Mailer` header and never shows server errors
+  to visitors.
 
 ---
 
@@ -797,57 +926,100 @@ them as formulas.
 
 What CanvasCore does for you:
 
+- **Installation**: there is no default account. The installer asks for a setup key written to
+  the data folder (proof of access to the server's files), runs under a lock, requires `dom`, and
+  refuses to install when the data folder can be downloaded from the web (section 3.3).
 - **Data outside the web root**: database, settings and sessions live in `canvascore-data/`
-  when writable; otherwise in `canvascore-admin/data/` with a deny-all `.htaccess` (Apache only;
-  on Nginx add the deny rule from section 4.2).
-- **Sessions**: cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` over HTTPS; the session ID is
-  regenerated at login; session files are stored in the data directory (`sessions/`), isolated
-  from other apps. Sessions expire after **30 minutes of inactivity** by default, adjustable by an
-  admin from **5 to 720 minutes** (Global Options → Security). The editor warns about 2 minutes
-  before expiry and keeps unsaved work when you sign in again.
-- **CSRF**: every state-changing request needs a per-session token sent in the `X-CSRF-Token`
-  header; otherwise the server answers 403 ("Invalid CSRF token. Reload the page.").
-- **Login throttling**: **5 wrong passwords in 15 minutes** for the same account from the same
-  IP address lock that account/address pair for **15 minutes**. Behind a reverse proxy or CDN
-  the visitor's real address is used once the proxy is listed in Trusted proxy addresses
-  (section 4.4); `X-Forwarded-For` is never trusted from other addresses.
+  outside the web root whenever PHP can write there (also for sites in a sub-folder of the web
+  root); otherwise in `canvascore-admin/data/` with a deny-all `.htaccess` (Apache only; on Nginx
+  add the rules from section 4.2).
+- **Admin folder**: security headers that keep the editor out of other sites' frames
+  (clickjacking) and stop MIME sniffing and referrer leaks; the library files and JSON files
+  can't be opened directly (section 4). The editor also refuses to run inside a frame.
+- **Sessions**: cookie `CCSESSID`, `HttpOnly`, `SameSite=Lax`, and `Secure` over HTTPS; no
+  session is created for visitors who aren't signing in; the session ID is regenerated at login;
+  session files are stored in the data directory (`sessions/`), isolated from other apps.
+  Sessions expire after **30 minutes of inactivity** by default, adjustable by an admin from
+  **5 to 720 minutes** (Global Options → Security), and at the latest **7 days** after signing
+  in. The editor warns about 2 minutes before expiry and keeps unsaved work when you sign in
+  again. Deleting an account, or resetting or changing its password, ends its other sessions at
+  once; the role is read from the database on every request.
+- **CSRF**: every state-changing request needs the session's token in the `X-CSRF-Token` header
+  and must come from the site itself (`Origin` / `Sec-Fetch-Site` are checked); otherwise the
+  server answers 403 ("Invalid CSRF token. Reload the page."). The token is kept only in the
+  editor's memory, never in a cookie. Sign-in accepts only JSON requests from the site itself,
+  so another site can't sign you in to an account of its choosing.
+- **Login throttling**: every attempt is counted before the password is checked. **5 wrong
+  passwords in 15 minutes** for one account from one IP address, **20 in 15 minutes** from one
+  address (any accounts), or **100 in an hour** for one account (any addresses) lock that pair,
+  address or account for **15 minutes**. An unknown username takes as long to answer as a wrong
+  password. Behind a reverse proxy or CDN the visitor's real address is used once the proxy is
+  listed in Trusted proxy addresses (section 4.4); `X-Forwarded-For` and `X-Forwarded-Proto` are
+  never trusted from other addresses.
 - **Passwords**: at least 8 characters everywhere (installer, new accounts, resets, own
-  changes). The default `admin`/`admin`, new accounts and reset passwords must be changed at
-  first sign-in; any later change of your own password requires the current one.
-- **HTML sanitizer**: rich text is filtered through an allow-list that removes scripts, iframes,
-  forms, `on*` event handlers and `javascript:`/`vbscript:`/`data:` links (only `data:image` is
-  allowed in image sources).
+  changes). New accounts and reset passwords must be changed at first sign-in, and the server
+  allows nothing else until then; any later change of your own password requires the current
+  one. The last admin can't be deleted.
+- **Rich text**: filtered through an allow-list when it is **saved** (pages, items,
+  header/footer, masters, templates, version history; after a restore or import; and once for
+  existing content when updating to 0.14.1) and again when it is published, whatever the role.
+  It removes scripts, iframes, forms, `on*` event handlers and `javascript:`/`vbscript:`/`data:`
+  links (only `data:image` is allowed in image sources); inline styles keep only plain typography
+  and box properties (no positioning, `url()` or expressions); links opening a new tab get
+  `rel="noopener noreferrer"`.
+- **Other content**: active addresses (`javascript:`, `data:text/…` and the like) are blanked in
+  every block field when saved, except an admin's Custom HTML and custom CSS/JS. Block style
+  values can't contain `;`, `{`, `}`, `<`, `>`, `\` or script addresses; page background colors
+  and widths, and Hero/Gallery image addresses, are validated. Editors don't receive a Form
+  block's own receiving email from the server. Templates and masters must be a single block.
+- **Editor**: the built editor runs under a strict Content Security Policy (scripts only from
+  its own files), and everything it shows as HTML (canvas, version history, rich text fields)
+  is cleaned again in the browser with DOMPurify. The Menu Builder's live preview runs in a
+  separate sandboxed page (`menu-preview.html`).
+- **Reserved addresses**: `canvascore-admin`, `uploads`, `canvascore-data` and `data` can't be
+  used by pages, collections or redirects, and publishing never writes into or deletes from
+  them (section 7.1).
 - **Uploads**: only `jpg`, `jpeg`, `png`, `gif`, `webp`, `avif`, `svg`, `ico`, `bmp`; raster
-  files must be real images; SVGs with scripts, event handlers, `javascript:` links, embedded
-  HTML (`foreignObject`) or external entities are refused. File names are sanitized and
-  prefixed with a timestamp. The uploads folder cannot run scripts (Apache `.htaccess`, or the
-  Nginx rules in section 4.2).
+  files must be real images. SVGs are accepted only when every element and attribute is on an
+  allow-list of plain drawing features: no scripts, event handlers, animations of links,
+  embedded HTML or MathML, external references or style sheets (`@import`), or processing
+  instructions. File names are sanitized and prefixed with a timestamp, and an upload never
+  overwrites an existing file. The uploads folder cannot run scripts, and SVGs opened directly
+  get a restrictive Content Security Policy (Apache `.htaccess`, or the Nginx rules in
+  section 4.2).
+- **Errors**: never displayed to users or visitors; database, publish, install and form errors
+  show a generic message and the details go to the server error log.
 - **Editors' limits**: see section 6 (no code, no form recipients, no security settings, no
   redirects, no accounts, backups or submissions).
 - **Cookie consent**: scripts and embeds marked for consent run only after Accept
   (section 7.6).
 - **Backups**: the Backup page and every backup action are admin-only. Saved backups live in
-  `backups/` inside the data directory (deny-all `.htaccess` as well) and are only sent through
-  the API to a signed-in admin; their names are checked, so no other file can be requested.
-  Backups never contain accounts or passwords. A backup to restore is checked before anything
-  changes (only known tables, data files and images; no paths leaving the folders), images in it
-  go through the same checks as uploads, and a safety copy is made first (section 8.2).
-- **Branding before sign-in**: the only data the admin shows before sign-in is the site name and
-  the favicon address (`api.php?action=branding`), both already public on the site.
-- **Publishing and forms**: publishing requires POST + token; form recipients are only read
-  from the server-side registry (no open mail relay).
+  `backups/` inside the data directory (deny-all `.htaccess` as well), with names containing 128
+  random bits, and are only sent through the API to a signed-in admin; their names are checked,
+  so no other file can be requested. Backups never contain accounts or passwords. A backup to
+  restore is checked before anything changes (only known tables, data files and images; no
+  paths leaving the folders), images in it go through the same checks as uploads, its redirects
+  and rich text are validated like new ones, and a safety copy is made first (section 8.2).
+- **Before sign-in**: the only data the admin shows before sign-in is the site name and the
+  favicon address (`api.php?action=branding`), both already public on the site. The CanvasCore
+  version is shown only to signed-in users and is not written into published pages.
+- **Publishing and forms**: publishing requires POST + token, and redirects are validated again
+  at every publish; form recipients, fields and success messages are only read from the
+  server-side registry (no open mail relay, section 9.4).
 
 Recommended hardening:
 
 1. Use HTTPS everywhere and redirect HTTP.
 2. Make sure the data directory is outside the web root; test that
-   `https://example.com/canvascore-admin/data/canvascore.sqlite` returns 403/404.
+   `https://example.com/canvascore-admin/data/canvascore.sqlite` and
+   `https://example.com/canvascore-admin/version.json` return 403/404.
 3. Delete `install.php` after installing and after every update.
 4. Give accounts the Editor role unless they need admin rights; remove accounts that are no
    longer used.
-5. On Nginx, add the deny rules from section 4.2 (the app cannot do it for you).
+5. On Nginx, add the deny rules and headers from section 4.2 (the app cannot do it for you).
 6. Optionally restrict `/canvascore-admin/` by IP or with HTTP basic auth at the web server, if
-   your editors work from known locations. Leave `/canvascore-admin/submit_form.php` reachable,
+   your editors work from known locations (on Apache, in your own `canvascore-admin/.htaccess` that
+   keeps CanvasCore's rules, see section 4.1). Leave `/canvascore-admin/submit_form.php` reachable,
    or the site's forms stop working.
 7. Behind a reverse proxy or CDN, list its addresses in Trusted proxy addresses (section 4.4).
 8. Keep PHP up to date and keep regular off-server backups (sections 8.1 and 8.3). Delete old
@@ -858,14 +1030,44 @@ Recommended hardening:
 
 ## 11. Troubleshooting
 
+**"CanvasCore is not set up yet" on the sign-in screen**
+The setup wizard has not run on this database (or, after updating to 0.14.1, the site only had
+the old default `admin`/`admin` account). Open `install.php` and complete it with the setup key
+(section 3.3); upload `install.php` again if you deleted it.
+
+**The installer doesn't accept the setup key, or says install-key.txt could not be written**
+Paste the whole content of `install-key.txt` from the data folder shown on the page (dashes and
+case don't matter). The key changes only if the file is deleted or damaged, so reload the page
+after editing the file by hand. If the file cannot be written, give PHP write access to the data
+folder.
+
+**The installer says the data folder is "DOWNLOADABLE by anyone"**
+The data folder is inside the web root and the server sends its files to anyone. Make the folder
+next to the web root writable by PHP (the message names it; CanvasCore then uses it), or deny
+web access to the data folder: on Nginx with the rules of section 4.2, on Apache by allowing
+`.htaccess` files (`AllowOverride All`).
+
+**"Choose a new password first."**
+The account has a temporary password (new account or reset): the server refuses everything else
+until a new one is chosen. Reload the editor: it then asks for the new password.
+
+**Signed out unexpectedly**
+A session ends when its account's password is changed or reset in another browser, when the
+account is deleted, after the inactivity timeout and at the latest 7 days after signing in.
+After updating to 0.14.1 everyone signs in again once.
+
+**"For your security, the CanvasCore editor can only be opened in its own browser tab."**
+The editor was opened inside a frame of another page. Open its address directly in a tab.
+
 **"Publish incomplete: N file(s) could not be written"**
 PHP cannot write in the web root or in a page folder. Give the PHP user write access to the web
 root and its sub-folders (for example `chown -R www-data:www-data /var/www/example.com/public`,
 or fix ownership in your hosting panel), then publish again. Stale pages are only cleaned up
 after a complete publish.
 
-**"PHP Error: …" or "Database not found." when publishing**
-The message comes from the server. "Database not found" means the data directory moved or
+**"Publishing failed because of a server error" or "Database not found." when publishing**
+The details of a server error are in the server error log (prefix `CanvasCore publish:`, see
+"Where are the PHP errors?" below). "Database not found" means the data directory moved or
 became unreadable: check that `canvascore-data/` (or `canvascore-admin/data/`) exists and is
 writable. "master.html missing!" means the upload of `canvascore-admin/` was incomplete.
 
@@ -875,7 +1077,12 @@ writable. "master.html missing!" means the upload of `canvascore-admin/` was inc
   (`AllowOverride All`).
 - "File type not allowed" / "The file is not a valid image": only the image types in section 10
   are accepted, and a renamed non-image is refused.
-- "This SVG contains scripts…": export the SVG again as a plain SVG, or as PNG.
+- "This SVG contains scripts or other active content…": the check accepts only plain drawing
+  elements and attributes (section 10), so animations, embedded HTML, external references or
+  style sheets are refused too. Export the SVG again as a plain SVG, or as PNG. SVGs are
+  refused altogether when the PHP `dom` extension is missing.
+- An SVG that worked before updating to 0.14.1 is gone: it failed the new check and was moved to
+  `quarantine/` in the data directory (see the server error log). Export it again and upload it.
 - "No file received or upload error": the file is larger than `upload_max_filesize` /
   `post_max_size` (Apache/PHP) or `client_max_body_size` (Nginx).
 - "Cannot move the uploaded file": `uploads/` is not writable by PHP.
@@ -885,7 +1092,8 @@ writable. "master.html missing!" means the upload of `canvascore-admin/` was inc
 2. Check the recipient (Form block or Global Options) and **publish** after changing it.
 3. Set a From address on your own domain and configure SPF/DKIM for it; check spam folders.
 4. Look in **Submissions**: if the message is there, the form works and the problem is mail
-   delivery.
+   delivery. Visitors always see a thank-you message, even when no recipient is set or `mail()`
+   fails; a failed `mail()` is logged in the server error log (`CanvasCore form:`).
 
 **Session keeps expiring**
 The default is 30 minutes without activity. An admin can raise it (up to 720 minutes) in Global
@@ -894,7 +1102,8 @@ directory's `sessions/` folder is writable (otherwise PHP's default session fold
 other applications' cleanup may delete CanvasCore sessions).
 
 **"Too many failed attempts. Try again in N minute(s)."**
-Five wrong passwords for that account from that address. Wait 15 minutes. To unlock at once,
+Five wrong passwords for that account from that address (or 20 from that address for any
+accounts, or 100 in an hour for that account from anywhere). Wait 15 minutes. To unlock at once,
 delete `login_attempts.json` from the data directory (this resets the counters for everyone).
 If the user forgot the password, an admin can reset it (section 6.3). If accounts get locked
 although their owners typed nothing wrong, or forms answer "Too many messages" to everyone, the
@@ -902,7 +1111,9 @@ site is probably behind a proxy or CDN: set the trusted proxy addresses (section
 
 **"Invalid CSRF token. Reload the page."**
 The editor tab is older than the current session (for example after a sign-in in another tab
-or an update). Reload the page.
+or an update), or the request didn't come from the site itself (for example the editor opened
+through a different address or proxy than the one the browser reports as its origin). Reload the
+page.
 
 **Deleted or renamed pages are still online**
 Deleted pages, collections and collection items are removed at once; unpublished pages and items
@@ -980,11 +1191,12 @@ On Apache, check that the root `.htaccess` contains `ErrorDocument 404 /404.html
 creates it only when the file does not exist). On Nginx, add `error_page 404 /404.html;`.
 
 **Where are the PHP errors?**
-The API and the publisher never print PHP errors in their answers; errors go to the PHP error
-log. Its location depends on the server: typically `/var/log/apache2/error.log`,
+CanvasCore never displays PHP errors (to editors or to visitors); errors go to the PHP error
+log, and the screen shows only a generic message. Its location depends on the server: typically `/var/log/apache2/error.log`,
 `/var/log/nginx/error.log` or `/var/log/php8.x-fpm.log`, or the "Error log" section of your
-hosting panel. `php -i | grep error_log` shows the configured file. Installer errors are logged
-with the prefix `CanvasCore install:`.
+hosting panel. `php -i | grep error_log` shows the configured file. CanvasCore's messages start
+with `CanvasCore install:`, `CanvasCore database error:`, `CanvasCore publish:`,
+`CanvasCore form:` / `CanvasCore form storage:` or `CanvasCore: unsafe SVG moved to quarantine:`.
 
 ---
 

@@ -2,12 +2,7 @@
 // XMLHttpRequest is used because fetch can't report upload progress; it sends the same CSRF token as the
 // fetch guard. If the server answers 401/403 (session expired or token to refresh) the upload is retried
 // once through fetch, whose guard handles sign-in again and the token refresh.
-const token = () => {
-  if (typeof window === 'undefined') return '';
-  if (window.__CC_CSRF) return window.__CC_CSRF;
-  const m = (document.cookie || '').match(/(?:^|;\s*)cc_csrf=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : '';
-};
+const token = () => (typeof window !== 'undefined' && window.__CC_CSRF) || '';
 
 const viaFetch = async (action, form) => {
   const res = await fetch(`api.php?action=${action}`, { method: 'POST', body: form });

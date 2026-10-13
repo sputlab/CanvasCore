@@ -10,12 +10,8 @@ export function installSession(win = window) {
   if (win.__CC_SESSION) return win.__CC_SESSION;
 
   const originalFetch = win.fetch.bind(win);
-  const readCookie = (name) => {
-    const m = win.document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
-    return m ? decodeURIComponent(m[1]) : '';
-  };
-  // Token from memory (set by login/check_auth) with fallback to the double-submit cookie.
-  const getToken = () => win.__CC_CSRF || readCookie('cc_csrf');
+  // CSRF token from memory (set by login / check_auth); it is never stored where scripts could read it from a cookie
+  const getToken = () => win.__CC_CSRF || '';
 
   const session = createSessionManager({
     store: useStore,

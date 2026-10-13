@@ -5,14 +5,15 @@ require_once __DIR__ . '/config.php';
 error_reporting(0);
 ini_set('display_errors', 0);
 header('Content-Type: application/json');
+header('Cache-Control: no-store');
+cc_security_headers();
 
 if (!cc_session_is_logged_in()) cc_unauthorized('Unauthorized. Please login.');
 // Publishing changes the site: POST with the CSRF token only (a link or another site can't trigger it)
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); die(json_encode(['success' => false, 'message' => 'Use POST.'])); }
 cc_verify_csrf_or_die();
-cc_session_touch();
-session_write_close(); // the rebuild can take a while: don't hold the other screens' requests
 
+require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/compiler.php';
 require_once __DIR__ . '/media.php';
 
@@ -23,6 +24,12 @@ if (!file_exists($db_file)) die(json_encode(['success' => false, 'message' => 'D
 try {
     $pdo = new PDO("sqlite:" . $db_file);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // The account must still exist unchanged, and not be waiting for a forced password change
+    $account = cc_session_account($pdo);
+    if (!$account) cc_unauthorized('Unauthorized. Please login.');
+    if ((int)$account['must_change_pw'] === 1) { http_response_code(403); die(json_encode(['success' => false, 'code' => 'must_change_pw', 'message' => 'Choose a new password first.'])); }
+    cc_session_touch();
+    session_write_close(); // the rebuild can take a while: don't hold the other screens' requests
 
     $base_dir = dirname($_SERVER['SCRIPT_NAME'], 2);
     if ($base_dir === '\\' || $base_dir === '/') $base_dir = '';
@@ -77,6 +84,10 @@ try {
     $site_root = realpath(__DIR__ . '/..');
     $written = []; $failed = []; $warnings = [];
     $write = function ($fp, $content) use (&$written, &$failed, $site_root) {
+        // Never outside the site folder, never into CanvasCore's own folders, never a server configuration or script file
+        $rel = ltrim(str_replace('\\', '/', substr($fp, strlen(__DIR__ . '/../'))), '/');
+        if (strpos($fp, __DIR__ . '/../') !== 0 || strpos($rel, '..') !== false || !preg_match('#^([A-Za-z0-9._-]+/)*[A-Za-z0-9_-][A-Za-z0-9._-]*\.(html|xml|json|txt)$#', $rel)
+            || cc_slug_reserved(explode('/', $rel)[0]) && strpos($rel, '/') !== false) { $failed[] = $fp; return; }
         $d = dirname($fp);
         if (!is_dir($d)) @mkdir($d, 0755, true);
         if (@file_put_contents($fp, $content) === false) { $failed[] = $fp; return; }
@@ -94,7 +105,7 @@ try {
             foreach ($pdo->query("SELECT c.id, c.name, c.slug FROM collections c WHERE EXISTS (SELECT 1 FROM collection_items i WHERE i.collection_id = c.id AND i.status = 'published' AND COALESCE(i.archived, 0) = 0)") as $fc) {
                 $feeds[$fc['id']] = ['name' => (string)$fc['name'], 'slug' => cc_safe_slug($fc['slug']), 'items' => []];
             }
-        } catch (Throwable $e) { $warnings[] = 'Feeds: ' . $e->getMessage(); }
+        } catch (Throwable $e) { error_log('CanvasCore publish (feeds): ' . $e->getMessage()); $warnings[] = 'Feeds could not be published (details in the server error log).'; }
     }
     $feed_links = '';
     foreach ($feeds as $fd) $feed_links .= '<link rel="alternate" type="application/rss+xml" title="' . htmlspecialchars($fd['name'] . ($site_name !== '' ? ' — ' . $site_name : '')) . '" href="' . htmlspecialchars($site_url . '/' . $fd['slug'] . '/feed.xml') . '">' . "\n";
@@ -136,12 +147,13 @@ try {
 
     foreach ($pages as $page) {
         $slug = cc_safe_slug($page['clean_slug'] ?? $page['slug'] ?? 'index');
+        if (cc_slug_reserved($slug)) { $warnings[] = 'Not published: "' . ($page['title'] ?? '') . '" uses the reserved address /' . $slug . '/'; continue; }
         $title = htmlspecialchars($page['title'] ?? '');
         $seo_title = !empty($page['seo_title']) ? htmlspecialchars($page['seo_title']) : $title . $site_suffix;
         $seo_description = htmlspecialchars($page['seo_description'] ?? '');
         $page_layout = $page['layout'] ?? 'boxed';
-        $page_bg = htmlspecialchars($page['bg_color'] ?? '#ffffff');
-        $boxed_width = htmlspecialchars($page['boxed_width'] ?? '1200px');
+        $page_bg = htmlspecialchars(cc_css_color($page['bg_color'] ?? '', '#ffffff'));
+        $boxed_width = htmlspecialchars(cc_css_length($page['boxed_width'] ?? '', '1200px'));
 
         $is_home_pg = (int)($page['is_home'] ?? 0) === 1;
         $blocks = json_decode($page['content_json'] ?? '[]', true);
@@ -158,7 +170,7 @@ try {
 
         $html = str_replace('{{PAGE_TITLE}}', $seo_title, $template);
         $html = str_replace('{{META_DESCRIPTION}}', $seo_description, $html);
-        $generator = '<meta name="generator" content="CanvasCore ' . htmlspecialchars(cc_version()['app']) . '">';
+        $generator = '<meta name="generator" content="CanvasCore">';   // no version number: it would tell attackers which fixes a site lacks
 
         // Public path of the page (for og:url and sitemap)
         $page_path = ($slug === 'index' || $slug === 'home' || $is_home_pg) ? '/' : '/' . $slug . '/';
@@ -212,6 +224,7 @@ try {
         $cols = $pdo->query("SELECT id, slug FROM collections")->fetchAll(PDO::FETCH_ASSOC);
         foreach ($cols as $col) {
             $col_slug = cc_safe_slug($col['slug']);
+            if (cc_slug_reserved($col_slug)) { $warnings[] = 'Not published: a collection uses the reserved address /' . $col_slug . '/'; continue; }
             $its = $pdo->prepare("SELECT * FROM collection_items WHERE collection_id = ? AND status = 'published'");
             $its->execute([$col['id']]);
             foreach ($its->fetchAll(PDO::FETCH_ASSOC) as $it) {
@@ -259,7 +272,7 @@ try {
                 $sitemap_urls[] = $i_abs !== '' ? $i_abs : ($base_url . $col_slug . '/' . $it_slug . '/');
             }
         }
-    } catch (Throwable $e) { $warnings[] = 'Collections: ' . $e->getMessage(); }
+    } catch (Throwable $e) { error_log('CanvasCore publish (collections): ' . $e->getMessage()); $warnings[] = 'Collections could not be published (details in the server error log).'; }
 
     // --- RSS feeds (newest 50 items each) ---
     foreach ($feeds as $fd) {
@@ -290,6 +303,11 @@ try {
     try {
         $written_now = array_flip($written);
         foreach ($pdo->query("SELECT from_path, to_path FROM redirects ORDER BY from_path") as $rd) {
+            // Only well-formed redirects (also those restored from a backup): a site path that stays inside the
+            // site and isn't one of CanvasCore's folders, to a site path or an http(s) address without spaces
+            $from_ok = cc_redirect_path($rd['from_path']); $to_ok = cc_redirect_target($rd['to_path']);
+            if ($from_ok === null || $to_ok === null || $from_ok !== $rd['from_path']) { $warnings[] = 'Skipped an invalid redirect.'; continue; }
+            $rd['to_path'] = $to_ok;
             $rel = trim($rd['from_path'], '/') . '/index.html';
             if (isset($written_now[$rel])) {   // a published page lives there now: the redirect is gone
                 $pdo->prepare("DELETE FROM redirects WHERE from_path = ?")->execute([$rd['from_path']]);
@@ -300,7 +318,7 @@ try {
             $write(__DIR__ . '/../' . $rel, cc_redirect_page_html($href));
             $apache_rules[] = [rtrim($base_url, '/') . $rd['from_path'], preg_match('~^https?://~i', $to) ? $to : rtrim($base_url, '/') . $to];
         }
-    } catch (Throwable $e) { $warnings[] = 'Redirects: ' . $e->getMessage(); }
+    } catch (Throwable $e) { error_log('CanvasCore publish (redirects): ' . $e->getMessage()); $warnings[] = 'Redirects could not be published (details in the server error log).'; }
 
     // Form recipient registry (per form, server-side: no email addresses in the client)
     $forms = function_exists('cc_form_registry') ? cc_form_registry() : [];
@@ -346,6 +364,7 @@ try {
         foreach ($previous as $rel) {
             if (!is_string($rel) || isset($keep[$rel]) || $rel === 'index.html') continue;
             if (!preg_match('#^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/(index\.html|feed\.xml)$#', $rel) || strpos($rel, '..') !== false) continue;
+            if (cc_slug_reserved(explode('/', $rel)[0])) continue;   // CanvasCore's own folders are never touched
             $fp = __DIR__ . '/../' . $rel;
             if (is_file($fp) && @unlink($fp)) {
                 $removed++;
@@ -364,5 +383,6 @@ try {
         echo json_encode(['success' => true, 'message' => $msg]);
     }
 } catch (Throwable $e) {
-    echo json_encode(['success' => false, 'message' => 'PHP Error: ' . $e->getMessage()]);
+    error_log('CanvasCore publish: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    echo json_encode(['success' => false, 'message' => 'Publishing failed because of a server error. Details are in the server error log.']);
 }

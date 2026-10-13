@@ -1,6 +1,6 @@
 # CanvasCore User Guide
 
-*For CanvasCore 0.14.0 · for editors and administrators*
+*For CanvasCore 0.14.1 · for editors and administrators*
 
 CanvasCore is where you build and update your website. You put pages together from ready-made blocks (text, images, buttons, galleries, forms and more), see them exactly as visitors will, and publish them when they're ready. Your work stays private as a draft until you publish it, unsaved changes are backed up on your device, and every saved version of a page is kept for a while, so a lost connection, an expired session or a wrong edit doesn't cost you your work. This guide covers day-to-day work. For the full list of blocks, see the [Block Reference](BLOCK-REFERENCE.md). For installation, accounts and server settings, see the [Administrator Guide](ADMIN-GUIDE.md).
 
@@ -40,11 +40,13 @@ Your role is shown under your name at the bottom of the sidebar.
 2. Enter your **Username** and **Password**.
 3. Click **Login**.
 
+If the sign-in screen says "CanvasCore is not set up yet", the site hasn't been installed: ask your administrator (it's done once, with `install.php`; see the [Administrator Guide](ADMIN-GUIDE.md#33-run-the-setup-wizard)).
+
 If you see "Your session expired" above the form, your unsaved changes were backed up. They'll be offered to you after you sign in (see [Unsaved work found](#unsaved-work-found)).
 
 ### The first password change
 
-The first time you sign in with the default password, CanvasCore asks you to **Set a new password**.
+The first time you sign in with the temporary password an administrator gave you (for a new account, or after a reset), CanvasCore asks you to **Set a new password**.
 
 1. Type a **NEW PASSWORD** of at least 8 characters.
 2. Type it again in **CONFIRM PASSWORD**.
@@ -58,10 +60,10 @@ Anyone, editor or admin, can change their own password at any time.
 
 1. At the bottom of the sidebar, click the key icon next to your name (**Change your password**).
 2. Type your **Current password**.
-3. Type the new one in **New password (at least 8 characters)** and again in **Repeat the new password**.
-4. Click **Change password**. A notification says "Password changed.".
+3. Type the new one in **New password (at least 8 characters)** and again in **Repeat the new password**. It can't be `admin`, your username or your current password.
+4. Click **Change password**. A notification says "Password changed.". If you're signed in on other computers or browsers, you're signed out there; this one stays signed in.
 
-If the current password is wrong, or the two new ones don't match, the box tells you and nothing changes. If you've forgotten your password, ask an administrator to set a new one.
+If the current password is wrong, or the two new ones don't match, the box tells you and nothing changes. Five wrong current passwords within 15 minutes pause password changes and sign-ins for your account, from that computer, for 15 minutes. If you've forgotten your password, ask an administrator to set a new one.
 
 ### The sidebar
 
@@ -76,7 +78,7 @@ At the bottom you see your name, your role, two icons (the key, **Change your pa
 
 ### Session expiry
 
-To keep the site safe, you're signed out after a period of inactivity. The default is 30 minutes, and an administrator can change it. Working in the editor counts as activity.
+To keep the site safe, you're signed out after a period of inactivity. The default is 30 minutes, and an administrator can change it. Working in the editor counts as activity. Even if you keep working, you sign in again at least once every 7 days. You're also signed out at once if your password is changed or reset elsewhere, or your account is deleted.
 
 - Shortly before it ends, a yellow bar says "Your session expires in m:ss due to inactivity". Click **Stay signed in**, or just move the mouse or press a key.
 - If it does expire, a **Session expired** screen covers the app. Your work underneath is not lost. Enter your password and click **Sign in and continue** to carry on exactly where you were. Anything that was being saved when the session ended is finished automatically.
@@ -360,7 +362,7 @@ With the cursor inside a table, **Table** offers **Row above**, **Row below**, *
 
 ### Pasting
 
-When you paste from Word, Google Docs or a web page, CanvasCore cleans the text and keeps only simple formatting such as headings, bold, lists and links. To paste plain text only, use **Ctrl+Shift+V** (**Cmd+Shift+V** on a Mac). You can't drag image files into text: use **Image** instead.
+When you paste from Word, Google Docs or a web page, CanvasCore cleans the text and keeps only simple formatting such as headings, bold, lists and links. Text is cleaned again when you save: scripts and other active code (also typed in **Edit HTML**) are removed, and styles that could move text over the page or load something are dropped. To paste plain text only, use **Ctrl+Shift+V** (**Cmd+Shift+V** on a Mac). You can't drag image files into text: use **Image** instead.
 
 ---
 
@@ -659,7 +661,7 @@ Click **Media** in the sidebar to open the **Media Library**, where all your ima
 
 - **Uploading**: click **Upload Images** and choose one or more files. You can also drag files from your computer and drop them anywhere on the page. New images go into the folder that is open (with **All images** open, they go in no folder).
 - **Accepted files**: JPG, PNG, GIF, WebP, AVIF, SVG, ICO and BMP.
-- **SVG files with scripts** or other active content are refused. Export the SVG again as a plain SVG, or as PNG.
+- **SVG files** are accepted only when they contain plain drawing: files with scripts, animated links, embedded web content, links to outside files or other active content are refused. Export the SVG again as a plain SVG, or as PNG. Uploading never replaces an image already in the library, even one with the same name.
 - **Searching**: type in **Search name or description…**. It searches the folder that is open.
 - **Sorting**: choose **Newest first**, **Oldest first**, **Name A–Z**, **Name Z–A**, **Largest first** or **Smallest first**.
 - **Copying an address**: click the copy icon under an image. If your browser blocks copying, the address appears in a box so you can copy it yourself.
@@ -853,7 +855,7 @@ These sections appear under **Administration** in the sidebar only for admins. D
 
 - **Forms**: the **Form** block's **Form Settings** set the **Form Title**, the **Receiving Email** and the **Submit Button Text**, and **Form Fields** lists the fields (for example **Short Text**, **Email**, **Long Text**, **Number**). See the [Block Reference](BLOCK-REFERENCE.md).
 - **Submissions** (**Form Submissions**): messages visitors sent through your forms. You can search them, **Refresh** the list, **Export CSV**, delete single messages or **Clear all**.
-- **Accounts**: **Add a user** with a **Username**, **Password** and **Role**. In the list you can **Change password** or delete an account. You can't delete your own account.
+- **Accounts**: **Add a user** with a **Username** (3–32 letters, digits, `.`, `_`, `-` or `@`; `Anna` and `anna` count as the same name), **Password** and **Role**. In the list you can **Change password** of another account (it is signed out at once and must choose a new password at the next sign-in; for your own, use the key icon) or delete an account. You can't delete your own account or the last admin.
 - **Backup**: **Download backup (.zip)** saves the whole site in one file: pages and their drafts, collections and items, templates, masters, the global header and footer, redirects, Global Options, the menu and every uploaded image (with its description and folder). Version history and form messages are optional. User accounts and passwords are never included. **Keep a copy on the server** stores it on the server instead, where it can later be downloaded, restored or deleted. **Restore** (from a file, or from a copy on the server) **replaces** the whole site with the backup; user accounts are kept, a safety copy of the current site is saved first, and the site is published again afterwards. Older `.json` backups can still be imported.
 
 ---
@@ -882,7 +884,7 @@ CanvasCore found work on this device that was never saved to the site. Click **R
 Backups of unsaved work are stored only in the browser where you made the changes.
 
 **I can't publish: the URL is already used.**
-Another page (or a collection) already has that address. Change the **URL (Slug)** in **Page Settings › Page Info**.
+Another page (or a collection) already has that address. Change the **URL (Slug)** in **Page Settings › Page Info**. The addresses `canvascore-admin`, `uploads`, `canvascore-data` and `data` belong to CanvasCore itself and can't be used, not even for a draft ("The URL /…/ is reserved for CanvasCore").
 
 **Animations don't play in the editor.**
 That's intentional, so blocks are easy to edit. Use **Preview animation** in the **Advanced** tab, or view the published page.

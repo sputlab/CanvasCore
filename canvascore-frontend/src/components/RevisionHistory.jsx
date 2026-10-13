@@ -4,6 +4,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { History, RotateCcw, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { safeHtml } from '../utils/safeHtml';
 import { renderBlock } from '../render/renderBlock.mjs';
 import { Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
@@ -77,7 +78,7 @@ export default function RevisionHistory({ owner, onClose }) {
           <div className="cc-history__preview" aria-live="polite">
             {!sel ? <p className="ui-hint" style={{ padding: 12 }}>{busy ? 'Opening…' : 'Pick a version to preview it.'}</p> : (
               <>
-                <div className="cc-history__frame"><div className="cc-canvas cc-history__page" dangerouslySetInnerHTML={{ __html: sel.blocks.map((b) => renderBlock(b)).join('') }} /></div>
+                <div className="cc-history__frame"><div className="cc-canvas cc-history__page" dangerouslySetInnerHTML={{ __html: safeHtml(sel.blocks.map((b) => renderBlock(b)).join('')) }} /></div>
                 <div className="ui-dialog__actions" style={{ marginTop: 10 }}>
                   <button type="button" className="ui-btn ui-btn--primary" onClick={restore}><RotateCcw size={15} aria-hidden="true" /> Restore this version</button>
                 </div>

@@ -7,12 +7,15 @@ require_once __DIR__ . '/media.php';
 require_once __DIR__ . '/backup.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
+cc_security_headers();
 // PHP notices/warnings must never be printed into a JSON answer (the client could not read it): log them
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
 $data_dir = cc_data_dir();
 $db_file = $data_dir . '/canvascore.sqlite';
+ensure_admin_htaccess(__DIR__);
+if (is_dir(__DIR__ . '/../uploads')) ensure_htaccess(__DIR__ . '/../uploads', $GLOBALS['CC_HT_UPLOADS']);   // kept up to date after updates
 
 try {
     $pdo = new PDO("sqlite:" . $db_file);
@@ -22,10 +25,31 @@ try {
     cc_migrate($pdo);
     cc_migrate_content($pdo);
 } catch (Exception $e) {
-    die(json_encode(['success' => false, 'message' => 'DB Error: ' . $e->getMessage()]));
+    error_log('CanvasCore database error: ' . $e->getMessage());
+    http_response_code(500);
+    die(json_encode(['success' => false, 'message' => 'The database could not be opened. Check the server error log.']));
 }
 
-$action = $_GET['action'] ?? '';
+
+// Once, after updating to 0.14.1: SVG images uploaded before the stricter check are checked again; the ones that
+// fail are moved out of the site into the data folder (quarantine/), so they can no longer be opened.
+if (!cc_meta_get($pdo, 'svg_recheck_v1')) {
+    $updir = __DIR__ . '/../uploads';
+    foreach (is_dir($updir) ? (glob($updir . '/*.[sS][vV][gG]') ?: []) : [] as $svgf) {
+        if (cc_svg_is_safe($svgf)) continue;
+        @mkdir($data_dir . '/quarantine', 0700, true);
+        if (@rename($svgf, $data_dir . '/quarantine/' . basename($svgf))) error_log('CanvasCore: unsafe SVG moved to quarantine: ' . basename($svgf));
+    }
+    try { cc_meta_set($pdo, 'svg_recheck_v1', gmdate('c')); } catch (Exception $e) {}
+}
+
+$action = (string)($_GET['action'] ?? '');
+
+// Until the setup wizard has run there are no accounts: everything except the public answers points to install.php
+if (!cc_is_installed($pdo) && !in_array($action, ['branding', 'session_status', 'check_auth'], true)) {
+    http_response_code(503);
+    die(json_encode(['success' => false, 'code' => 'not_installed', 'message' => 'CanvasCore is not set up yet: open install.php in this folder to create the administrator account.']));
+}
 
 // A POST without a valid session is "unauthenticated" (401), NOT "bad CSRF" (403): this way the client
 // can always tell an expired session from a token that needs refreshing.
@@ -41,11 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action !== 'login') {
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
-if ($action === 'version') {
-    $v = cc_version();
-    $v['db_schema_applied'] = (int) cc_meta_get($pdo, 'db_schema', 0);
-    echo json_encode($v); exit;
-}
 
 // Public branding for the sign-in screen and the admin shell: only the site name and the favicon address
 // (both already public on the published site). Nothing else from the settings is exposed here.
@@ -58,10 +77,11 @@ if ($action === 'branding') {
 // READ-ONLY session status: does not extend the session (background polling must not
 // keep it from expiring due to inactivity). Releases the session lock immediately.
 if ($action === 'session_status') {
+    $acc = cc_session_account($pdo);
     $out = [
-        'authenticated' => cc_session_is_logged_in(),
-        'username' => cc_session_is_logged_in() ? ($_SESSION['username'] ?? null) : null,
-        'role' => cc_session_is_logged_in() ? ($_SESSION['role'] ?? null) : null,
+        'authenticated' => (bool)$acc,
+        'username' => $acc ? $acc['username'] : null,
+        'role' => $acc ? $_SESSION['role'] : null,
         'expires_in' => cc_session_expires_in(),
         'timeout' => cc_session_limit(),
         'expired' => !empty($GLOBALS['CC_SESSION_EXPIRED']),
@@ -71,68 +91,78 @@ if ($action === 'session_status') {
 }
 
 if ($action === 'check_auth') {
-    $is_logged = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true;
-    $mcp = 0;
-    if ($is_logged) {
-        $st = $pdo->prepare("SELECT must_change_pw FROM admin WHERE username = ?");
-        $st->execute([$_SESSION['username'] ?? '']);
-        $mcp = (int)($st->fetchColumn() ?: 0);
-    }
-    echo json_encode(['authenticated' => $is_logged, 'role' => $_SESSION['role'] ?? 'editor', 'username' => $_SESSION['username'] ?? null, 'csrf' => cc_issue_csrf(), 'must_change_pw' => $mcp, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]);
+    $acc = cc_session_account($pdo);
+    $out = ['authenticated' => (bool)$acc, 'installed' => cc_is_installed($pdo), 'role' => $acc ? ($acc['role'] === 'admin' ? 'admin' : 'editor') : null,
+            'username' => $acc ? $acc['username'] : null, 'must_change_pw' => $acc ? (int)$acc['must_change_pw'] : 0];
+    if ($acc) $out += ['csrf' => cc_issue_csrf(), 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()];
+    echo json_encode($out);
     exit;
 }
 
 if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    // JSON only (a form on another site can't send it without CORS), from this site only: no login CSRF
+    if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0 || !cc_same_origin_request()) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Sign in from the CanvasCore sign-in screen.']); exit;
+    }
     $data = json_decode(file_get_contents('php://input'), true);
-    $username = trim((string)($data['username'] ?? 'admin'));
+    $username = mb_substr(trim((string)($data['username'] ?? '')), 0, 64);
     $password = (string)($data['password'] ?? '');
-    // Brute force protection: too many wrong passwords from this address for this account -> wait
-    $wait = cc_login_wait($username);
+    if ($username === '' || $password === '' || strlen($password) > 4096) { echo json_encode(['success' => false, 'message' => 'Invalid credentials.']); exit; }
+    // Brute force protection (counted before the check, see cc_login_begin)
+    $wait = cc_login_begin($username);
     if ($wait > 0) {
         http_response_code(429);
         echo json_encode(['success' => false, 'message' => 'Too many failed attempts. Try again in ' . max(1, (int)ceil($wait / 60)) . ' minute(s).']); exit;
     }
-    $stmt = $pdo->prepare("SELECT password_hash, role, must_change_pw FROM admin WHERE username = ?");
+    $stmt = $pdo->prepare("SELECT id, username, password_hash, role, must_change_pw, session_gen FROM admin WHERE username = ? COLLATE NOCASE");
     $stmt->execute([$username]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($user && password_verify($password, $user['password_hash'])) {
+    // An unknown name takes as long as a wrong password (no way to tell which accounts exist)
+    $dummy = cc_meta_get($pdo, 'dummy_hash');
+    if (!$dummy) { $dummy = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT); cc_meta_set($pdo, 'dummy_hash', $dummy); }
+    $ok = password_verify($password, $user ? (string)$user['password_hash'] : $dummy);
+    // The old default account (admin/admin) is never accepted: install.php creates the first real account
+    if ($ok && $user && !cc_is_default_admin($user)) {
         cc_login_result($username, true);
-        session_regenerate_id(true); // session fixation mitigation
-        $_SESSION['logged_in'] = true;
-        $_SESSION['username'] = $username;
-        $_SESSION['role'] = $user['role'];
-        $_SESSION['last_seen'] = time();
-        $_SESSION['csrf'] = bin2hex(random_bytes(32));
-        cc_issue_csrf(); // align the double-submit cookie with the new session token
-        echo json_encode(['success' => true, 'role' => $user['role'], 'username' => $username, 'csrf' => $_SESSION['csrf'], 'must_change_pw' => (int)($user['must_change_pw'] ?? 0), 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]);
+        if (password_needs_rehash($user['password_hash'], PASSWORD_DEFAULT)) $pdo->prepare("UPDATE admin SET password_hash = ? WHERE id = ?")->execute([password_hash($password, PASSWORD_DEFAULT), $user['id']]);
+        cc_session_login($user);
+        echo json_encode(['success' => true, 'role' => $_SESSION['role'], 'username' => $user['username'], 'csrf' => cc_issue_csrf(), 'must_change_pw' => (int)($user['must_change_pw'] ?? 0), 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]);
     } else {
-        cc_login_result($username, false);
         echo json_encode(['success' => false, 'message' => 'Invalid credentials.']);
     }
     exit;
 }
 
 if ($action === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!headers_sent()) {
-        @setcookie('cc_csrf', '', ['expires' => time() - 3600, 'path' => '/', 'samesite' => 'Lax', 'secure' => cc_is_https(), 'httponly' => false]);
-    }
-    unset($_COOKIE['cc_csrf']);
-    session_destroy();
+    cc_session_logout();
     echo json_encode(['success' => true]); exit;
 }
 
-// Gate: everything below requires login
-if (!cc_session_is_logged_in()) {
+// Gate: everything below requires login, with an account that still exists unchanged (see cc_session_account)
+$account = cc_session_account($pdo);
+if (!$account) {
     cc_unauthorized();
+}
+// A forced password change comes first: until then the account can only change its password or sign out
+if ((int)$account['must_change_pw'] === 1 && !in_array($action, ['change_own_password', 'keepalive', 'version'], true)) {
+    http_response_code(403);
+    die(json_encode(['success' => false, 'code' => 'must_change_pw', 'message' => 'Choose a new password first.']));
 }
 // From here on it is user activity: extend the session.
 cc_session_touch();
 
+if ($action === 'version') {
+    session_write_close();
+    $v = cc_version();
+    $v['db_schema_applied'] = (int) cc_meta_get($pdo, 'db_schema', 0);
+    echo json_encode($v); exit;
+}
+
 // ---------------------------------------------------------------------------
 // Account management (admin only)
 // ---------------------------------------------------------------------------
-$is_admin = ($_SESSION['role'] ?? '') === 'admin';
+$is_admin = $account['role'] === 'admin';
 
 // Read-only requests release the session lock right away: PHP keeps one request per session at a time,
 // so a slow request (publish, big page list) would otherwise hold every other screen's data back.
@@ -152,30 +182,40 @@ if ($action === 'get_users') {
 }
 if ($action === 'add_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $username = trim($data['username'] ?? '');
-    $password = $data['password'] ?? '';
+    $username = trim((string)($data['username'] ?? ''));
+    $password = (string)($data['password'] ?? '');
     if ($username === '' || $password === '') { echo json_encode(['success' => false, 'message' => 'Username and password required.']); exit; }
-    if (strlen($password) < 8) { echo json_encode(['success' => false, 'message' => 'The password must be at least 8 characters.']); exit; }
-    $chk = $pdo->prepare("SELECT COUNT(*) FROM admin WHERE username = ?"); $chk->execute([$username]);
+    if (!preg_match('/^[A-Za-z0-9._@-]{3,32}$/', $username)) { echo json_encode(['success' => false, 'message' => 'Usernames have 3–32 characters: letters, numbers, dot, dash, underscore or @.']); exit; }
+    if (strlen($password) < 8 || strlen($password) > 4096) { echo json_encode(['success' => false, 'message' => 'The password must be at least 8 characters.']); exit; }
+    $chk = $pdo->prepare("SELECT COUNT(*) FROM admin WHERE username = ? COLLATE NOCASE"); $chk->execute([$username]);
     if ($chk->fetchColumn() > 0) { echo json_encode(['success' => false, 'message' => 'Username already exists.']); exit; }
     $role = ($data['role'] ?? '') === 'admin' ? 'admin' : 'editor';
-    $pdo->prepare("INSERT INTO admin (username, password_hash, role, must_change_pw) VALUES (?, ?, ?, 1)")
-        ->execute([$username, password_hash($password, PASSWORD_DEFAULT), $role]);
+    try {
+        $pdo->prepare("INSERT INTO admin (username, password_hash, role, must_change_pw, session_gen) VALUES (?, ?, ?, 1, 0)")
+            ->execute([$username, password_hash($password, PASSWORD_DEFAULT), $role]);
+    } catch (Exception $e) { echo json_encode(['success' => false, 'message' => 'Username already exists.']); exit; }
     echo json_encode(['success' => true, 'message' => 'User added successfully!']); exit;
 }
 if ($action === 'delete_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $stmt = $pdo->prepare("SELECT username FROM admin WHERE id = ?"); $stmt->execute([$data['id']]);
-    if ($stmt->fetchColumn() === ($_SESSION['username'] ?? null)) { echo json_encode(['success' => false, 'message' => 'You cannot delete yourself.']); exit; }
-    $pdo->prepare("DELETE FROM admin WHERE id = ?")->execute([$data['id']]);
+    $uid = (int)($data['id'] ?? 0);
+    $stmt = $pdo->prepare("SELECT id, role FROM admin WHERE id = ?"); $stmt->execute([$uid]);
+    $victim = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$victim) { echo json_encode(['success' => false, 'message' => 'Account not found.']); exit; }
+    if ((int)$victim['id'] === (int)$account['id']) { echo json_encode(['success' => false, 'message' => 'You cannot delete yourself.']); exit; }
+    if ($victim['role'] === 'admin' && (int)$pdo->query("SELECT COUNT(*) FROM admin WHERE role = 'admin'")->fetchColumn() <= 1) { echo json_encode(['success' => false, 'message' => 'The last administrator cannot be deleted.']); exit; }
+    // its open sessions end at their next request (cc_session_account finds no account)
+    $pdo->prepare("DELETE FROM admin WHERE id = ?")->execute([$uid]);
     echo json_encode(['success' => true, 'message' => 'User deleted.']); exit;
 }
 if ($action === 'force_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $pwd = $data['password'] ?? '';
-    if (strlen($pwd) < 8) { echo json_encode(['success' => false, 'message' => 'Password too short (at least 8 characters).']); exit; }
-    $st = $pdo->prepare("UPDATE admin SET password_hash = ?, must_change_pw = 1 WHERE id = ?");
-    $st->execute([password_hash($pwd, PASSWORD_DEFAULT), $data['id'] ?? 0]);
+    $pwd = (string)($data['password'] ?? '');
+    if (strlen($pwd) < 8 || strlen($pwd) > 4096) { echo json_encode(['success' => false, 'message' => 'Password too short (at least 8 characters).']); exit; }
+    if ((int)($data['id'] ?? 0) === (int)$account['id']) { echo json_encode(['success' => false, 'message' => 'Use "Change password" for your own account.']); exit; }
+    // A reset signs the account out everywhere (session_gen) and asks for a new password at the next sign-in
+    $st = $pdo->prepare("UPDATE admin SET password_hash = ?, must_change_pw = 1, session_gen = COALESCE(session_gen, 0) + 1 WHERE id = ?");
+    $st->execute([password_hash($pwd, PASSWORD_DEFAULT), (int)($data['id'] ?? 0)]);
     if ($st->rowCount() === 0) { echo json_encode(['success' => false, 'message' => 'Account not found.']); exit; }
     echo json_encode(['success' => true, 'message' => 'Password updated.']); exit;
 }
@@ -184,18 +224,25 @@ if ($action === 'force_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($action === 'change_own_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $pwd = (string)($data['password'] ?? '');
-    $me = $pdo->prepare("SELECT password_hash, must_change_pw FROM admin WHERE username = ?"); $me->execute([$_SESSION['username'] ?? '']);
+    $me = $pdo->prepare("SELECT id, password_hash, must_change_pw FROM admin WHERE id = ?"); $me->execute([(int)$account['id']]);
     $meRow = $me->fetch(PDO::FETCH_ASSOC);
     if (!$meRow) { echo json_encode(['success' => false, 'message' => 'Account not found.']); exit; }
-    // A voluntary change needs the current password (the forced first change comes right after signing in)
-    if ((int)$meRow['must_change_pw'] !== 1 && !password_verify((string)($data['current'] ?? ''), $meRow['password_hash'])) {
-        echo json_encode(['success' => false, 'message' => 'The current password is not correct.']); exit;
+    // A voluntary change needs the current password (the forced change comes right after signing in, which just
+    // checked it). Wrong current passwords count like wrong sign-ins.
+    if ((int)$meRow['must_change_pw'] !== 1) {
+        if (cc_login_begin($account['username']) > 0) { http_response_code(429); echo json_encode(['success' => false, 'message' => 'Too many failed attempts. Try again later.']); exit; }
+        if (!password_verify((string)($data['current'] ?? ''), $meRow['password_hash'])) { echo json_encode(['success' => false, 'message' => 'The current password is not correct.']); exit; }
+        cc_login_result($account['username'], true);
     }
-    if (strlen($pwd) < 8) { echo json_encode(['success' => false, 'message' => 'Password must be at least 8 characters.']); exit; }
-    if ($pwd === 'admin') { echo json_encode(['success' => false, 'message' => 'Please choose a different password.']); exit; }
-    $pdo->prepare("UPDATE admin SET password_hash = ?, must_change_pw = 0 WHERE username = ?")
-        ->execute([password_hash($pwd, PASSWORD_DEFAULT), $_SESSION['username'] ?? '']);
-    echo json_encode(['success' => true, 'message' => 'Password changed.']); exit;
+    if (strlen($pwd) < 8 || strlen($pwd) > 4096) { echo json_encode(['success' => false, 'message' => 'Password must be at least 8 characters.']); exit; }
+    if (strtolower($pwd) === 'admin' || strtolower($pwd) === strtolower($account['username'])) { echo json_encode(['success' => false, 'message' => 'Please choose a different password.']); exit; }
+    if (password_verify($pwd, $meRow['password_hash'])) { echo json_encode(['success' => false, 'message' => 'Choose a password different from the current one.']); exit; }
+    // Other sessions of this account end; this one carries on with the new generation
+    $pdo->prepare("UPDATE admin SET password_hash = ?, must_change_pw = 0, session_gen = COALESCE(session_gen, 0) + 1 WHERE id = ?")
+        ->execute([password_hash($pwd, PASSWORD_DEFAULT), (int)$meRow['id']]);
+    $_SESSION['gen'] = (int)$pdo->query("SELECT session_gen FROM admin WHERE id = " . (int)$meRow['id'])->fetchColumn();
+    session_regenerate_id(true);
+    echo json_encode(['success' => true, 'message' => 'Password changed.', 'csrf' => cc_issue_csrf()]); exit;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,8 +270,10 @@ if ($action === 'upload_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['success' => false, 'message' => 'The file is not a valid image.']); exit;
             }
         }
-        $safe = preg_replace('/[^a-zA-Z0-9._-]/', '', $orig);
+        $safe = ltrim(preg_replace('/[^a-zA-Z0-9._-]/', '', $orig), '.-');
+        if ($safe === '' || strtolower(pathinfo($safe, PATHINFO_EXTENSION)) !== $ext) $safe = 'image.' . $ext;
         $fname = time() . '_' . $safe;
+        if (file_exists($uploads_dir . '/' . $fname)) $fname = time() . '_' . bin2hex(random_bytes(3)) . '_' . $safe;   // never overwrite
         $target = $uploads_dir . '/' . $fname;
         if (move_uploaded_file($_FILES['file']['tmp_name'], $target)) {
             $base_dir = dirname($_SERVER['SCRIPT_NAME'], 2);
@@ -370,7 +419,7 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // system folder). Drafts don't own a URL until they are published. Returns a description of the
 // current owner, or null if the slug is free.
 function cc_slug_owner($pdo, $slug, $except_page = null, $except_collection = null) {
-    if (in_array($slug, ['canvascore-admin', 'uploads'], true)) return 'a system folder';
+    if (cc_slug_reserved($slug)) return 'a system folder';
     $st = $pdo->prepare("SELECT title FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified') AND clean_slug = ? AND id IS NOT ?");
     $st->execute([$slug, $except_page]);
     if (($t = $st->fetchColumn()) !== false) return 'the page "' . $t . '"';
@@ -437,6 +486,7 @@ if ($action === 'get_revision') {
     $st = $pdo->prepare("SELECT id, owner, title, kind, author, created_at, content_json FROM page_revisions WHERE id = ?");
     $st->execute([(int)($_GET['id'] ?? 0)]);
     $row = $st->fetch(PDO::FETCH_ASSOC);
+    if ($row && !$is_admin) $row['content_json'] = cc_redact_content_json($row['content_json']);
     echo json_encode($row ?: ['success' => false, 'message' => 'Version not found.']); exit;
 }
 
@@ -466,30 +516,38 @@ if ($action === 'get_pages') {
         if (($r['status'] ?? '') === 'modified') {
             $copyStmt->execute([$r['id']]);
             $copy = $copyStmt->fetch(PDO::FETCH_ASSOC);
-            if ($copy) { $copy['is_home'] = $r['is_home']; $r['draft_copy'] = $copy; }
+            if ($copy) { $copy['is_home'] = $r['is_home']; if (!$is_admin) $copy['content_json'] = cc_redact_content_json($copy['content_json']); $r['draft_copy'] = $copy; }
         }
+        if (!$is_admin) $r['content_json'] = cc_redact_content_json($r['content_json']);
     }
+    unset($r);
     echo json_encode($rows); exit;
 }
 
 if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
 
-    $id          = $data['id'];
-    $title       = $data['title'] ?? 'Untitled';
+    if (!is_array($data) || !isset($data['id']) || !is_scalar($data['id']) || (string)$data['id'] === '') { echo json_encode(['success' => false, 'message' => 'Invalid page.']); exit; }
+    $id          = (string)$data['id'];
+    $title       = mb_substr((string)($data['title'] ?? 'Untitled'), 0, 300);
     $clean       = sanitize_slug($data['slug'] ?? '');
-    $seo_title   = $data['seo_title'] ?? '';
-    $seo_desc    = $data['seo_description'] ?? '';
-    $seo_image   = $data['seo_image'] ?? '';
-    $layout      = $data['layout'] ?? 'boxed';
-    $bg_color    = $data['bg_color'] ?? '#ffffff';
-    $boxed_width = $data['boxed_width'] ?? '1200px';
+    // CanvasCore's own folders can't be page addresses, not even for a draft (see cc_reserved_slugs)
+    if (cc_slug_reserved($clean)) { echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL /$clean/ is reserved for CanvasCore. Choose a different slug in Page Info."]); exit; }
+    $seo_title   = mb_substr((string)($data['seo_title'] ?? ''), 0, 300);
+    $seo_desc    = mb_substr((string)($data['seo_description'] ?? ''), 0, 1000);
+    $seo_image   = mb_substr((string)($data['seo_image'] ?? ''), 0, 2000);
+    $layout      = ($data['layout'] ?? 'boxed') === 'full' ? 'full' : 'boxed';
+    // These two go into the page's <style>: a color and a length only
+    $bg_color    = cc_css_color($data['bg_color'] ?? '', '#ffffff');
+    $boxed_width = cc_css_length($data['boxed_width'] ?? '', '1200px');
+    $blocks_in   = isset($data['blocks']) && is_array($data['blocks']) ? array_values($data['blocks']) : [];
     // Non-admin users cannot save "code" surfaces (HTML block / custom CSS).
-    if (!$is_admin && isset($data['blocks']) && is_array($data['blocks'])) {
-        $prevRow = $pdo->prepare("SELECT content_json FROM pages WHERE id = ?"); $prevRow->execute([$data['id'] ?? '']);
-        cc_keep_code_surfaces($data['blocks'], $prevRow->fetchColumn() ?: '[]');
+    if (!$is_admin) {
+        $prevRow = $pdo->prepare("SELECT content_json FROM pages WHERE id = ?"); $prevRow->execute([$id]);
+        cc_keep_code_surfaces($blocks_in, $prevRow->fetchColumn() ?: '[]');
     }
-    $content     = isset($data['blocks']) ? json_encode($data['blocks']) : '[]';
+    cc_sanitize_blocks($blocks_in);   // rich text never holds active code, for any role
+    $content     = json_encode($blocks_in);
     $publish     = !empty($data['publish']);
     $is_home     = !empty($data['is_home']) ? 1 : 0;
     // Only touch the homepage flag when the client sends it (a save without it keeps the current home)
@@ -574,9 +632,13 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if ($action === 'discard_draft' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $parentId = json_decode(file_get_contents('php://input'), true)['id'] ?? null;
-    if ($parentId) {
-        $pdo->prepare("DELETE FROM pages WHERE parent_id = ? AND is_draft_copy = 1")->execute([$parentId]);
-        $pdo->prepare("UPDATE pages SET status='published' WHERE id = ?")->execute([$parentId]);
+    // Only a live page with unpublished changes goes back to its published version; anything else is left alone
+    // (this must never publish a page that was not published).
+    $st = $pdo->prepare("SELECT status, is_draft_copy, clean_slug FROM pages WHERE id = ?"); $st->execute([(string)$parentId]);
+    $pg = $st->fetch(PDO::FETCH_ASSOC);
+    if ($pg && (int)$pg['is_draft_copy'] === 0 && in_array($pg['status'], ['modified', 'published'], true)) {
+        $pdo->prepare("DELETE FROM pages WHERE parent_id = ? AND is_draft_copy = 1")->execute([(string)$parentId]);
+        if ($pg['status'] === 'modified') $pdo->prepare("UPDATE pages SET status='published' WHERE id = ?")->execute([(string)$parentId]);
     }
     echo json_encode(['success' => true]); exit;
 }
@@ -589,7 +651,7 @@ if ($action === 'delete_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($p && (int)$p['is_draft_copy'] === 0) {
             // Remove the generated HTML from disk, only if this page is the one online
             // (a draft never published may share a slug with a live page and must not delete its file)
-            if (in_array($p['status'] ?? '', ['published', 'modified'], true)) {
+            if (in_array($p['status'] ?? '', ['published', 'modified'], true) && !cc_slug_reserved($p['clean_slug'] ?? '')) {
                 $slug = sanitize_slug($p['clean_slug'] ?? 'index');
                 if ((int)($p['is_home'] ?? 0) === 1 || $slug === 'index' || $slug === 'home') {
                     @unlink(__DIR__ . '/../index.html');
@@ -649,13 +711,15 @@ if ($action === 'export_submissions') {
     $labels = array_keys($labels);
     $cols = array_merge(['created_at', 'form_id', 'page'], $labels);
     $out = fopen('php://temp', 'r+');
-    fputcsv($out, $cols);
+    // A value starting with = + - @ would run as a formula in Excel/Sheets: prefix it with ' (column names too:
+    // the field labels come from the site's visitors)
+    $csvSafe = function ($v) { $v = (string)$v; return ($v !== '' && strpbrk($v[0], "=+-@\t\r") !== false) ? "'" . $v : $v; };
+    fputcsv($out, array_map($csvSafe, $cols));
     foreach ($rows as $r) {
         $d = json_decode($r['data_json'], true) ?: [];
         $line = [$r['created_at'], $r['form_id'], $r['page']];
         foreach ($labels as $l) $line[] = is_array($d[$l] ?? '') ? implode(', ', $d[$l]) : (string)($d[$l] ?? '');
-        // A value starting with = + - @ would run as a formula in Excel/Sheets: prefix it with '
-        $line = array_map(function ($v) { $v = (string)$v; return ($v !== '' && strpbrk($v[0], "=+-@\t\r") !== false) ? "'" . $v : $v; }, $line);
+        $line = array_map($csvSafe, $line);
         fputcsv($out, $line);
     }
     rewind($out); $csv = stream_get_contents($out); fclose($out);
@@ -746,6 +810,7 @@ if ($action === 'get_item') {
     $st->execute([$_GET['id'] ?? '']);
     $row = $st->fetch(PDO::FETCH_ASSOC);
     if ($row) $row['archived'] = (int)($row['archived'] ?? 0);
+    if ($row && !$is_admin) $row['content_json'] = cc_redact_content_json($row['content_json']);
     echo json_encode($row ?: null); exit;
 }
 if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -762,7 +827,10 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $archived = (!empty($d['archived']) && $d['archived'] !== '0') ? 1 : 0;
     $seo_t = $d['seo_title'] ?? '';
     $seo_d = $d['seo_description'] ?? '';
-    $blocks = isset($d['blocks']) && is_array($d['blocks']) ? $d['blocks'] : null;
+    $blocks = isset($d['blocks']) && is_array($d['blocks']) ? array_values($d['blocks']) : null;
+    if ($blocks !== null) cc_sanitize_blocks($blocks);   // rich text never holds active code, for any role
+    $title = mb_substr($title, 0, 300); $excerpt = mb_substr((string)$excerpt, 0, 2000); $cover = mb_substr((string)$cover, 0, 2000);
+    $date = preg_match('/^[0-9TZ:+. -]{0,40}$/', (string)$date) ? (string)$date : '';
     $cschema = cc_version()['content_schema'];
     $now = date('Y-m-d H:i:s');
 
@@ -873,7 +941,7 @@ if ($action === 'get_parts') {
     $out = ['header' => [], 'footer' => []];
     try {
         foreach ($pdo->query("SELECT name, content_json FROM site_parts") as $row) {
-            $out[$row['name']] = json_decode($row['content_json'], true) ?: [];
+            $out[$row['name']] = json_decode($is_admin ? $row['content_json'] : cc_redact_content_json($row['content_json']), true) ?: [];
         }
     } catch (Exception $e) {}
     echo json_encode($out); exit;
@@ -882,7 +950,8 @@ if ($action === 'get_parts') {
 if ($action === 'save_part' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $name = ($data['name'] ?? '') === 'footer' ? 'footer' : 'header';
-    $blocks = isset($data['blocks']) && is_array($data['blocks']) ? $data['blocks'] : [];
+    $blocks = isset($data['blocks']) && is_array($data['blocks']) ? array_values($data['blocks']) : [];
+    cc_sanitize_blocks($blocks);
     if (!$is_admin) {   // editor: keeps the admin's code as saved, can't add new code
         $prevPart = $pdo->prepare("SELECT content_json FROM site_parts WHERE name = ?"); $prevPart->execute([$name]);
         cc_keep_code_surfaces($blocks, $prevPart->fetchColumn() ?: '[]');
@@ -1050,6 +1119,7 @@ if ($action === 'import_site' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($bundle['settings'])) file_put_contents($data_dir . '/settings.json', json_encode($bundle['settings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         $pdo->commit();
         cc_migrate_content($pdo);
+        cc_sanitize_all_content($pdo);
         echo json_encode(['success' => true, 'message' => 'Site imported.']);
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
@@ -1059,15 +1129,20 @@ if ($action === 'import_site' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'get_templates') {
-    echo json_encode($pdo->query("SELECT * FROM templates ORDER BY rowid DESC")->fetchAll(PDO::FETCH_ASSOC)); exit;
+    $rows = $pdo->query("SELECT * FROM templates ORDER BY rowid DESC")->fetchAll(PDO::FETCH_ASSOC);
+    if (!$is_admin) foreach ($rows as &$r) $r['content_json'] = cc_redact_content_json($r['content_json']);
+    unset($r);
+    echo json_encode($rows); exit;
 }
 if ($action === 'save_template' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $tplJson = (string)($data['content_json'] ?? '{}');
-    if (!$is_admin) {   // an editor's template carries no code
-        $tmp = json_decode($tplJson, true);
-        if (is_array($tmp)) { $wrap = [$tmp]; cc_keep_code_surfaces($wrap, []); $tplJson = json_encode($wrap[0]); }
-    }
+    // A template is one block (an object with a type), nothing else
+    $tmp = json_decode((string)($data['content_json'] ?? ''), true);
+    if (!is_array($tmp) || !isset($tmp['type']) || !is_string($tmp['type'])) { echo json_encode(['success' => false, 'message' => 'Invalid template.']); exit; }
+    $wrap = [$tmp];
+    if (!$is_admin) cc_keep_code_surfaces($wrap, []);   // an editor's template carries no code
+    cc_sanitize_blocks($wrap);
+    $tplJson = json_encode($wrap[0]);
     // Names are stored as typed (the interface escapes them when it shows them)
     $tplName = trim(mb_substr((string)($data['name'] ?? 'Template'), 0, 120)) ?: 'Template';
     $pdo->prepare("INSERT INTO templates (id, name, content_json) VALUES (?, ?, ?)")
@@ -1083,21 +1158,26 @@ if ($action === 'delete_template' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // Master Components
 // ---------------------------------------------------------------------------
 if ($action === 'get_masters') {
-    echo json_encode($pdo->query("SELECT * FROM master_components ORDER BY updated_at DESC")->fetchAll(PDO::FETCH_ASSOC)); exit;
+    $rows = $pdo->query("SELECT * FROM master_components ORDER BY updated_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+    if (!$is_admin) foreach ($rows as &$r) $r['content_json'] = cc_redact_content_json($r['content_json']);
+    unset($r);
+    echo json_encode($rows); exit;
 }
 if ($action === 'save_master' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $id = $data['id'];
+    $id = (string)($data['id'] ?? '');
     $name = trim(mb_substr((string)($data['name'] ?? 'Master'), 0, 120)) ?: 'Master';
-    $content_json = $data['content_json'] ?? '{}';
+    // A master is one block (an object with a type), nothing else
+    $tmp = is_string($data['content_json'] ?? null) ? json_decode($data['content_json'], true) : null;
+    if ($id === '' || !is_array($tmp) || !isset($tmp['type']) || !is_string($tmp['type'])) { echo json_encode(['success' => false, 'message' => 'Invalid master component.']); exit; }
+    $wrap = [$tmp];
     if (!$is_admin) {
-        $tmp = json_decode($content_json, true);
-        if (is_array($tmp)) {
-            $prevM = $pdo->prepare("SELECT content_json FROM master_components WHERE id = ?"); $prevM->execute([$id]);
-            $prevBlock = json_decode($prevM->fetchColumn() ?: 'null', true);
-            $wrap = [$tmp]; cc_keep_code_surfaces($wrap, is_array($prevBlock) ? [$prevBlock] : []); $content_json = json_encode($wrap[0]);
-        }
+        $prevM = $pdo->prepare("SELECT content_json FROM master_components WHERE id = ?"); $prevM->execute([$id]);
+        $prevBlock = json_decode($prevM->fetchColumn() ?: 'null', true);
+        cc_keep_code_surfaces($wrap, is_array($prevBlock) ? [$prevBlock] : []);
     }
+    cc_sanitize_blocks($wrap);
+    $content_json = json_encode($wrap[0]);
 
     $stmt = $pdo->prepare("SELECT id FROM master_components WHERE id = ?");
     $stmt->execute([$id]);
