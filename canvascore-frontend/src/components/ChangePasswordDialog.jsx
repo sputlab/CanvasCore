@@ -21,7 +21,7 @@ export default function ChangePasswordDialog({ onClose }) {
     try {
       const res = await fetch('api.php?action=change_own_password', { method: 'POST', body: JSON.stringify({ current: form.current, password: form.next }) });
       const data = await res.json();
-      if (data && data.success) { notify('Password changed.'); onClose(); return; }
+      if (data && data.success) { if (data.csrf) window.__CC_CSRF = data.csrf; notify('Password changed.'); onClose(); return; }
       setError((data && data.message) || 'The password was not changed.');
     } catch { setError('Connection problem: the password was not changed.'); }
     setBusy(false);

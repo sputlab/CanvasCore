@@ -506,7 +506,10 @@ function LivePreview({ items, settings, device, onDevice }) {
         </span>
       </div>
       <div style={{ background: '#1e293b', display: 'flex', justifyContent: 'center' }}>
-        <iframe title="menu-preview" srcDoc={doc} sandbox="allow-scripts"
+        {/* The preview runs the menu's own scripts in a sandboxed page of its own (public/menu-preview.html): the
+            editor's Content Security Policy allows no inline scripts. Reloaded for each change. */}
+        <iframe key={doc} title="menu-preview" src="menu-preview.html" sandbox="allow-scripts"
+          onLoad={(e) => { try { e.currentTarget.contentWindow.postMessage({ type: 'cc-menu-preview', html: doc }, '*'); } catch { /* noop */ } }}
           style={{ width: mobile ? '390px' : '100%', maxWidth: '100%', height: '300px', border: 'none', background: '#f1f5f9', display: 'block' }} />
       </div>
     </div>

@@ -16,6 +16,20 @@ export function escapeHtml(s) {
     .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// An image address: http(s), a relative or root path, or an inline raster image; any other scheme -> ''.
+// Mirrors cc_img_url() / cc_css_url() in compiler.php.
+export function ccImgUrl(u) {
+  const s = String(u ?? '').trim();
+  // eslint-disable-next-line no-control-regex -- browsers ignore control characters in a URL scheme
+  const probe = s.replace(/[\x00-\x20\x7f]+/g, '').toLowerCase();
+  if (/^[a-z][a-z0-9+.-]*:/.test(probe) && !/^(https?:|data:image\/(png|jpe?g|gif|webp|avif);)/.test(probe)) return '';
+  return s;
+}
+export function ccCssUrl(u) {
+  return ccImgUrl(u).replace(/'/g, '%27').replace(/"/g, '%22').replace(/\\/g, '%5C').replace(/\(/g, '%28').replace(/\)/g, '%29')
+    .replace(/[\n\r]/g, '').replace(/</g, '%3C').replace(/>/g, '%3E');
+}
+
 // Whole number within [min, max] (default when missing or not a number). Mirrors cc_int() in compiler.php.
 export function ccInt(v, def, min, max) {
   const n = parseInt(v, 10);
@@ -33,6 +47,7 @@ export function buildInlineStyle(styles) {
     const v = styles[k];
     if (v === '' || v === null || v === undefined || k === 'animation') continue;
     if (!/^[a-zA-Z][a-zA-Z0-9-]*$/.test(k) || typeof v === 'object') continue;
+    if (/[;{}<>\\]|expression\s*\(|javascript:|vbscript:/i.test(String(v))) continue;   // mirrors build_inline_style()
     const kebab = k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
     str += `${kebab}: ${escapeHtml(v)}; `;
   }
@@ -57,7 +72,8 @@ export function blockRoot(block) {
   const id = block.id ? String(block.id).replace(/[^a-zA-Z0-9_-]/g, '') : 'b_x';
   const innerId = content.customId ? String(content.customId).replace(/[^a-zA-Z0-9_-]/g, '') : id;
   const animClass = effectClasses(styles, content);
-  const innerClass = content.customClass ? ' ' + content.customClass : '';
+  // a React className here (editor containers): only class-name characters
+  const innerClass = content.customClass ? ' ' + String(content.customClass).replace(/[^A-Za-z0-9_\s-]/g, '') : '';
   switch (block.type) {
     case 'SECTION':   return { tag: 'section', id: innerId, className: `cc-section${animClass}${innerClass}`, style: { ...styles } };
     case 'CONTAINER': return { tag: 'div', id: innerId, className: `cc-container${animClass}${innerClass}`, style: { ...styles } };
@@ -212,7 +228,8 @@ export function renderBlock(block, opts = {}) {
     }
 
     case 'HERO': {
-      const bg = content.bgImage ? `background-image: url('${escapeHtml(content.bgImage)}'); background-size: cover; background-position: center;` : '';
+      const bgUrl = ccCssUrl(content.bgImage);
+      const bg = bgUrl ? `background-image: url('${escapeHtml(bgUrl)}'); background-size: cover; background-position: center;` : '';
       const title = content.title ?? '';
       const subtitle = content.subtitle ?? '';
       const minHeight = escapeHtml(styles.minHeight ?? 'auto');
@@ -464,7 +481,7 @@ export function renderBlock(block, opts = {}) {
       const imgStyle = useAr ? 'width:100%; height:100%; object-fit:cover; display:block;' : 'width:100%; height:auto; display:block;';
       let figs = '';
       for (const im of images) {
-        const src = escapeHtml(im.src ?? '');
+        const src = escapeHtml(ccImgUrl(im.src));
         const alt = escapeHtml(im.alt ?? '');
         const cap = escapeHtml(im.caption ?? '');
         const imgHtml = `<img src="${src}" alt="${alt}" loading="lazy" style="${imgStyle}">`;

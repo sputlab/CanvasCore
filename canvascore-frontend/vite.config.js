@@ -14,8 +14,31 @@ const blockDefs = readJson('../canvascore-admin/blocks.json', { _baseStyles: {},
 let effectsCss = ''
 try { effectsCss = readFileSync(fileURLToPath(new URL('../canvascore-admin/effects.css', import.meta.url)), 'utf-8') } catch { /* optional */ }
 
+// Content Security Policy of the built editor (index.html): scripts only from the editor's own files, so nothing
+// that ends up in the page as HTML (block previews, rich text) can ever run code, not even an event handler.
+// Only in the build: the dev server needs inline scripts for hot reload.
+const EDITOR_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https: http:",
+  "media-src 'self' data: blob: https: http:",
+  "frame-src 'self' https:",
+  "connect-src 'self'",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ')
+const editorCsp = {
+  name: 'canvascore-editor-csp',
+  apply: 'build',
+  transformIndexHtml: (html) => html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${EDITOR_CSP}" />\n    <meta name="referrer" content="same-origin" />\n    <meta name="robots" content="noindex, nofollow" />`),
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), editorCsp],
   base: './',
   define: {
     __APP_VERSION__: JSON.stringify(version.app || '0.0.0'),

@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore';
 import { InlineRegions } from '../editor/RichText';
 import { Crown } from 'lucide-react';
 import { renderBlock, blockRoot } from '../render/renderBlock.mjs';
+import { safeHtml } from '../utils/safeHtml';
 import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
 
 const CONTAINERS = CONTAINER_TYPES;
@@ -218,13 +219,13 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     // SLIDER: canonical HTML + animation driven via ref
     if (block.type === 'SLIDER') {
       return (
-        <div ref={sliderRef} style={{ pointerEvents: isMasterPreview ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: canonicalHtml(innerBlock) }} />
+        <div ref={sliderRef} style={{ pointerEvents: isMasterPreview ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock)) }} />
       );
     }
 
     // Everything else (and unselected editables): canonical HTML = identical to the site
     return (
-      <div ref={block.type === 'BEFORE_AFTER' ? baRef : undefined} style={{ pointerEvents: (isMasterPreview || INTERACTIVE.includes(block.type)) ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: canonicalHtml(innerBlock) }} />
+      <div ref={block.type === 'BEFORE_AFTER' ? baRef : undefined} style={{ pointerEvents: (isMasterPreview || INTERACTIVE.includes(block.type)) ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock)) }} />
     );
   };
 

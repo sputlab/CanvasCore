@@ -14,6 +14,7 @@ import {
 import { useStore } from '../store/useStore';
 import MediaPickerModal from '../components/MediaPickerModal';
 import { tidyHtml } from './cleanHtml';
+import { safeHtml } from '../utils/safeHtml';
 import {
   TOOLSETS, BLOCK_FORMATS, FONTS, SIZES, TEXT_COLORS, HIGHLIGHTS, SITE_COLOR, TB_ATTR,
   exec, insertHtml, applyInlineStyle, setRegionHtml, closestIn, selectionNode, tableOp, tableHtml, escAttr, isInToolbar, useRegionHandlers,
@@ -398,7 +399,7 @@ export function RichTextField({ value, onChange, variant = 'full', label, minHei
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
-    if (document.activeElement !== node && node.innerHTML !== (value || '')) node.innerHTML = value || '';
+    if (document.activeElement !== node && node.innerHTML !== (value || '')) node.innerHTML = safeHtml(value || '');
     last.current = value || '';
   }, [value]);
   useEffect(() => { setEl(ref.current); }, []);
@@ -470,7 +471,7 @@ export function InlineRegions({ html, variants, onCommit, initialPoint, style })
   useLayoutEffect(() => {
     if (!ref.current || html === shown.current) return;
     if (shown.current !== null && (activeRef.current || moving.current)) return;   // refreshed when editing stops
-    ref.current.innerHTML = html;
+    ref.current.innerHTML = safeHtml(html);
     shown.current = html;
   }, [html, active]);
 

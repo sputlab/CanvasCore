@@ -33,10 +33,11 @@ export default function App() {
     document.body.style.fontFamily = 'Inter, system-ui, sans-serif';
     document.body.style.backgroundColor = '#0f172a';
 
-    fetchVersion();
     // Wait for the site name and icon too, so the sign-in screen doesn't change after it appears
     Promise.all([checkAuth(), fetchBranding()]).then(() => setLoading(false));
-  }, [checkAuth, fetchVersion, fetchBranding]);
+  }, [checkAuth, fetchBranding]);
+  // The version is for signed-in users only
+  useEffect(() => { if (isAuthenticated && !mustChangePw) fetchVersion(); }, [isAuthenticated, mustChangePw, fetchVersion]);
 
   // The session manager runs while authenticated (even with the login overlay shown).
   useEffect(() => {
