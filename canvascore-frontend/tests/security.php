@@ -240,5 +240,46 @@ db()->exec("INSERT INTO form_submissions (form_id, page, data_json) VALUES ('f',
 $csv = (string)($own->api('export_submissions')['json']['csv'] ?? '');
 check('formula characters are neutralized in column names too', strpos($csv, "'=cmd") !== false && strpos($csv, "'+1") !== false, $csv);
 
+echo "\nDEMO MODE\n";
+$r = (new Client())->api('branding');
+check('without demo.json the sign-in screen gets no demo login and pages may be indexed', !isset($r['json']['demo']) && stripos($r['head'], 'X-Robots-Tag') === false, $r['body']);
+// the visitors' account (an editor that already chose its password) and a collection, made before demo mode is on
+$own->api('add_user', ['username' => 'visitor', 'password' => 'Visitor-pass-1', 'role' => 'editor']);
+$vis = new Client(); $vis->login('visitor', 'Visitor-pass-1');
+$r = $vis->api('change_own_password', ['password' => 'Visitor-pass-2']); if (!empty($r['json']['csrf'])) $vis->csrf = $r['json']['csrf'];
+$own->api('save_collection', ['id' => 'col_demo', 'name' => 'Demo news', 'slug' => 'demo-news']);
+file_put_contents($data . '/demo.json', json_encode(['username' => 'demo', 'password' => 'canvasdemo', 'resetMinutes' => 10, 'maxNewPages' => 2, 'maxNewItems' => 2]));
+$r = (new Client())->api('branding');
+$d = $r['json']['demo'] ?? [];
+check('with demo.json the sign-in screen gets the demo login, the reset interval and the limits', ($d['username'] ?? '') === 'demo' && ($d['password'] ?? '') === 'canvasdemo' && ($d['resetMinutes'] ?? 0) === 10 && ($d['maxNewPages'] ?? 0) === 2 && ($d['maxNewItems'] ?? 0) === 2, $r['body']);
+check('…and the seconds until the next reset, for the countdown', is_int($d['nextResetIn'] ?? null) && $d['nextResetIn'] > 0 && $d['nextResetIn'] <= 600, $r['body']);
+check('…and search engines are told not to index the demo', stripos($r['head'], 'X-Robots-Tag: noindex') !== false);
+$hash = (string)db()->query("SELECT password_hash FROM admin WHERE username = 'owner'")->fetchColumn();
+$r = $own->api('change_own_password', ['current' => 'Correct-Horse-9', 'password' => 'Another-pass-99']);
+check('a visitor can\'t change the shared password', empty($r['json']['success']) && (string)db()->query("SELECT password_hash FROM admin WHERE username = 'owner'")->fetchColumn() === $hash, $r['body']);
+check('…nor reset another account\'s', empty($own->api('force_password', ['id' => 1, 'password' => 'Another-pass-99'])['json']['success']));
+check('uploads are refused', !$up('demo.svg', '<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"/></svg>') && !is_file($web . '/uploads/demo.svg'));
+$before = (int)db()->query("SELECT COUNT(*) FROM form_submissions")->fetchColumn();
+$r = $post(['_form' => $fid, 'field_0' => 'Demo visitor']);
+check('form submissions are still stored and answered (only the mail is skipped)', $r['code'] === 200 && (int)db()->query("SELECT COUNT(*) FROM form_submissions")->fetchColumn() === $before + 1, $r['code'] . ' ' . strip_tags($r['body']));
+$page = function ($id) use ($vis) { return !empty($vis->api('save_page', ['id' => $id, 'title' => $id, 'slug' => $id, 'blocks' => []])['json']['success']); };
+check('visitors can create the allowed number of new pages', $page('demo-p1') && $page('demo-p2'));
+$r = $vis->api('save_page', ['id' => 'demo-p3', 'title' => 'p3', 'slug' => 'demo-p3', 'blocks' => []]);
+check('…and no more, with a message saying why', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), '2 new pages') !== false && !db()->query("SELECT id FROM pages WHERE id = 'demo-p3'")->fetch(), $r['body']);
+check('…while saving an existing page still works', $page('demo-p1'));
+check('…and admins are not limited', !empty($own->api('save_page', ['id' => 'demo-own', 'title' => 'o', 'slug' => 'demo-own', 'blocks' => []])['json']['success']));
+$item = function ($id) use ($vis) { return !empty($vis->api('save_item', ['id' => $id, 'collection_id' => 'col_demo', 'title' => $id, 'slug' => $id])['json']['success']); };
+check('visitors can create the allowed number of collection items', $item('demo-i1') && $item('demo-i2'));
+$r = $vis->api('save_item', ['id' => 'demo-i3', 'collection_id' => 'col_demo', 'title' => 'i3', 'slug' => 'demo-i3']);
+check('…and no more, with a message saying why', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), '2 new collection items') !== false && !db()->query("SELECT id FROM collection_items WHERE id = 'demo-i3'")->fetch(), $r['body']);
+check('…while saving an existing item still works', $item('demo-i1'));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('published pages of the demo carry a noindex tag', strpos((string)@file_get_contents($web . '/contact/index.html'), '<meta name="robots" content="noindex">') !== false);
+check('…and robots.txt keeps every crawler out', strpos((string)@file_get_contents($web . '/robots.txt'), 'Disallow: /') !== false);
+unlink($data . '/demo.json');
+check('removing demo.json turns demo mode off', !isset((new Client())->api('branding')['json']['demo']));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('…and the next publish lets search engines in again', strpos((string)@file_get_contents($web . '/contact/index.html'), 'name="robots"') === false && strpos((string)@file_get_contents($web . '/robots.txt'), 'Allow: /') !== false);
+
 echo "\n" . ($fails ? "$fails checks failed" : 'SECURITY OK') . " ($total checks)\n";
 exit($fails ? 1 : 0);
