@@ -1349,7 +1349,8 @@ function render_block($block) {
                     . ($fade ? '#' . $innerId . ' .cc-logos-marquee{-webkit-mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)}' : '')
                     . '@media(prefers-reduced-motion:reduce){#' . $innerId . ' .cc-logos-track{animation:none; flex-wrap:wrap; width:auto !important}#' . $innerId . ' .cc-logos-set[aria-hidden="true"]{display:none}' . ($fade ? '#' . $innerId . ' .cc-logos-marquee{-webkit-mask-image:none;mask-image:none}' : '') . '}';
                 $setStyle = 'display:flex; align-items:center; gap:' . $gap . 'px; padding-right:' . $gap . 'px;';
-                $body = '<div class="cc-logos-marquee" style="overflow:hidden;"><div class="cc-logos-track" style="display:flex; width:max-content;"><div class="cc-logos-set" style="' . $setStyle . '">' . $set1 . '</div><div class="cc-logos-set" aria-hidden="true" style="' . $setStyle . '">' . $set2 . '</div></div></div>';
+                // contain:inline-size: the moving track (wider than the strip) never widens the page, a row or the editor
+                $body = '<div class="cc-logos-marquee" style="overflow:hidden; contain:inline-size;"><div class="cc-logos-track" style="display:flex; width:max-content;"><div class="cc-logos-set" style="' . $setStyle . '">' . $set1 . '</div><div class="cc-logos-set" aria-hidden="true" style="' . $setStyle . '">' . $set2 . '</div></div></div>';
             } else {
                 $css .= '@media(max-width:768px){#' . $innerId . ' .cc-logos-grid{grid-template-columns:repeat(' . min($cols, 3) . ', 1fr) !important}}';
                 $body = '<div class="cc-logos-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:' . $gap . 'px; align-items:center; justify-items:center;">' . $set1 . '</div>';

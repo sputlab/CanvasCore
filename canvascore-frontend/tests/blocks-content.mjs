@@ -3,6 +3,7 @@
 // Timeline, Logos, Team, Before/After, Business. Parity (parity.mjs) checks that editor and compiler
 // produce the same structure; here we check that the PHP compiler's HTML is SAFE and WORKS.
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import { JSDOM } from 'jsdom';
@@ -489,6 +490,8 @@ section('LOGOS strip fill (published script and editor canvas)');
   const still = stripPage(php('LOGOS', content), { reduced: true });
   check('published: nothing is added for visitors who prefer reduced motion', sets(still.doc)[0].children.length === 2);
   check('published: the grid layout has no script', !/<script/.test(php('LOGOS', { ...content, layout: 'grid' })));
+  check('the moving track never widens the page, a row or the editor (the strip box has contain:inline-size)', /class="cc-logos-marquee" style="overflow:hidden; contain:inline-size;"/.test(php('LOGOS', content)) && /class="cc-logos-marquee" style="overflow:hidden; contain:inline-size;"/.test(js('LOGOS', content)));
+  check('the editor\'s layout column can\'t grow wider than the screen (kit.css: minmax(0, 1fr))', /\.cc-editor \{[^}]*grid-template-columns: minmax\(0, 1fr\)/.test(readFileSync(new URL('../src/ui/kit.css', import.meta.url), 'utf-8')));
   check('published: a strip without logos has no script', !/<script/.test(php('LOGOS', { ...content, logos: [] })));
   check('published: the speed in the script is the clamped number from the block', /var dur=120,/.test(php('LOGOS', { ...content, speed: '9999' })) && /var dur=30,/.test(php('LOGOS', { ...content, speed: 'x;alert(1)' })));
 
