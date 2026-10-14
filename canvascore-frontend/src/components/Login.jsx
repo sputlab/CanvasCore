@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { LogIn, Clock } from 'lucide-react';
+import { LogIn, Clock, Info } from 'lucide-react';
 import { BrandLogo } from '../ui/BrandLogo';
 import { Button, Field, Input } from '../ui/kit';
 import { readExpiredNotice, clearExpiredNotice } from '../session/drafts';
@@ -9,6 +9,7 @@ export default function Login() {
   const { login } = useStore();
   const siteName = useStore((s) => s.branding.siteName);
   const installed = useStore((s) => s.installed);
+  const demo = useStore((s) => s.demo);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -45,6 +46,18 @@ export default function Login() {
           <div role="status" style={{ display: 'flex', gap: 10, background: '#451a03', border: '1px solid #92400e', borderRadius: 10, padding: '11px 13px', marginBottom: 20, fontSize: 13, color: '#fde68a', lineHeight: 1.5 }}>
             <Clock size={17} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
             <span><strong>Your session expired.</strong> Unsaved changes{notice.user ? <> of <strong>{notice.user}</strong></> : ''} are backed up on this device and will be offered after you sign in.</span>
+          </div>
+        )}
+
+        {demo && (
+          <div role="note" style={{ display: 'flex', gap: 10, background: '#082f49', border: '1px solid #0369a1', borderRadius: 10, padding: '11px 13px', marginBottom: 20, fontSize: 13, color: '#bae6fd', lineHeight: 1.5 }}>
+            <Info size={17} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+            <div style={{ minWidth: 0 }}>
+              <strong>Public demo.</strong> Sign in with <strong style={{ overflowWrap: 'anywhere' }}>{demo.username}</strong> / <strong style={{ overflowWrap: 'anywhere' }}>{demo.password}</strong>. Every change is wiped every {demo.resetMinutes} minutes.
+              <div style={{ marginTop: 8 }}>
+                <Button type="button" size="sm" onClick={() => { setUsername(String(demo.username)); setPassword(String(demo.password)); }}>Fill in the demo login</Button>
+              </div>
+            </div>
           </div>
         )}
 

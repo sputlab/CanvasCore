@@ -162,6 +162,7 @@ export const useStore = create((set, get) => ({
   appBuild: (typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 0),
   serverVersion: null,
   branding: { siteName: '', faviconUrl: '' },   // site name + favicon (Global Options) for the login and the sidebar
+  demo: null,   // demo mode only: { username, password, resetMinutes, nextResetIn, resetAt, maxNewPages, maxNewItems }
 
   // ---- session (see src/session/) ----
   sessionExpired: false,        // true: login shown ON TOP of the app (which stays mounted with all its state)
@@ -189,7 +190,11 @@ export const useStore = create((set, get) => ({
     try {
       const res = await fetch('api.php?action=branding');
       const data = await res.json();
-      if (data && typeof data === 'object') get().setBranding(data);
+      if (data && typeof data === 'object') {
+        get().setBranding(data);
+        // resetAt: when the next reset is due, on this device's clock
+        set({ demo: data.demo && typeof data.demo === 'object' ? { ...data.demo, resetAt: Date.now() + (Number(data.demo.nextResetIn) || 0) * 1000 } : null });
+      }
     } catch { /* noop: the default name and icon stay */ }
   },
   setBranding: (b) => set({ branding: { siteName: String((b && b.siteName) || '').trim(), faviconUrl: String((b && b.faviconUrl) || '').trim() } }),

@@ -71,7 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action !== 'login') {
 if ($action === 'branding') {
     session_write_close();
     $s = @json_decode((string)@file_get_contents($data_dir . '/settings.json'), true);
-    echo json_encode(cc_public_branding(is_array($s) ? $s : [])); exit;
+    $out = cc_public_branding(is_array($s) ? $s : []);
+    // Demo mode: the public demo login is shown on the sign-in screen (never the password of a real account)
+    if ($demo = cc_demo_config()) $out['demo'] = ['username' => $demo['username'], 'password' => $demo['password'], 'resetMinutes' => $demo['resetMinutes'],
+        'nextResetIn' => cc_demo_next_reset(), 'maxNewPages' => $demo['maxNewPages'], 'maxNewItems' => $demo['maxNewItems']];
+    echo json_encode($out); exit;
 }
 
 // READ-ONLY session status: does not extend the session (background polling must not
@@ -207,6 +211,10 @@ if ($action === 'delete_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // its open sessions end at their next request (cc_session_account finds no account)
     $pdo->prepare("DELETE FROM admin WHERE id = ?")->execute([$uid]);
     echo json_encode(['success' => true, 'message' => 'User deleted.']); exit;
+}
+// Demo mode: the shared demo login keeps its password, and visitors can't put files on the server
+if (cc_demo_on() && in_array($action, ['force_password', 'change_own_password', 'upload_media'], true)) {
+    echo json_encode(['success' => false, 'message' => 'Not available in the demo.']); exit;
 }
 if ($action === 'force_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
@@ -561,12 +569,14 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $cschema = cc_version()['content_schema'];
     $has_noindex = is_array($data) && array_key_exists('noindex', $data);
     $noindex = !empty($data['noindex']) ? 1 : 0;
-    $writeRow = function ($targetId, $status, $isCopy, $parentId) use ($pdo, $title, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $author, $now, $cschema, $has_noindex, $noindex) {
+    $writeRow = function ($targetId, $status, $isCopy, $parentId) use ($pdo, $title, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $author, $now, $cschema, $has_noindex, $noindex, $is_admin) {
         $chk = $pdo->prepare("SELECT id FROM pages WHERE id = ?"); $chk->execute([$targetId]);
         if ($chk->fetch()) {
             $pdo->prepare("UPDATE pages SET parent_id=?, title=?, slug=?, clean_slug=?, seo_title=?, seo_description=?, seo_image=?, layout=?, bg_color=?, boxed_width=?, content_json=?, status=?, is_draft_copy=?, content_schema=?, author=?, updated_at=? WHERE id=?")
                 ->execute([$parentId, $title, $clean, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $status, $isCopy, $cschema, $author, $now, $targetId]);
         } else {
+            // Demo mode: a new page (not the hidden draft copy of an existing one) uses up one of the visitors' pages
+            if (!$is_admin && !$isCopy && !cc_demo_take('pages')) { echo json_encode(['success' => false, 'message' => 'The demo allows ' . cc_demo_config()['maxNewPages'] . ' new pages until the next reset. Edit an existing page instead.']); exit; }
             $pdo->prepare("INSERT INTO pages (id, parent_id, title, slug, clean_slug, seo_title, seo_description, seo_image, layout, bg_color, boxed_width, content_json, status, is_draft_copy, content_schema, author, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                 ->execute([$targetId, $parentId, $title, $clean, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $status, $isCopy, $cschema, $author, $now]);
         }
@@ -857,6 +867,8 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $b = $blocks ?? [];
         if (!$is_admin) cc_keep_code_surfaces($b, []);
+        // Demo mode: a new item uses up one of the visitors' items
+        if (!$is_admin && !cc_demo_take('items')) { echo json_encode(['success' => false, 'message' => 'The demo allows ' . cc_demo_config()['maxNewItems'] . ' new collection items until the next reset. Edit an existing item instead.']); exit; }
         $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $now]);
     }
