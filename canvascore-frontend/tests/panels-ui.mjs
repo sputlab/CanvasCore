@@ -227,7 +227,8 @@ try {
     const range = await waitFor(() => doc.querySelector('.cc-ba-range'));
     const ba = doc.querySelector('.cc-ba');
     check('BEFORE_AFTER canvas: start position 50%', ba.style.getPropertyValue('--pos') === '50%');
-    range.value = '80'; range.dispatchEvent(new w.Event('input', { bubbles: true }));
+    // the canvas wires the slider in an effect, after the HTML is in the page: keep moving it until the listener is there
+    await waitFor(() => { range.value = '80'; range.dispatchEvent(new w.Event('input', { bubbles: true })); return ba.style.getPropertyValue('--pos') === '80%'; });
     check('BEFORE_AFTER canvas: moving the slider updates the position (faithful preview)', ba.style.getPropertyValue('--pos') === '80%', ba.style.getPropertyValue('--pos'));
     check('BEFORE_AFTER canvas: the block receives clicks (usable slider)', doc.querySelector('.cc-ba').parentElement.style.pointerEvents === 'auto');
   }
