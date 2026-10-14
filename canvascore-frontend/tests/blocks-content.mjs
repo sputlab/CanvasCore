@@ -430,6 +430,20 @@ section('LOGOS strip options');
   check('the grid layout ignores both options', !/reverse|mask-image/.test(php('LOGOS', { layout: 'grid', direction: 'right', fade: true, logos })));
 }
 
+// =============================================================== built-in placeholder images survive saving
+section('Placeholder images survive saving');
+{
+  // the same test as cc_scrub_urls() in config.php: a value matching it is blanked when a page is saved
+  // eslint-disable-next-line no-control-regex -- browsers ignore control characters in a URL scheme (as in cc_scrub_urls)
+  const blanked = (v) => /^(javascript|vbscript|livescript|data:(text|application)|data:image\/svg)/.test(String(v).replace(/[\x00-\x20\x7f]+/g, '').toLowerCase());
+  const walk = (node, out) => { if (node && typeof node === 'object') for (const v of Object.values(node)) walk(v, out); else if (typeof node === 'string' && node.startsWith('data:')) out.push(node); return out; };
+  const defs = walk(JSON.parse(readFileSync(new URL('../../canvascore-admin/blocks.json', import.meta.url), 'utf-8')), []);
+  const starters = walk(JSON.parse(readFileSync(new URL('../../canvascore-admin/starters.json', import.meta.url), 'utf-8')), []);
+  check('the default block placeholders are PNG images (saving keeps them)', defs.length > 0 && defs.every((u) => u.startsWith('data:image/png;base64,') && !blanked(u)), `${defs.filter(blanked).length} would be blanked`);
+  check('the starter pages\' placeholders are PNG images too', starters.length > 0 && starters.every((u) => u.startsWith('data:image/png;base64,') && !blanked(u)), `${starters.filter(blanked).length} would be blanked`);
+  check('the editor\'s placeholder is a PNG (and the rule does not blank it)', !blanked('data:image/png;base64,iVBORw0KGgo='));
+}
+
 // =============================================================== LOGOS strip: logos repeat to cover the strip
 section('LOGOS strip fill (published script and editor canvas)');
 {
