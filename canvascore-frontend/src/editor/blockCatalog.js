@@ -6,6 +6,7 @@ import {
   GalleryHorizontal, GitCompare, Timer, ListOrdered, Hash, BarChart3, Table2, History, CreditCard, Users,
   Building2, Store, MapPin, Library, Crown, Square, Search, LayoutDashboard, Columns2, TrendingUp, CircleUserRound,
   StarHalf, MessagesSquare, SquareMousePointer, ScrollText, MapPinned, TableOfContents, Share2, Code2,
+  Calculator, ListChecks,
 } from 'lucide-react';
 
 export const CATEGORIES = [
@@ -43,6 +44,7 @@ export const BLOCKS = [
   { type: 'SPLIT_CTA', label: 'Split CTA', icon: Columns2, category: 'sections', color: '#fcd34d', keywords: 'call to action two buttons banner' },
   { type: 'CASE_STUDY', label: 'Case Study', icon: TrendingUp, category: 'sections', color: '#3b82f6', keywords: 'success story result client metric' },
   { type: 'AUTHOR_BIO', label: 'Author Bio', icon: CircleUserRound, category: 'sections', color: '#a78bfa', keywords: 'writer profile about person' },
+  { type: 'WIZARD', label: 'Multi-step Form', icon: ListChecks, category: 'sections', color: '#a855f7', keywords: 'form steps wizard quote questionnaire survey progress' },
   { type: 'SCROLLYTELLING', label: 'Scrollytelling', icon: ScrollText, category: 'sections', color: '#fdba74', keywords: 'story sticky image scroll steps narrative' },
   { type: 'TESTIMONIAL_WALL', label: 'Testimonial Wall', icon: MessagesSquare, category: 'sections', color: '#3b82f6', keywords: 'reviews quotes masonry customers' },
 
@@ -50,6 +52,7 @@ export const BLOCKS = [
   { type: 'TABS', label: 'Tabs', icon: PanelTop, category: 'interactive', color: '#10b981', keywords: 'tabbed panels' },
   { type: 'FAQ', label: 'FAQ', icon: HelpCircle, category: 'interactive', color: '#10b981', keywords: 'questions answers' },
   { type: 'SLIDER', label: 'Slider', icon: Images, category: 'interactive', color: '#10b981', keywords: 'carousel slideshow' },
+  { type: 'PRICE_CALCULATOR', label: 'Price Calculator', icon: Calculator, category: 'interactive', color: '#10b981', keywords: 'pricing estimate sliders quote plan cost total' },
   { type: 'HOTSPOTS', label: 'Product Hotspots', icon: MapPinned, category: 'interactive', color: '#10b981', keywords: 'pins image points annotations tour' },
   { type: 'HOVER_GRID', label: 'Hover Reveal Grid', icon: SquareMousePointer, category: 'interactive', color: '#10b981', keywords: 'portfolio services image overlay cards' },
   { type: 'GALLERY', label: 'Gallery', icon: GalleryHorizontal, category: 'interactive', color: '#10b981', keywords: 'images lightbox photos' },

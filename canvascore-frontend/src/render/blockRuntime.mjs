@@ -1,10 +1,11 @@
-// Behaviour of the blocks that need a script: Code Snippet (highlight + copy), Table of Contents, Share Bar.
+// Behaviour of the blocks that need a script: Code Snippet (highlight + copy), Table of Contents, Share Bar,
+// Pricing Calculator, Multi-step Form.
 // The editor canvas runs these functions through the wrappers at the bottom; published pages run the SAME text
-// from canvascore-admin/compiler.php (CC_CODE_SCRIPT, CC_TOC_SCRIPT, CC_SHARE_SCRIPT). Every function between a
-// "cc-xxx:begin" and "cc-xxx:end" line is copied verbatim into the compiler (so no literal "<!--" or "-->" or "</script" in them): edit both, and tests/blocks-content.mjs
-// fails when the two texts differ. They are plain ES5 (var, function, optional catch binding), take their window and document from the
-// element they work on, and never write HTML: tokens and links are built with createElement / textContent.
-
+// from canvascore-admin/compiler.php (the CC_*_SCRIPT constants). Every function between a "cc-xxx:begin" and
+// "cc-xxx:end" line is copied verbatim into the compiler (so no literal "<!--", "-->" or "</script" in them):
+// edit both, and tests/blocks-content.mjs fails when the two texts differ. They are plain ES5 (var, function,
+// optional catch binding), take their window and document from the element they work on, and never write HTML:
+// tokens, links and amounts are built with createElement / textContent.
 // cc-hl:begin
 function ccTokens(code, lang) {
   var STR = /"(?:\\[\s\S]|[^"\\\n])*(?:"|$)|'(?:\\[\s\S]|[^'\\\n])*(?:'|$)/y;
@@ -167,6 +168,137 @@ function ccShareInit(root, editor) {
 }
 // cc-share:end
 
+// cc-calc:begin
+function ccPlain(v) {
+  var s = v.toFixed(4);
+  if (s.indexOf('.') > -1) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  return s;
+}
+function ccCalcInit(root) {
+  var dec = parseInt(root.getAttribute('data-dec'), 10) || 0, eu = root.getAttribute('data-fmt') === 'eu';
+  var cur = root.getAttribute('data-cur') || '', after = root.getAttribute('data-pos') === 'after';
+  var base = parseFloat(root.getAttribute('data-base')) || 0, disc = parseFloat(root.getAttribute('data-disc')) || 0;
+  var perM = root.getAttribute('data-per-m') || '', perY = root.getAttribute('data-per-y') || '', saveTpl = root.getAttribute('data-save') || '';
+  var ranges = root.querySelectorAll('.cc-calc-range'), addons = root.querySelectorAll('.cc-calc-addon'), radios = root.querySelectorAll('.cc-calc-billing input');
+  var amount = root.querySelector('.cc-calc-amount'), per = root.querySelector('.cc-calc-per'), save = root.querySelector('.cc-calc-save'), i;
+  var money = function (v) {
+    var m = Math.pow(10, dec), r = Math.floor(Math.abs(v) * m + 0.5 + 1e-9) / m;
+    if (v < 0) r = -r;
+    if (r === 0) r = 0;
+    var parts = r.toFixed(dec).split('.'), s;
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    s = parts.join('.');
+    if (eu) s = s.replace(/[,.]/g, function (ch) { return ch === ',' ? '.' : ','; });
+    return after ? s + ' ' + cur : cur + s;
+  };
+  var line = function (key, cost, f, show) {
+    var li = root.querySelector('.cc-calc-line[data-line="' + key + '"]');
+    if (!li) return;
+    li.hidden = !show;
+    li.querySelector('.cc-calc-line-amt').textContent = money(cost * f);
+  };
+  var update = function () {
+    var yearly = false, total = base, f, k;
+    for (k = 0; k < radios.length; k++) { if (radios[k].checked && radios[k].value === 'yearly') yearly = true; }
+    f = yearly ? 12 * (1 - disc / 100) : 1;
+    line('base', base, f, true);
+    for (k = 0; k < ranges.length; k++) {
+      var inp = ranges[k], val = parseFloat(inp.value) || 0, unit = inp.getAttribute('data-unit') || '';
+      var cost = Math.max(0, val - (parseFloat(inp.getAttribute('data-incl')) || 0)) * (parseFloat(inp.getAttribute('data-price')) || 0);
+      total += cost;
+      var out = root.querySelector('.cc-calc-val[data-for="' + inp.id + '"]');
+      if (out) out.textContent = ccPlain(val) + (unit ? ' ' + unit : '');
+      line(inp.getAttribute('data-line'), cost, f, cost !== 0);
+    }
+    for (k = 0; k < addons.length; k++) {
+      var price = parseFloat(addons[k].getAttribute('data-price')) || 0;
+      if (addons[k].checked) total += price;
+      line(addons[k].getAttribute('data-line'), price, f, addons[k].checked);
+    }
+    if (amount) amount.textContent = money(total * f);
+    if (per) per.textContent = yearly ? perY : perM;
+    if (save) {
+      var saved = total * 12 - total * f;
+      save.hidden = !(yearly && saved > 0);
+      save.textContent = saveTpl.split('{amount}').join(money(saved));
+    }
+  };
+  for (i = 0; i < ranges.length; i++) ranges[i].addEventListener('input', update);
+  for (i = 0; i < addons.length; i++) addons[i].addEventListener('change', update);
+  for (i = 0; i < radios.length; i++) radios[i].addEventListener('change', update);
+  update();
+}
+// cc-calc:end
+
+// cc-wizard:begin
+function ccWizardInit(root, editor) {
+  var form = root.querySelector('.cc-wz-form');
+  if (!form || root.getAttribute('data-ready')) return;
+  var steps = root.querySelectorAll('.cc-wz-step'), n = steps.length, cur = 0, i;
+  var back = root.querySelector('.cc-wz-back'), next = root.querySelector('.cc-wz-next'), submit = root.querySelector('.cc-wz-submit');
+  var prog = root.querySelector('.cc-wz-progress'), fill = root.querySelector('.cc-wz-fill'), count = root.querySelector('.cc-wz-count');
+  var dots = root.querySelectorAll('.cc-wz-dot'), tpl = root.getAttribute('data-step-label') || 'Step {n} of {total}';
+  root.setAttribute('data-ready', '1');
+  form.setAttribute('novalidate', '');
+  var groups = root.querySelectorAll('.cc-wz-group[data-req="1"]');
+  var clear = function (boxes) { return function () { boxes[0].setCustomValidity(''); }; };
+  for (i = 0; i < groups.length; i++) {
+    var boxes = groups[i].querySelectorAll('input[type="checkbox"]');
+    for (var b = 0; b < boxes.length; b++) boxes[b].addEventListener('change', clear(boxes));
+  }
+  if (n < 2) return;
+  var show = function (k, focus) {
+    cur = k;
+    for (i = 0; i < n; i++) steps[i].hidden = i !== k;
+    back.hidden = k === 0;
+    next.hidden = k === n - 1;
+    submit.hidden = k !== n - 1;
+    if (prog) prog.hidden = false;
+    if (fill) fill.style.width = (((k + 1) / n) * 100).toFixed(1) + '%';
+    if (count) count.textContent = tpl.split('{n}').join(String(k + 1)).split('{total}').join(String(n));
+    for (i = 0; i < dots.length; i++) {
+      dots[i].className = 'cc-wz-dot' + (i < k ? ' is-done' : '') + (i === k ? ' is-current' : '');
+      if (i === k) dots[i].setAttribute('aria-current', 'step'); else dots[i].removeAttribute('aria-current');
+    }
+    // the step itself takes the focus (it is announced with its title): Firefox ignores focus() on a <legend> that has just become visible
+    if (focus && !editor) steps[k].focus();
+  };
+  var firstInvalid = function (k) {
+    var gs = steps[k].querySelectorAll('.cc-wz-group[data-req="1"]'), g, bx, any, j;
+    for (g = 0; g < gs.length; g++) {
+      bx = gs[g].querySelectorAll('input[type="checkbox"]');
+      any = false;
+      for (j = 0; j < bx.length; j++) { if (bx[j].checked) any = true; }
+      if (bx.length) bx[0].setCustomValidity(any ? '' : 'Please choose at least one option.');
+    }
+    var els = steps[k].querySelectorAll('input, select, textarea');
+    for (j = 0; j < els.length; j++) { if (!els[j].checkValidity()) return els[j]; }
+    return null;
+  };
+  back.addEventListener('click', function () { show(cur - 1, true); });
+  next.addEventListener('click', function () {
+    var bad = editor ? null : firstInvalid(cur);
+    if (bad) { bad.reportValidity(); return; }
+    show(cur + 1, true);
+  });
+  form.addEventListener('submit', function (e) {
+    if (editor) { e.preventDefault(); return; }
+    var bad, k;
+    if (cur < n - 1) {
+      e.preventDefault();
+      bad = firstInvalid(cur);
+      if (bad) bad.reportValidity(); else show(cur + 1, true);
+      return;
+    }
+    for (k = 0; k < n; k++) {
+      bad = firstInvalid(k);
+      if (bad) { e.preventDefault(); show(k, false); bad.reportValidity(); return; }
+    }
+  });
+  show(0, false);
+}
+// cc-wizard:end
+
 // ---- the editor canvas (scripts injected into the canvas HTML don't run: these wrappers do the same work) ----
 
 // Code Snippet: highlight and copy button
@@ -194,5 +326,11 @@ export function initTocBlock(root) {
   return () => { mo.disconnect(); win.clearTimeout(timer); };
 }
 
+// Pricing Calculator: live total
+export function initCalcBlock(root) { if (root) ccCalcInit(root); }
+
+// Multi-step Form: the steps can be walked through to design them; nothing is validated or sent from the editor
+export function initWizardBlock(root) { if (root) ccWizardInit(root, true); }
+
 // For tests: the highlighter on its own
-export { ccTokens };
+export { ccTokens, ccPlain };

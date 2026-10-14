@@ -618,6 +618,9 @@ function cc_strip_code_surfaces(&$blocks) {
     unset($b);
 }
 
+// Blocks that send what visitors write to an email address: that address is an admin setting (see cc_keep_code_surfaces,
+// cc_redact_blocks)
+const CC_FORM_BLOCKS = ['FORM', 'WIZARD'];
 // Non-admin save: the code an admin put in (Custom HTML blocks, custom CSS/JS, a form's receiving email) is KEPT as it was saved,
 // matched by block id, instead of being wiped; an editor can't add or change code, only move or delete
 // those blocks. $previous = the blocks currently stored (array or JSON string).
@@ -645,9 +648,9 @@ function cc_keep_code_surfaces(&$blocks, $previous) {
             if (($b['type'] ?? '') === 'HTML') {
                 $b['content']['code'] = ($old && $old['type'] === 'HTML' && is_string($old['code'])) ? $old['code'] : '';
             }
-            // A form's own receiving email is an admin setting too (where the site's messages go)
-            if (($b['type'] ?? '') === 'FORM') {
-                $b['content']['email'] = ($old && $old['type'] === 'FORM' && is_string($old['email'])) ? $old['email'] : '';
+            // A form's own receiving email is an admin setting too (where the site's messages go): Form and Multi-step Form
+            if (in_array($b['type'] ?? '', CC_FORM_BLOCKS, true)) {
+                $b['content']['email'] = ($old && $old['type'] === $b['type'] && is_string($old['email'])) ? $old['email'] : '';
             }
             foreach (['customCss', 'customJs'] as $k) {
                 if ($old && is_string($old[$k]) && $old[$k] !== '') $b['content'][$k] = $old[$k]; else unset($b['content'][$k]);
@@ -847,7 +850,7 @@ function cc_redact_blocks(&$blocks) {
     if (isset($blocks['type']) && is_string($blocks['type'])) { $one = [&$blocks]; cc_redact_blocks($one); return; }
     foreach ($blocks as &$b) {
         if (!is_array($b)) continue;
-        if (($b['type'] ?? '') === 'FORM' && isset($b['content']) && is_array($b['content']) && array_key_exists('email', $b['content'])) $b['content']['email'] = '';
+        if (in_array($b['type'] ?? '', CC_FORM_BLOCKS, true) && isset($b['content']) && is_array($b['content']) && array_key_exists('email', $b['content'])) $b['content']['email'] = '';
         if (isset($b['children']) && is_array($b['children'])) cc_redact_blocks($b['children']);
     }
     unset($b);

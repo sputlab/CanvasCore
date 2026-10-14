@@ -9,6 +9,7 @@
 // of structure and styles.
 
 import { effectClasses, buttonHover } from './effects.mjs';
+import { ccPlain } from './blockRuntime.mjs';
 
 export function escapeHtml(s) {
   return String(s ?? '')
@@ -145,6 +146,17 @@ const SHARE_NETS = [
   ['print', 'Print', SHARE_ICON('<path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>'), '#475569'],
   ['share', 'Share', SHARE_ICON('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>'), '#475569'],
 ];
+// Multi-step Form field types: the Form block's, plus choices. Twin of CC_WIZARD_TYPES in compiler.php.
+const WIZARD_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date', 'select', 'radio', 'checkboxes', 'consent'];
+const WZ_INPUT = 'width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box;';
+const WZ_BTN = 'padding:12px 24px; border-radius:8px; font:700 15px/1 inherit; cursor:pointer;';
+// An amount: rounded half up at `dec` decimals, thousands separators, "1,234.56" or "1.234,56" (eu), the currency before
+// or after (with a no-break space). Twin of cc_money() in compiler.php and of money() in blockRuntime.mjs.
+function ccMoney(v, dec, eu, cur, after) {
+  let s = ccFmtNum(v, dec);
+  if (eu) s = s.replace(/[,.]/g, (ch) => (ch === ',' ? '.' : ','));
+  return after ? s + '\u00a0' + cur : cur + s;
+}
 // Code Snippet languages: [id, label]. Twin of CC_CODE_LANGS in compiler.php.
 const CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['json', 'JSON'], ['php', 'PHP'], ['shell', 'Shell'], ['text', '']];
 
@@ -1302,6 +1314,154 @@ export function renderBlock(block, opts = {}) {
         + (lineNums ? `<span class="cc-code-gutter" aria-hidden="true" style="flex:0 0 auto; padding:16px 12px 16px 16px; text-align:right; white-space:pre; user-select:none; color:${pal[4]};">${gutter}</span>` : '')
         + `<pre class="cc-code-pre" style="flex:1; margin:0; padding:16px; white-space:pre; tab-size:2; font:inherit;"><code class="cc-code-code" style="font:inherit;">${escapeHtml(code)}</code></pre>`
         + `</div></div>\n</figure>\n`;
+    }
+
+    case 'PRICE_CALCULATOR': {
+      const c = content;
+      const objs = (v) => (Array.isArray(v) ? v : []).filter((o) => o && typeof o === 'object');
+      const sliders = objs(c.sliders).slice(0, 6);
+      const addons = objs(c.addons).slice(0, 8);
+      const cur = [...ccStr(c.currency).trim()].slice(0, 6).join('');
+      const after = c.currencyPos === 'after';
+      const eu = c.numberFormat === 'eu';
+      const dec = ccInt(c.decimals, 0, 0, 2);
+      const base = ccNum(c.basePrice, 0, 1e7, 0);
+      const disc = ccNum(c.yearlyDiscount, 0, 90, 0);
+      const toggle = c.billingToggle === true;
+      const yearly = toggle && c.defaultBilling === 'yearly';
+      const f = yearly ? 12 * (1 - disc / 100) : 1;
+      const word = (v, d) => ccEsc([...(ccStr(v).trim() || d)].slice(0, 30).join(''));
+      const perM = ' / ' + word(c.periodMonth, 'month');
+      const perY = ' / ' + word(c.periodYear, 'year');
+      const saveTpl = ccEsc([...(ccStr(c.saveText).trim() || 'You save {amount} a year')].slice(0, 80).join(''));
+      const accent = ccColor(c.accent, 'var(--brand-color, #3b82f6)');
+      const card = c.layout !== 'plain';
+      const title = ccEsc(c.title);
+      const intro = ccBr(ccStr(c.intro));
+      const curHtml = escapeHtml(cur);   // the symbol goes into the page as text: escaped
+      const money = (v) => ccMoney(v, dec, eu, curHtml, after);
+      let total = base, controls = '', lines = '';
+      if (base > 0) lines += `<li class="cc-calc-line" data-line="base" style="display:flex; justify-content:space-between; gap:12px; font-size:14px; color:#475569; padding:4px 0;"><span class="cc-calc-line-label">${word(c.baseLabel, 'Base price')}</span><span class="cc-calc-line-amt">${money(base * f)}</span></li>`;
+      sliders.forEach((sl, i) => {
+        const min = ccNum(sl.min, -1e9, 1e9, 0);
+        let max = ccNum(sl.max, -1e9, 1e9, 100);
+        if (max <= min) max = min + 1;
+        const step = ccNum(sl.step, 0.01, 1e6, 1);
+        const val = Math.min(max, Math.max(min, ccNum(sl.value, -1e9, 1e9, min)));
+        const price = ccNum(sl.price, 0, 1e7, 0);
+        const incl = ccNum(sl.included, 0, 1e9, 0);
+        const unit = ccEsc([...ccStr(sl.unit).trim()].slice(0, 30).join(''));
+        const label = ccEsc(sl.label);
+        const cost = Math.max(0, val - incl) * price;
+        total += cost;
+        const sid = `${innerId}-s${i}`;
+        controls += `<div class="cc-calc-row" style="margin-bottom:22px;"><div class="cc-calc-head" style="display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; font-weight:600; font-size:15px; color:#0f172a;"><label for="${sid}">${label}</label><output class="cc-calc-val" for="${sid}" data-for="${sid}">${ccPlain(val)}${unit !== '' ? ' ' + unit : ''}</output></div>`
+          + `<input type="range" class="cc-calc-range" id="${sid}" min="${ccPlain(min)}" max="${ccPlain(max)}" step="${ccPlain(step)}" value="${ccPlain(val)}" data-price="${ccPlain(price)}" data-incl="${ccPlain(incl)}" data-unit="${unit}" data-line="s${i}" style="width:100%; accent-color:${accent};"></div>`;
+        lines += `<li class="cc-calc-line"${cost !== 0 ? '' : ' hidden'} data-line="s${i}" style="display:flex; justify-content:space-between; gap:12px; font-size:14px; color:#475569; padding:4px 0;"><span class="cc-calc-line-label">${label}</span><span class="cc-calc-line-amt">${money(cost * f)}</span></li>`;
+      });
+      addons.forEach((ad, i) => {
+        const price = ccNum(ad.price, 0, 1e7, 0);
+        const on = ad.checked === true;
+        const label = ccEsc(ad.label);
+        if (on) total += price;
+        controls += `<label class="cc-calc-addon-row" style="display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:15px; color:#0f172a; cursor:pointer;"><input type="checkbox" class="cc-calc-addon" data-price="${ccPlain(price)}" data-line="a${i}"${on ? ' checked' : ''} style="width:18px; height:18px; accent-color:${accent};"><span class="cc-calc-addon-label" style="flex:1;">${label}</span><span class="cc-calc-addon-price" style="color:#64748b; font-size:14px;">+ ${money(price)}${perM}</span></label>`;
+        lines += `<li class="cc-calc-line"${on ? '' : ' hidden'} data-line="a${i}" style="display:flex; justify-content:space-between; gap:12px; font-size:14px; color:#475569; padding:4px 0;"><span class="cc-calc-line-label">${label}</span><span class="cc-calc-line-amt">${money(price * f)}</span></li>`;
+      });
+      const saved = total * 12 - total * f;
+      const saveShown = yearly && saved > 0;
+      const btnText = ccEsc(c.buttonText);
+      const note = ccBr(ccStr(c.note));
+      const id = '#' + innerId;
+      const billing = toggle
+        ? `<div class="cc-calc-billing" role="radiogroup" aria-label="Billing period" style="display:inline-flex; padding:4px; background:#f1f5f9; border-radius:999px; margin-bottom:24px;">`
+          + `<label class="cc-calc-pill"><input type="radio" name="${innerId}-billing" value="monthly"${yearly ? '' : ' checked'}><span>${word(c.monthlyLabel, 'Monthly')}</span></label>`
+          + `<label class="cc-calc-pill"><input type="radio" name="${innerId}-billing" value="yearly"${yearly ? ' checked' : ''}><span>${word(c.yearlyLabel, 'Yearly')}${disc > 0 ? `<em class="cc-calc-badge"> -${ccPlain(disc)}%</em>` : ''}</span></label></div>`
+        : '';
+      return customCss + `<style>${id} .cc-calc-pill input{position:absolute;opacity:0;pointer-events:none}${id} .cc-calc-pill span{display:inline-block;padding:8px 18px;border-radius:999px;font-weight:600;font-size:14px;color:#475569;cursor:pointer}${id} .cc-calc-pill input:checked+span{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(15,23,42,0.15)}${id} .cc-calc-pill input:focus-visible+span{outline:2px solid ${accent};outline-offset:2px}${id} .cc-calc-badge{font-style:normal;color:${accent};font-weight:700}${id} .cc-calc-btn:hover{filter:brightness(.92)}${id} input[type=range]:focus-visible,${id} .cc-calc-addon:focus-visible{outline:2px solid ${accent};outline-offset:2px}</style>`
+        + `<div id="${innerId}" class="cc-calc${animClass}${innerClass}" data-base="${ccPlain(base)}" data-disc="${ccPlain(disc)}" data-dec="${dec}" data-fmt="${eu ? 'eu' : 'en'}" data-cur="${ccEsc(cur)}" data-pos="${after ? 'after' : 'before'}" data-per-m="${perM}" data-per-y="${perY}" data-save="${saveTpl}" style="${styleAttr}">\n`
+        + `<div class="cc-calc-card" style="${card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;'}">`
+        + (title !== '' ? `<div class="cc-calc-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">${title}</div>` : '')
+        + (intro !== '' ? `<p class="cc-calc-intro" style="margin:0 0 20px 0; font-size:15px; line-height:1.6; color:#475569;">${intro}</p>` : '')
+        + billing
+        + `<div class="cc-calc-controls">${controls}</div>`
+        + `<div class="cc-calc-summary" style="border-top:1px solid #e2e8f0; padding-top:18px; margin-top:8px;">`
+        + (lines !== '' ? `<ul class="cc-calc-lines" style="list-style:none; margin:0 0 12px 0; padding:0;">${lines}</ul>` : '')
+        + `<div class="cc-calc-total-row" role="status" aria-live="polite" aria-atomic="true" style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;"><span class="cc-calc-total-label" style="font-weight:700; font-size:15px; color:#0f172a;">${word(c.totalLabel, 'Estimated total')}</span><span><strong class="cc-calc-amount" style="font-size:40px; font-weight:800; line-height:1.1; color:#0f172a;">${money(total * f)}</strong><span class="cc-calc-per" style="font-size:15px; color:#64748b;">${yearly ? perY : perM}</span></span></div>`
+        + `<div class="cc-calc-save"${saveShown ? '' : ' hidden'} style="margin-top:6px; text-align:right; font-size:14px; font-weight:600; color:${accent};">${saveShown ? saveTpl.split('{amount}').join(money(saved)) : ''}</div>`
+        + (btnText !== '' ? `<a class="cc-calc-btn" href="${escapeHtml(resolveBlockUrl(ccStr(c.buttonUrl)))}" style="display:block; margin-top:20px; padding:14px 24px; text-align:center; border-radius:10px; background:${accent}; color:#ffffff; font-weight:700; text-decoration:none;">${btnText}</a>` : '')
+        + (note !== '' ? `<p class="cc-calc-note" style="margin:12px 0 0 0; font-size:13px; line-height:1.5; color:#64748b;">${note}</p>` : '')
+        + `</div></div>\n</div>\n`;
+    }
+
+    case 'WIZARD': {
+      const c = content;
+      const objs = (v) => (Array.isArray(v) ? v : []).filter((o) => o && typeof o === 'object');
+      const steps = objs(c.steps).slice(0, 8);
+      const n = steps.length;
+      const accent = ccColor(c.accent, 'var(--brand-color, #3b82f6)');
+      const dots = c.progress === 'steps';
+      const card = c.layout !== 'plain';
+      const text = (v, d, max) => ccEsc([...(ccStr(v).trim() || d)].slice(0, max).join(''));
+      const title = ccEsc(c.title);
+      const intro = ccBr(ccStr(c.intro));
+      const stepLabel = text(c.stepLabel, 'Step {n} of {total}', 60);
+      const successMsg = ccStr(c.successMsg).trim() || 'Thank you! We will be in touch.';
+      const formId = c.customId ? 'f_' + String(c.customId).replace(/[^a-zA-Z0-9_-]/g, '') : 'f_' + String(block.id ?? '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+      let fi = 0, stepsHtml = '', dotsHtml = '';
+      steps.forEach((st, si) => {
+        const fields = objs(st.fields).slice(0, 12);
+        const stTitle = ccEsc(st.title);
+        const desc = ccBr(ccStr(st.description));
+        let inner = '';
+        fields.forEach((f) => {
+          if (fi >= 40) return;
+          const name = 'field_' + fi, fid = `${innerId}-f${fi}`;
+          const label = ccEsc(f.label);
+          const type = WIZARD_TYPES.includes(f.type) ? f.type : 'text';
+          const req = f.required === true ? ' required' : '';
+          const opts = ccLines(ccStr(f.options)).slice(0, 20).map((o) => [...o].slice(0, 100).join(''));
+          fi++;
+          inner += `<input type="hidden" name="_label_${name}" value="${label}">\n`;
+          if (type === 'radio' || type === 'checkboxes') {
+            const radio = type === 'radio';
+            inner += `<fieldset class="cc-wz-field cc-wz-group" data-req="${!radio && req !== '' ? '1' : '0'}" style="border:0; margin:0 0 16px 0; padding:0; min-width:0;"><legend class="cc-wz-label" style="padding:0;">${label}</legend>`
+              + opts.map((o) => `<label class="cc-wz-opt" style="display:flex; align-items:center; gap:8px; margin:6px 0; font-size:15px; color:#0f172a;"><input type="${radio ? 'radio' : 'checkbox'}" name="${name}${radio ? '' : '[]'}" value="${escapeHtml(o)}"${radio ? req : ''} style="width:18px; height:18px; accent-color:${accent};"><span>${escapeHtml(o)}</span></label>`).join('')
+              + `</fieldset>\n`;
+          } else if (type === 'consent') {
+            inner += `<div class="cc-wz-field"><label class="cc-wz-opt" style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#475569;"><input type="checkbox" id="${fid}" name="${name}" value="Yes"${req} style="width:18px; height:18px; margin-top:2px; accent-color:${accent};"><span>${label}</span></label></div>\n`;
+          } else if (type === 'select') {
+            inner += `<div class="cc-wz-field"><label class="cc-wz-label" for="${fid}">${label}</label><select id="${fid}" name="${name}"${req} style="${WZ_INPUT}"><option value="">${text(f.placeholder, 'Choose an option', 60)}</option>`
+              + opts.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('') + `</select></div>\n`;
+          } else if (type === 'textarea') {
+            inner += `<div class="cc-wz-field"><label class="cc-wz-label" for="${fid}">${label}</label><textarea id="${fid}" name="${name}"${req} rows="4" style="${WZ_INPUT}"></textarea></div>\n`;
+          } else {
+            inner += `<div class="cc-wz-field"><label class="cc-wz-label" for="${fid}">${label}</label><input type="${type}" id="${fid}" name="${name}"${req} style="${WZ_INPUT}"></div>\n`;
+          }
+        });
+        stepsHtml += `<fieldset class="cc-wz-step" data-i="${si}" tabindex="-1" style="border:0; margin:0; padding:0; min-width:0;"><legend class="cc-wz-step-title" style="padding:0; font-size:20px; font-weight:700; color:#0f172a; margin-bottom:4px;">${stTitle !== '' ? stTitle : 'Step ' + (si + 1)}</legend>`
+          + (desc !== '' ? `<p class="cc-wz-step-desc" style="margin:0 0 16px 0; font-size:14px; color:#64748b;">${desc}</p>` : '')
+          + inner + `</fieldset>\n`;
+        dotsHtml += `<li class="cc-wz-dot${si === 0 ? ' is-current' : ''}"${si === 0 ? ' aria-current="step"' : ''}><span class="cc-wz-dot-n">${si + 1}</span><span class="cc-wz-dot-t">${stTitle !== '' ? stTitle : 'Step ' + (si + 1)}</span></li>`;
+      });
+      const pct = n > 0 ? (100 / n).toFixed(1) : '100.0';
+      const progress = `<div class="cc-wz-progress" hidden style="margin-bottom:24px;">`
+        + (dots ? `<ol class="cc-wz-dots" style="list-style:none; display:flex; gap:8px; margin:0 0 10px 0; padding:0;">${dotsHtml}</ol>` : `<div class="cc-wz-track" style="height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden;"><div class="cc-wz-fill" style="height:100%; width:${pct}%; background:${accent}; border-radius:999px;"></div></div>`)
+        + `<div class="cc-wz-count" aria-live="polite" style="margin-top:8px; font-size:13px; color:#64748b;">${stepLabel.split('{n}').join('1').split('{total}').join(String(n))}</div></div>`;
+      const id = '#' + innerId;
+      return customCss + `<style>${id} .cc-wz-label{display:block;margin-bottom:6px;font-weight:600;font-size:14px;color:#0f172a}${id} .cc-wz-field{margin-bottom:16px}${id} input:focus-visible,${id} select:focus,${id} textarea:focus{outline:2px solid ${accent};outline-offset:1px}`
+        + `${id} .cc-wz-dot{display:flex;align-items:center;gap:8px;flex:1;font-size:13px;color:#94a3b8}${id} .cc-wz-dot-n{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#e2e8f0;color:#475569;font-weight:700;flex-shrink:0}`
+        + `${id} .cc-wz-dot.is-current .cc-wz-dot-n,${id} .cc-wz-dot.is-done .cc-wz-dot-n{background:${accent};color:#fff}${id} .cc-wz-dot.is-current{color:#0f172a;font-weight:600}${id} .cc-wz-fill{transition:width .3s ease}${id} .cc-wz-step:focus{outline:none}${id} button:hover{filter:brightness(.94)}`
+        + `@media(max-width:600px){${id} .cc-wz-dot-t{display:none}${id} .cc-wz-card{padding:20px !important}}@media(prefers-reduced-motion:reduce){${id} .cc-wz-fill{transition:none}}</style>`
+        + `<div id="${innerId}" class="cc-wizard${animClass}${innerClass}" data-step-label="${stepLabel}" style="${styleAttr}">\n`
+        + `<div class="cc-wz-card" style="${card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;'}">`
+        + (title !== '' ? `<div class="cc-wz-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">${title}</div>` : '')
+        + (intro !== '' ? `<p class="cc-wz-intro" style="margin:0 0 20px 0; font-size:15px; line-height:1.6; color:#475569;">${intro}</p>` : '')
+        + progress
+        + `<form id="${formId}" class="cc-wz-form" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST">\n<input type="hidden" name="_form" value="${formId}">\n<input type="hidden" name="_success" value="${escapeHtml(successMsg)}">\n<input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">\n`
+        + stepsHtml
+        + `<div class="cc-wz-nav" style="display:flex; align-items:center; gap:10px; margin-top:24px;"><button type="button" class="cc-wz-back" hidden style="${WZ_BTN} background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;">${text(c.backText, 'Back', 30)}</button><span style="flex:1;"></span>`
+        + `<button type="button" class="cc-wz-next" hidden style="${WZ_BTN} background:${accent}; color:#ffffff; border:none;">${text(c.nextText, 'Next', 30)}</button>`
+        + `<button type="submit" class="cc-wz-submit" style="${WZ_BTN} background:${accent}; color:#ffffff; border:none;">${text(c.btnText, 'Send', 30)}</button></div>\n</form>\n</div>\n</div>\n`;
     }
 
     default:

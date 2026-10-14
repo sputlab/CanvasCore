@@ -1191,6 +1191,151 @@
         "width": "100%",
         "padding": "20px 0"
       }
+    },
+    "PRICE_CALCULATOR": {
+      "content": {
+        "title": "Estimate your price",
+        "intro": "Move the sliders to see what your plan would cost.",
+        "layout": "card",
+        "accent": "",
+        "currency": "\u20ac",
+        "currencyPos": "before",
+        "numberFormat": "en",
+        "decimals": 0,
+        "basePrice": 29,
+        "baseLabel": "Base plan",
+        "periodMonth": "month",
+        "periodYear": "year",
+        "billingToggle": true,
+        "defaultBilling": "monthly",
+        "monthlyLabel": "Monthly",
+        "yearlyLabel": "Yearly",
+        "yearlyDiscount": 20,
+        "saveText": "You save {amount} a year",
+        "sliders": [
+          {
+            "label": "Team members",
+            "unit": "people",
+            "min": 1,
+            "max": 50,
+            "step": 1,
+            "value": 5,
+            "included": 3,
+            "price": 8
+          },
+          {
+            "label": "Storage",
+            "unit": "GB",
+            "min": 10,
+            "max": 500,
+            "step": 10,
+            "value": 50,
+            "included": 10,
+            "price": 0.5
+          }
+        ],
+        "addons": [
+          {
+            "label": "Priority support",
+            "price": 49,
+            "checked": false
+          },
+          {
+            "label": "Custom domain",
+            "price": 9,
+            "checked": true
+          }
+        ],
+        "totalLabel": "Estimated total",
+        "buttonText": "Get started",
+        "buttonUrl": "",
+        "note": "Prices exclude VAT. This is an estimate, not a quote."
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "WIZARD": {
+      "content": {
+        "title": "Request a quote",
+        "intro": "Answer a few questions and we will get back to you.",
+        "progress": "bar",
+        "layout": "card",
+        "accent": "",
+        "stepLabel": "Step {n} of {total}",
+        "btnText": "Send request",
+        "nextText": "Next",
+        "backText": "Back",
+        "successMsg": "Thank you! We will be in touch.",
+        "email": "",
+        "steps": [
+          {
+            "title": "About you",
+            "description": "Who should we reply to?",
+            "fields": [
+              {
+                "label": "Name",
+                "type": "text",
+                "required": true,
+                "options": "",
+                "placeholder": ""
+              },
+              {
+                "label": "Email",
+                "type": "email",
+                "required": true,
+                "options": "",
+                "placeholder": ""
+              }
+            ]
+          },
+          {
+            "title": "Your project",
+            "description": "",
+            "fields": [
+              {
+                "label": "What do you need?",
+                "type": "radio",
+                "required": true,
+                "options": "A new website\nA redesign\nSomething else",
+                "placeholder": ""
+              },
+              {
+                "label": "Budget",
+                "type": "select",
+                "required": false,
+                "options": "Under 2,000\n2,000 - 5,000\nOver 5,000",
+                "placeholder": "Choose a range"
+              }
+            ]
+          },
+          {
+            "title": "Details",
+            "description": "Anything else we should know?",
+            "fields": [
+              {
+                "label": "Message",
+                "type": "textarea",
+                "required": false,
+                "options": "",
+                "placeholder": ""
+              },
+              {
+                "label": "I agree to the privacy policy",
+                "type": "consent",
+                "required": true,
+                "options": "",
+                "placeholder": ""
+              }
+            ]
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
     }
   }
 }

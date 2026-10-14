@@ -165,12 +165,30 @@ const fixtures = [
   { id: 'cn3', type: 'CODE_SNIPPET', styles: {}, content: { language: 'text', code: '' } },
   { id: 'cn4', type: 'CODE_SNIPPET', styles: {}, content: { language: 'js', copyButton: false, code: { o: 1 } } },
   { id: 'cn5', type: 'CODE_SNIPPET', styles: {}, content: {} },
+  { id: 'pc1', type: 'PRICE_CALCULATOR', styles: { width: '100%' }, content: { title: 'Prezzo', intro: 'a\nb', layout: 'card', accent: '#10b981', currency: '€', currencyPos: 'after', numberFormat: 'eu', decimals: 2, basePrice: 1234.5, baseLabel: 'Base', periodMonth: 'mese', periodYear: 'anno',
+      billingToggle: true, defaultBilling: 'yearly', monthlyLabel: 'Mensile', yearlyLabel: 'Annuale', yearlyDiscount: 15, saveText: 'Risparmi {amount}', totalLabel: 'Totale', buttonText: 'Vai', buttonUrl: 'contatti/index.html', note: 'x\ny',
+      sliders: [{ label: 'Utenti', unit: 'utenti', min: 1, max: 100, step: 1, value: 25, included: 5, price: 7.25 }, { label: 'Spazio', unit: 'GB', min: 0, max: 1, step: 0.1, value: 0.5, included: 0, price: 100 }],
+      addons: [{ label: 'Supporto', price: 49.99, checked: true }, { label: 'Dominio', price: 9, checked: false }] } },
+  { id: 'pc2', type: 'PRICE_CALCULATOR', styles: {}, content: { title: '<b>x</b>', currency: '<script>x</script>12345678', currencyPos: 'weird', numberFormat: 'xx', decimals: 99, basePrice: -5, accent: 'red;}', billingToggle: 'yes', defaultBilling: 'yearly', yearlyDiscount: 999,
+      sliders: [{ label: '<i>a</i>', unit: '<b>u</b>', min: 50, max: 10, step: 0, value: 999, included: -3, price: -2 }, 'junk', null, { min: 'a', max: 'b', step: 'c', value: 'd', price: 'e' }],
+      addons: [{ label: ['x'], price: 'y', checked: 'yes' }, 7], buttonText: 'B', buttonUrl: 'javascript:alert(1)', note: { o: 1 } } },
+  { id: 'pc3', type: 'PRICE_CALCULATOR', styles: {}, content: {} },
+  { id: 'pc4', type: 'PRICE_CALCULATOR', styles: {}, content: { layout: 'plain', billingToggle: true, yearlyDiscount: 0, defaultBilling: 'yearly', basePrice: 10, currency: '$', sliders: [] } },
+  { id: 'wz1', type: 'WIZARD', styles: { width: '100%' }, content: { title: 'Quote', intro: 'a\nb', progress: 'steps', layout: 'card', accent: '#ef4444', stepLabel: 'Passo {n} di {total}', btnText: 'Invia', nextText: 'Avanti', backText: 'Indietro', successMsg: 'Grazie', email: 'a@b.it', steps: [
+      { title: 'You', description: 'Who?', fields: [{ label: 'Name', type: 'text', required: true }, { label: 'Email', type: 'email', required: true }, { label: 'Phone', type: 'tel' }] },
+      { title: 'Project', fields: [{ label: 'Need', type: 'radio', required: true, options: 'A\nB\n\n  C  ' }, { label: 'Budget', type: 'select', options: 'x\ny', placeholder: 'Pick' }, { label: 'Extras', type: 'checkboxes', required: true, options: 'One\nTwo' }] },
+      { title: '', fields: [{ label: 'Message', type: 'textarea' }, { label: 'Agree', type: 'consent', required: true }, { label: 'Date', type: 'date' }, { label: 'N', type: 'number' }, { label: 'URL', type: 'url' }] }] } },
+  { id: 'wz2', type: 'WIZARD', styles: {}, content: { title: '<b>x</b>', progress: 'evil', layout: 'plain', accent: 'red;}', customId: 'My Form!', successMsg: '"><script>x</script>', steps: [
+      { title: '<img src=x onerror=a>', description: { o: 1 }, fields: [{ label: '"><b>', type: 'evil', required: 'yes' }, 'junk', null, { label: ['x'], type: 'select', options: Array.from({ length: 30 }, (_, i) => 'opt' + i).join('\n') }] }, 'junk', null,
+      { fields: 'nope' }] } },
+  { id: 'wz3', type: 'WIZARD', styles: {}, content: {} },
+  { id: 'wz4', type: 'WIZARD', styles: {}, content: { steps: [{ title: 'Only', fields: [{ label: 'A', type: 'text' }] }] } },
 ];
 
 // Fixtures from the REAL DEFAULTS (blocks.json): exactly what the editor creates with addBlock.
 {
   const defs = JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks.json', import.meta.url)), 'utf-8'));
-  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET']) {
+  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD']) {
     const def = defs.types[type];
     if (!def) { console.error(`blocks.json: type ${type} is missing`); process.exit(1); }
     fixtures.push({ id: 'def_' + type.toLowerCase(), type, styles: { ...(defs._baseStyles || {}), ...(def.styles || {}) }, content: JSON.parse(JSON.stringify(def.content || {})) });
@@ -234,7 +252,7 @@ function diff(a, b, path = '') {
 
 // For these blocks the generated CSS carries LOGIC (radio tabs, open state, responsive):
 // besides the structure we also compare the text of the <style> tags.
-const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET']);
+const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD']);
 function styleTexts(html) {
   const $ = load(`<div id="__root__">${html}</div>`, null, false);
   return $('style').map((_, e) => $(e).text().replace(/\s+/g, ' ').replace(/:\s+/g, ':').replace(/,\s+/g, ',').trim()).get();

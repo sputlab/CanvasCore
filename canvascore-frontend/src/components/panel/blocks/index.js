@@ -43,6 +43,8 @@ import HotspotsPanel from './HotspotsPanel';
 import TableOfContentsPanel from './TableOfContentsPanel';
 import ShareBarPanel from './ShareBarPanel';
 import CodeSnippetPanel from './CodeSnippetPanel';
+import PriceCalculatorPanel from './PriceCalculatorPanel';
+import WizardPanel from './WizardPanel';
 
 export const CONTENT_PANELS = {
   ACCORDION: AccordionTabsPanel,
@@ -92,4 +94,6 @@ export const CONTENT_PANELS = {
   TABLE_OF_CONTENTS: TableOfContentsPanel,
   SHARE_BAR: ShareBarPanel,
   CODE_SNIPPET: CodeSnippetPanel,
+  PRICE_CALCULATOR: PriceCalculatorPanel,
+  WIZARD: WizardPanel,
 };

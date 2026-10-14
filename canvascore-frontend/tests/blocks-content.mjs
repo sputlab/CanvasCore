@@ -446,12 +446,12 @@ section('Placeholder images survive saving');
 }
 
 // =============================================================== batch 3: scripts shared by the editor canvas and published pages
-section('Shared scripts (Code Snippet, Table of Contents, Share Bar)');
+section('Shared scripts (Code Snippet, Table of Contents, Share Bar, Price Calculator, Multi-step Form)');
 const RUNTIME_SRC = readFileSync(new URL('../src/render/blockRuntime.mjs', import.meta.url), 'utf-8');
 const COMPILER_SRC = readFileSync(new URL('../../canvascore-admin/compiler.php', import.meta.url), 'utf-8');
 const regionOf = (src, name) => { const m = src.match(new RegExp(`// cc-${name}:begin\\n[\\s\\S]*?// cc-${name}:end\\n`)); return m ? m[0] : null; };
 {
-  for (const name of ['hl', 'code', 'toc', 'share']) {
+  for (const name of ['hl', 'code', 'toc', 'share', 'calc', 'wizard']) {
     const a = regionOf(RUNTIME_SRC, name), b = regionOf(COMPILER_SRC, name);
     check(`"${name}": the text in the compiler is identical to the editor's (blockRuntime.mjs)`, !!a && a === b);
     check(`"${name}": nothing in it can end or confuse a <script> element`, !!a && !/<\/script|<!--|-->/i.test(a));
@@ -703,6 +703,153 @@ section('HOTSPOTS');
   check('published: Escape closes it', !pinEls[2].classList.contains('is-open') && btns[2].getAttribute('aria-expanded') === 'false');
   p.click(btns[3]); p.click(p.doc.body);
   check('published: a click anywhere else closes it', !pinEls[3].classList.contains('is-open'));
+}
+
+// =============================================================== PRICE_CALCULATOR
+section('PRICE_CALCULATOR');
+const phpReg = (type, content, id = 'tb') => JSON.parse(execFileSync('php', [fileURLToPath(new URL('./render_registry.php', import.meta.url))], { input: JSON.stringify({ id, type, styles: {}, content }) }).toString());
+{
+  const calc = { title: 'Estimate', basePrice: 29, currency: '€', periodMonth: 'month', billingToggle: true, yearlyDiscount: 20, sliders: [
+    { label: 'Team', unit: 'people', min: 1, max: 50, step: 1, value: 5, included: 3, price: 8 }, { label: 'Storage', unit: 'GB', min: 10, max: 500, step: 10, value: 50, included: 10, price: 0.5 }],
+    addons: [{ label: 'Support', price: 49, checked: false }, { label: 'Domain', price: 9, checked: true }], buttonText: 'Start', buttonUrl: 'contatti/index.html', note: 'Excl. VAT' };
+  const h = php('PRICE_CALCULATOR', calc);
+  const d = $(h);
+  // 29 base + (5-3)*8 = 16 + (50-10)*0.5 = 20 + domain 9 = 74
+  check('the starting total is worked out on the server: base + sliders beyond their free units + ticked add-ons', d('.cc-calc-amount').text() === '€74' && d('.cc-calc-per').text() === ' / month', d('.cc-calc-amount').text());
+  check('every slider has its range, step, price, free units, unit and value showing', d('.cc-calc-range').length === 2 && d('.cc-calc-range').eq(0).attr('min') === '1' && d('.cc-calc-range').eq(0).attr('max') === '50' && d('.cc-calc-range').eq(1).attr('step') === '10' && d('.cc-calc-range').eq(1).attr('data-price') === '0.5' && d('.cc-calc-range').eq(0).attr('data-incl') === '3' && d('.cc-calc-val').eq(0).text() === '5 people' && d('.cc-calc-val').eq(1).text() === '50 GB');
+  check('each slider is labelled and its value is an <output> tied to it (accessible names)', d('label[for="tb-s0"]').text() === 'Team' && d('output.cc-calc-val').eq(0).attr('for') === 'tb-s0');
+  check('the breakdown shows the base price, the sliders that cost something and the ticked add-ons; unticked ones are hidden', d('.cc-calc-line').map((_, e) => d(e).attr('data-line') + (d(e).attr('hidden') !== undefined ? '(hidden)' : '')).get().join() === 'base,s0,s1,a0(hidden),a1' && d('.cc-calc-line-amt').map((_, e) => d(e).text()).get().join() === '€29,€16,€20,€49,€9');
+  check('add-ons list their monthly price, and are ticked as set', d('.cc-calc-addon-price').eq(0).text() === '+ €49 / month' && d('.cc-calc-addon').eq(1).attr('checked') !== undefined && d('.cc-calc-addon').eq(0).attr('checked') === undefined);
+  check('the monthly / yearly switch is a real radio group (with the discount shown) and monthly is chosen', d('.cc-calc-billing').attr('role') === 'radiogroup' && d('.cc-calc-billing input').length === 2 && d('.cc-calc-billing input[value="monthly"]').attr('checked') !== undefined && d('.cc-calc-badge').text().trim() === '-20%');
+  check('the button goes to the internal page; the note is shown', d('.cc-calc-btn').attr('href') === '{{BASE_URL}}contatti/' && d('.cc-calc-note').text() === 'Excl. VAT');
+  const yr = $(php('PRICE_CALCULATOR', { ...calc, defaultBilling: 'yearly' }));
+  // 74 * 12 * 0.8 = 710.4 → €710; without discount 888 → saves 177.6 → €178
+  check('shown yearly: 12 months minus the discount, "/ year", and what it saves', yr('.cc-calc-amount').text() === '€710' && yr('.cc-calc-per').text() === ' / year' && yr('.cc-calc-save').attr('hidden') === undefined && yr('.cc-calc-save').text() === 'You save €178 a year' && yr('.cc-calc-line-amt').eq(0).text() === '€278');
+  check('…monthly: no saving message', d('.cc-calc-save').attr('hidden') !== undefined && d('.cc-calc-save').text() === '');
+  check('no switch without the option (and never yearly then)', $(php('PRICE_CALCULATOR', { ...calc, billingToggle: false, defaultBilling: 'yearly' }))('.cc-calc-billing').length === 0 && $(php('PRICE_CALCULATOR', { ...calc, billingToggle: false, defaultBilling: 'yearly' }))('.cc-calc-amount').text() === '€74');
+  const fm = (extra) => $(php('PRICE_CALCULATOR', { basePrice: 1234567.891, currency: '€', ...extra }))('.cc-calc-amount').text();
+  check('number formats: 1,234,568 and 1.234.568,89 with decimals; the currency before or after (with a no-break space)', fm({}) === '€1,234,568' && fm({ decimals: 2 }) === '€1,234,567.89' && fm({ decimals: 2, numberFormat: 'eu' }) === '€1.234.567,89' && fm({ decimals: 2, numberFormat: 'eu', currencyPos: 'after' }) === '1.234.567,89 €');
+  check('amounts round half up (2.675 → 2.68, 0.005 → 0.01)', $(php('PRICE_CALCULATOR', { basePrice: 2.675, decimals: 2 }))('.cc-calc-amount').text() === '2.68' && $(php('PRICE_CALCULATOR', { basePrice: 0.005, decimals: 2 }))('.cc-calc-amount').text() === '0.01');
+  const bad = php('PRICE_CALCULATOR', { title: '<img src=x onerror=a>', currency: '<script>x</script>', basePrice: -5, decimals: 99, accent: 'red;}', billingToggle: 'yes', yearlyDiscount: 999, buttonText: 'B', buttonUrl: 'javascript:alert(1)',
+    sliders: [{ label: '<i>a</i>', unit: '<b>u</b>', min: 50, max: 10, step: 0, value: 999, included: -3, price: -2 }, 'junk', null], addons: [{ label: ['x'], price: 'y', checked: 'yes' }, 7] });
+  const bd = $(bad);
+  check('hostile values: everything escaped, no javascript: link, unsafe color replaced', !/<img src=x|<script>x|<i>a|<b>u/.test(bad) && !/href="javascript:/i.test(bad) && !/red;\}/.test(bad));
+  // the currency symbol is shown inside every amount: markup in it must stay text (6 characters are enough for "<!--" or "<b>")
+  for (const [name, fn] of [['PHP', php], ['the editor', js]]) {
+    const cm = $(fn('PRICE_CALCULATOR', { basePrice: 5, currency: '<!--', sliders: [{ label: 'x', min: 0, max: 9, step: 1, value: 2, price: 1 }], addons: [{ label: 'y', price: 3, checked: true }] }));
+    const bm = $(fn('PRICE_CALCULATOR', { basePrice: 5, currency: '<b>X</b>' }));
+    check(`${name}: a currency like "<!--" or "<b>" stays visible text in every amount, and the rest of the block is intact`, cm('.cc-calc-amount').text() === '<!--10' && cm('.cc-calc-line-amt').map((_, e) => cm(e).text()).get().join() === '<!--5,<!--2,<!--3' && cm('.cc-calc-btn, .cc-calc-summary').length >= 1 && bm('.cc-calc-amount').text() === '<b>X</5' && bm('.cc-calc-amount b').length === 0);
+  }
+  check('odd numbers are tamed: a negative price becomes 0, decimals ≤ 2, a switch needs exactly true, a slider with min ≥ max still works, value is kept inside the range', bd('.cc-calc-billing').length === 0 && /data-dec="2"/.test(bad) && bd('.cc-calc-range').attr('min') === '50' && bd('.cc-calc-range').attr('max') === '51' && bd('.cc-calc-range').attr('value') === '51' && bd('.cc-calc-range').attr('data-price') === '0' && bd('.cc-calc-amount').text() === '<scrip0.00' && bd('.cc-calc-range').length === 1 && bd('.cc-calc-addon').length === 1);
+  check('at most 6 sliders and 8 add-ons; the currency is cut at 6 characters', $(php('PRICE_CALCULATOR', { sliders: Array.from({ length: 9 }, () => ({ label: 'x' })), addons: Array.from({ length: 12 }, () => ({ label: 'y' })) }))('.cc-calc-range').length === 6 && $(php('PRICE_CALCULATOR', { addons: Array.from({ length: 12 }, () => ({ label: 'y' })) }))('.cc-calc-addon').length === 8 && /data-cur="12345678"/.test(php('PRICE_CALCULATOR', { currency: '12345678' })) === false);
+  // the server and the editor produce the same numbers in every text
+  const texts = (html) => { const q = $(html); return ['.cc-calc-amount', '.cc-calc-per', '.cc-calc-save', '.cc-calc-line-amt', '.cc-calc-val', '.cc-calc-addon-price'].map((sel) => q(sel).map((_, e) => q(e).text()).get().join('|')).join(' # '); };
+  const variants = [calc, { ...calc, defaultBilling: 'yearly', numberFormat: 'eu', decimals: 2, currencyPos: 'after' }, { basePrice: 1234.5, decimals: 1, sliders: [{ label: 'x', min: 0, max: 1, step: 0.1, value: 0.5, price: 100 }], addons: [{ label: 'a', price: 49.99, checked: true }] }, { basePrice: 10, billingToggle: true, defaultBilling: 'yearly', yearlyDiscount: 0 }];
+  check('PHP and the editor\'s renderer write exactly the same amounts, units and labels', variants.every((v) => texts(php('PRICE_CALCULATOR', v)) === texts(js('PRICE_CALCULATOR', v))), variants.map((v) => texts(php('PRICE_CALCULATOR', v)) === texts(js('PRICE_CALCULATOR', v))).join());
+  check('the attributes the script reads are the same on both sides', ['data-base', 'data-disc', 'data-dec', 'data-fmt', 'data-cur', 'data-pos', 'data-per-m', 'data-per-y', 'data-save'].every((a) => variants.every((v) => $(php('PRICE_CALCULATOR', v))('.cc-calc').attr(a) === $(js('PRICE_CALCULATOR', v))('.cc-calc').attr(a))));
+
+  // the published script
+  const p = pub(php('PRICE_CALCULATOR', calc));
+  const amount = () => p.doc.querySelector('.cc-calc-amount').textContent;
+  const setRange = (i, v) => { const r = p.doc.querySelectorAll('.cc-calc-range')[i]; r.value = String(v); r.dispatchEvent(new p.win.Event('input', { bubbles: true })); };
+  const lineAmt = (k) => p.doc.querySelector(`.cc-calc-line[data-line="${k}"]`);
+  check('published: starting numbers are unchanged by the script (it agrees with the server)', amount() === '€74' && p.doc.querySelectorAll('.cc-calc-line-amt')[1].textContent === '€16');
+  setRange(0, 13);   // (13-3)*8 = 80 → 29+80+20+9 = 138
+  check('published: moving a slider updates the value shown, its line and the total at once', amount() === '€138' && p.doc.querySelector('.cc-calc-val').textContent === '13 people' && lineAmt('s0').querySelector('.cc-calc-line-amt').textContent === '€80');
+  setRange(0, 2);    // inside the free units: costs nothing → line hidden
+  check('published: a slider inside its free units costs nothing and its line disappears', amount() === '€58' && lineAmt('s0').hidden === true);
+  const sup = p.doc.querySelectorAll('.cc-calc-addon')[0]; sup.checked = true; sup.dispatchEvent(new p.win.Event('change', { bubbles: true }));
+  check('published: ticking an add-on adds it and shows its line', amount() === '€107' && lineAmt('a0').hidden === false);
+  const yearlyRadio = p.doc.querySelector('.cc-calc-billing input[value="yearly"]'); yearlyRadio.checked = true; yearlyRadio.dispatchEvent(new p.win.Event('change', { bubbles: true }));
+  // (29 + 0 + 20 + 49 + 9) = 107 → *12*0.8 = 1027.2
+  check('published: switching to yearly shows the yearly total, "/ year", every line scaled, and the saving', amount() === '€1,027' && p.doc.querySelector('.cc-calc-per').textContent === ' / year' && lineAmt('base').querySelector('.cc-calc-line-amt').textContent === '€278' && p.doc.querySelector('.cc-calc-save').hidden === false && p.doc.querySelector('.cc-calc-save').textContent === 'You save €257 a year', p.doc.querySelector('.cc-calc-save').textContent);
+  const monthlyRadio = p.doc.querySelector('.cc-calc-billing input[value="monthly"]'); monthlyRadio.checked = true; yearlyRadio.checked = false; monthlyRadio.dispatchEvent(new p.win.Event('change', { bubbles: true }));
+  check('published: and back to monthly (the saving message goes away)', amount() === '€107' && p.doc.querySelector('.cc-calc-per').textContent === ' / month' && p.doc.querySelector('.cc-calc-save').hidden === true);
+  const eu = pub(php('PRICE_CALCULATOR', { basePrice: 1000, decimals: 2, numberFormat: 'eu', currencyPos: 'after', currency: '€', sliders: [{ label: 'x', min: 0, max: 100, step: 1, value: 0, price: 1234.56 }] }));
+  const er = eu.doc.querySelector('.cc-calc-range'); er.value = '2'; er.dispatchEvent(new eu.win.Event('input', { bubbles: true }));
+  check('published: the script formats like the server (1.000,00 € → 3.469,12 €)', eu.doc.querySelector('.cc-calc-amount').textContent === '3.469,12 €', eu.doc.querySelector('.cc-calc-amount').textContent);
+  const dec = pub(php('PRICE_CALCULATOR', { sliders: [{ label: 'x', unit: 'kg', min: 0, max: 1, step: 0.1, value: 0.5, price: 10 }] }));
+  const dr = dec.doc.querySelector('.cc-calc-range'); dr.value = '0.7'; dr.dispatchEvent(new dec.win.Event('input', { bubbles: true }));
+  check('published: decimal slider values read cleanly (0.7 kg), the total follows', dec.doc.querySelector('.cc-calc-val').textContent === '0.7 kg' && dec.doc.querySelector('.cc-calc-amount').textContent === '7', dec.doc.querySelector('.cc-calc-amount').textContent);
+}
+
+// =============================================================== WIZARD (multi-step form)
+section('WIZARD');
+{
+  const wiz = { title: 'Quote', intro: 'Tell us more', email: 'owner@corp.example', successMsg: 'Thanks!', steps: [
+    { title: 'You', description: 'Who?', fields: [{ label: 'Name', type: 'text', required: true }, { label: 'Email', type: 'email', required: true }] },
+    { title: 'Project', fields: [{ label: 'Need', type: 'radio', required: true, options: 'A\nB\n\n  C  ' }, { label: 'Budget', type: 'select', options: 'x\ny', placeholder: 'Pick' }, { label: 'Extras', type: 'checkboxes', required: true, options: 'One\nTwo' }] },
+    { title: '', fields: [{ label: 'Message', type: 'textarea' }, { label: 'I agree', type: 'consent', required: true }] }] };
+  const out = phpReg('WIZARD', wiz, 'wz-1');
+  const h = out.html; const d = $(h);
+  check('one fieldset per step (focusable by the script), with the step title as its legend (a number when there is none)', d('fieldset.cc-wz-step').length === 3 && d('fieldset.cc-wz-step').toArray().every((e) => d(e).attr('tabindex') === '-1') && d('.cc-wz-step-title').map((_, e) => d(e).text()).get().join('|') === 'You|Project|Step 3' && d('.cc-wz-step-desc').text() === 'Who?');
+  check('every field of every step is numbered in order (field_0 … field_6) and carries its label, so the form endpoint reads it like any form', d('[name^="_label_field_"]').map((_, e) => d(e).attr('name') + '=' + d(e).attr('value')).get().join() === '_label_field_0=Name,_label_field_1=Email,_label_field_2=Need,_label_field_3=Budget,_label_field_4=Extras,_label_field_5=Message,_label_field_6=I agree');
+  check('it posts to the same endpoint as the Form block, with the same hidden fields and honeypot', d('form').attr('action') === '{{BASE_URL}}canvascore-admin/submit_form.php' && d('form').attr('method') === 'POST' && d('input[name="_form"]').attr('value') === d('form').attr('id') && d('input[name="_hp"]').length === 1 && d('input[name="_success"]').attr('value') === 'Thanks!');
+  check('the form\'s registry entry holds the labels in the same order, the recipient and the message', JSON.stringify(out.registry[d('form').attr('id')]) === JSON.stringify({ to: 'owner@corp.example', labels: ['Name', 'Email', 'Need', 'Budget', 'Extras', 'Message', 'I agree'], success: 'Thanks!' }), JSON.stringify(out.registry));
+  check('the recipient never appears in the page itself', !/owner@corp\.example/.test(h));
+  check('text, email and long-text fields have their own control, label tied to it, and required where asked', d('input[type="text"][name="field_0"]').attr('required') !== undefined && d('label[for="wz-1-f0"]').text() === 'Name' && d('input[type="email"][name="field_1"]').length === 1 && d('textarea[name="field_5"]').attr('required') === undefined);
+  check('choose-one: radio buttons (trimmed choices, empty lines dropped), each required', d('input[type="radio"][name="field_2"]').map((_, e) => d(e).attr('value')).get().join() === 'A,B,C' && d('input[type="radio"][name="field_2"]').toArray().every((e) => d(e).attr('required') !== undefined));
+  check('drop-down: a first empty choice with the placeholder, then the choices', d('select[name="field_3"] option').map((_, e) => d(e).attr('value') + ':' + d(e).text()).get().join() === ':Pick,x:x,y:y');
+  check('choose-several: checkboxes sent as a list, in a group that is marked required (checked by the script)', d('input[type="checkbox"][name="field_4[]"]').length === 2 && d('input[name="field_4[]"]').attr('required') === undefined && d('.cc-wz-group').eq(1).attr('data-req') === '1' && d('.cc-wz-group').eq(0).attr('data-req') === '0');
+  check('agreement: one box whose text is the label', d('input[type="checkbox"][name="field_6"]').attr('required') !== undefined && d('input[name="field_6"]').attr('value') === 'Yes' && d('label.cc-wz-opt span').last().text() === 'I agree');
+  check('without the script every step shows (long form) and the step buttons are hidden; only "Send" is visible', d('.cc-wz-step[hidden]').length === 0 && d('.cc-wz-back').attr('hidden') !== undefined && d('.cc-wz-next').attr('hidden') !== undefined && d('.cc-wz-submit').attr('hidden') === undefined && d('.cc-wz-progress').attr('hidden') !== undefined);
+  check('progress: a bar at 1/3 and "Step 1 of 3" by default; numbered steps on request', /width:33\.3%/.test(h) && d('.cc-wz-count').text() === 'Step 1 of 3' && $(php('WIZARD', { ...wiz, progress: 'steps' }))('.cc-wz-dot').length === 3 && $(php('WIZARD', { ...wiz, progress: 'steps' }))('.cc-wz-fill').length === 0);
+  check('the step text can be translated ({n} and {total})', $(php('WIZARD', { ...wiz, stepLabel: 'Passo {n} di {total}' }))('.cc-wz-count').text() === 'Passo 1 di 3');
+  const id1 = d('form').attr('id'), other = phpReg('WIZARD', wiz, 'wz-2').html;
+  check('every wizard has its own form id (so its submissions are told apart); a custom id is used as given (cleaned)', id1 !== $(other)('form').attr('id') && /^f_[a-f0-9]{16}$/.test(id1) && $(php('WIZARD', { ...wiz, customId: 'My Form!' }))('form').attr('id') === 'f_MyForm');
+  const bad = phpReg('WIZARD', { title: '<b>x</b>', progress: 'evil', accent: 'red;}', successMsg: '"><script>x</script>', steps: [
+    { title: '<img src=x onerror=a>', description: { o: 1 }, fields: [{ label: '"><b>', type: 'evil', required: 'yes' }, 'junk', null, { label: ['x'], type: 'select', options: Array.from({ length: 30 }, (_, i) => 'opt' + i).join('\n') }] }, 'junk', null, { fields: 'nope' }] }, 'wz-3');
+  const bh = bad.html, bd = $(bh);
+  check('hostile values: escaped everywhere (labels, titles, options, messages), unsafe color replaced', !/<img src=x|<b>x|"><b>|"><script>/.test(bh) && !/red;\}/.test(bh) && bd('input[name="_success"]').attr('value') === '"><script>x</script>');
+  check('odd input is tamed: an unknown field type is a text field, "required" needs exactly true, junk steps and fields are skipped, at most 20 choices', bd('fieldset.cc-wz-step').length === 2 && bd('input[type="text"][name="field_0"]').length === 1 && bd('input[name="field_0"]').attr('required') === undefined && bd('select option').length === 21 && Object.values(bad.registry)[0].labels.length === 2);
+  check('limits: 8 steps, 12 fields a step, 40 fields in all', $(php('WIZARD', { steps: Array.from({ length: 12 }, () => ({ title: 't', fields: [{ label: 'a' }] })) }))('.cc-wz-step').length === 8 && $(php('WIZARD', { steps: [{ fields: Array.from({ length: 20 }, () => ({ label: 'a' })) }] }))('input[type="text"][name^="field_"]').length === 12 && $(php('WIZARD', { steps: Array.from({ length: 6 }, () => ({ fields: Array.from({ length: 12 }, () => ({ label: 'a' })) })) }))('input[name^="field_"]').length === 40);
+  check('an empty wizard is still a valid, harmless form', $(php('WIZARD', {}))('.cc-wz-step').length === 0 && $(php('WIZARD', {}))('form').length === 1);
+  const texts = (html) => { const q = $(html); return ['.cc-wz-title', '.cc-wz-intro', '.cc-wz-step-title', '.cc-wz-label', '.cc-wz-count', 'option', '.cc-wz-opt span', 'button'].map((sel) => q(sel).map((_, e) => q(e).text()).get().join('|')).join(' # '); };
+  check('PHP and the editor\'s renderer write the same texts, labels and choices', [wiz, { ...wiz, progress: 'steps', stepLabel: 'Passo {n}' }, {}].every((v) => texts(php('WIZARD', v)) === texts(js('WIZARD', v))));
+
+  // the published script
+  const mk = () => pub(php('WIZARD', wiz));
+  const p = mk();
+  const vis = () => [...p.doc.querySelectorAll('.cc-wz-step')].map((e) => !e.hidden).join();
+  const fill = (name, v) => { const e = p.doc.querySelector(`[name="${name}"]`); e.value = v; };
+  check('published: starts on step 1 only, with Next visible (not Back, not Send), the progress shown and "Step 1 of 3"', vis() === 'true,false,false' && p.doc.querySelector('.cc-wz-back').hidden === true && p.doc.querySelector('.cc-wz-next').hidden === false && p.doc.querySelector('.cc-wz-submit').hidden === true && p.doc.querySelector('.cc-wz-progress').hidden === false && p.doc.querySelector('.cc-wz-count').textContent === 'Step 1 of 3');
+  check('published: the browser\'s own checking is replaced by the script\'s (novalidate), since hidden steps can\'t be focused', p.doc.querySelector('form').hasAttribute('novalidate'));
+  p.click(p.doc.querySelector('.cc-wz-next'));
+  check('published: Next stays on the step while a required field is empty', vis() === 'true,false,false');
+  fill('field_0', 'Ann'); fill('field_1', 'not-an-email'); p.click(p.doc.querySelector('.cc-wz-next'));
+  check('published: …and while a value is not valid for its type (an email)', vis() === 'true,false,false');
+  fill('field_1', 'ann@example.com'); p.click(p.doc.querySelector('.cc-wz-next'));
+  check('published: with valid answers Next shows step 2, the bar moves to 67%, "Step 2 of 3", Back appears', vis() === 'false,true,false' && p.doc.querySelector('.cc-wz-fill').style.width === '66.7%' && p.doc.querySelector('.cc-wz-count').textContent === 'Step 2 of 3' && p.doc.querySelector('.cc-wz-back').hidden === false);
+  check('published: the new step takes the focus (announced with its title, for keyboard and screen reader users)', p.doc.activeElement === p.doc.querySelectorAll('.cc-wz-step')[1]);
+  p.click(p.doc.querySelector('.cc-wz-next'));
+  check('published: a required choose-one stays put until something is chosen', vis() === 'false,true,false');
+  p.doc.querySelector('input[name="field_2"][value="B"]').checked = true; p.click(p.doc.querySelector('.cc-wz-next'));
+  check('published: …and so does a required choose-several (at least one box)', vis() === 'false,true,false');
+  p.doc.querySelector('input[name="field_4[]"][value="Two"]').checked = true; p.doc.querySelector('input[name="field_4[]"][value="Two"]').dispatchEvent(new p.win.Event('change', { bubbles: true }));
+  p.click(p.doc.querySelector('.cc-wz-back'));
+  check('published: Back returns to step 1 with the answers kept', vis() === 'true,false,false' && p.doc.querySelector('[name="field_0"]').value === 'Ann');
+  p.click(p.doc.querySelector('.cc-wz-next')); p.click(p.doc.querySelector('.cc-wz-next'));
+  check('published: on the last step Send replaces Next and the bar is full', vis() === 'false,false,true' && p.doc.querySelector('.cc-wz-submit').hidden === false && p.doc.querySelector('.cc-wz-next').hidden === true && parseFloat(p.doc.querySelector('.cc-wz-fill').style.width) === 100);
+  const ev1 = new p.win.Event('submit', { bubbles: true, cancelable: true }); p.doc.querySelector('form').dispatchEvent(ev1);
+  check('published: sending is refused while the agreement box is not ticked', ev1.defaultPrevented === true);
+  p.doc.querySelector('[name="field_6"]').checked = true;
+  const ev2 = new p.win.Event('submit', { bubbles: true, cancelable: true }); p.doc.querySelector('form').dispatchEvent(ev2);
+  check('published: with everything valid the form is sent normally (not prevented)', ev2.defaultPrevented === false);
+  const q = mk();
+  const qvis = () => [...q.doc.querySelectorAll('.cc-wz-step')].map((e) => !e.hidden).join();
+  q.doc.querySelector('[name="field_0"]').value = 'Ann'; q.doc.querySelector('[name="field_1"]').value = 'a@b.co';
+  const ev3 = new q.win.Event('submit', { bubbles: true, cancelable: true }); q.doc.querySelector('form').dispatchEvent(ev3);
+  check('published: pressing Enter in the middle of the form moves on instead of sending it', ev3.defaultPrevented === true && qvis() === 'false,true,false');
+  const r2 = mk(); r2.doc.querySelector('[name="field_0"]').value = 'Ann'; r2.doc.querySelector('[name="field_1"]').value = 'a@b.co';
+  r2.click(r2.doc.querySelector('.cc-wz-next')); r2.doc.querySelector('input[name="field_2"][value="A"]').checked = true; r2.doc.querySelector('input[name="field_4[]"]').checked = true; r2.click(r2.doc.querySelector('.cc-wz-next'));
+  r2.doc.querySelector('input[name="field_2"][value="A"]').checked = false;   // an earlier answer gets lost somehow
+  const ev4 = new r2.win.Event('submit', { bubbles: true, cancelable: true }); r2.doc.querySelector('form').dispatchEvent(ev4);
+  check('published: sending checks every step and returns to the first one that is not valid', ev4.defaultPrevented === true && [...r2.doc.querySelectorAll('.cc-wz-step')].map((e) => !e.hidden).join() === 'false,true,false');
+  const single = pub(php('WIZARD', { steps: [{ title: 'Only', fields: [{ label: 'A', type: 'text' }] }] }));
+  check('published: a single step is just a form (no Next, no progress)', single.doc.querySelector('.cc-wz-next').hidden === true && single.doc.querySelector('.cc-wz-progress').hidden === true && single.doc.querySelector('.cc-wz-submit').hidden === false);
+  const dots = pub(php('WIZARD', { ...wiz, progress: 'steps' }));
+  dots.doc.querySelector('[name="field_0"]').value = 'A'; dots.doc.querySelector('[name="field_1"]').value = 'a@b.co'; dots.click(dots.doc.querySelector('.cc-wz-next'));
+  check('published: numbered steps mark the finished and the current one (aria-current)', [...dots.doc.querySelectorAll('.cc-wz-dot')].map((e) => /is-done/.test(e.className) ? 'done' : /is-current/.test(e.className) ? 'current' : 'todo').join() === 'done,current,todo' && dots.doc.querySelectorAll('.cc-wz-dot[aria-current="step"]').length === 1);
 }
 
 // =============================================================== LOGOS strip: logos repeat to cover the strip

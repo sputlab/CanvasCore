@@ -6,14 +6,14 @@ import { InlineRegions } from '../editor/RichText';
 import { Crown } from 'lucide-react';
 import { renderBlock, blockRoot } from '../render/renderBlock.mjs';
 import { fillLogosMarquee } from '../render/logosMarquee.mjs';
-import { initCodeBlock, initShareBlock, initTocBlock } from '../render/blockRuntime.mjs';
+import { initCodeBlock, initShareBlock, initTocBlock, initCalcBlock, initWizardBlock } from '../render/blockRuntime.mjs';
 import { safeHtml } from '../utils/safeHtml';
 import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
 
 const CONTAINERS = CONTAINER_TYPES;
 // Blocks whose canonical HTML is interactive in the canvas too (native details/radio, no JS):
 // a click opens/switches the tab AND selects the block (the event bubbles up to the frame).
-const INTERACTIVE = ['ACCORDION', 'TABS', 'BEFORE_AFTER', 'HOTSPOTS', 'CODE_SNIPPET'];
+const INTERACTIVE = ['ACCORDION', 'TABS', 'BEFORE_AFTER', 'HOTSPOTS', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD'];
 
 // Properties that define how the block is SIZED/POSITIONED as an item of its parent:
 // they go on the frame (so flex/grid behave as on the site), not duplicated in the content.
@@ -98,11 +98,13 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     return fillLogosMarquee(htmlRef.current && htmlRef.current.querySelector('.cc-logos'), block.content?.speed);
   }, [block]);
 
-  // Code Snippet, Share Bar and Table of Contents: the published scripts don't run on the canvas, so the same
+  // Code Snippet, Share Bar, Table of Contents, Price Calculator and Multi-step Form: the published scripts don't run on the canvas, so the same
   // functions (src/render/blockRuntime.mjs) are run here
   useEffect(() => {
     if (block.type === 'CODE_SNIPPET') initCodeBlock(htmlRef.current && htmlRef.current.querySelector('.cc-code'));
     else if (block.type === 'SHARE_BAR') initShareBlock(htmlRef.current && htmlRef.current.querySelector('.cc-share'));
+    else if (block.type === 'PRICE_CALCULATOR') initCalcBlock(htmlRef.current && htmlRef.current.querySelector('.cc-calc'));
+    else if (block.type === 'WIZARD') initWizardBlock(htmlRef.current && htmlRef.current.querySelector('.cc-wizard'));
     else if (block.type === 'TABLE_OF_CONTENTS') return initTocBlock(htmlRef.current && htmlRef.current.querySelector('.cc-toc'));
     return undefined;
   }, [block]);

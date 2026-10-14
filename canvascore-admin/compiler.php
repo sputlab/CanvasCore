@@ -258,6 +258,23 @@ function cc_share_nets() {
         ['share', 'Share', cc_share_icon('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>'), '#475569'],
     ];
 }
+// Multi-step Form field types: the Form block's, plus choices. Twin of WIZARD_TYPES in src/render/renderBlock.mjs.
+const CC_WIZARD_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date', 'select', 'radio', 'checkboxes', 'consent'];
+const CC_WZ_INPUT = 'width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box;';
+const CC_WZ_BTN = 'padding:12px 24px; border-radius:8px; font:700 15px/1 inherit; cursor:pointer;';
+// A number as plain text: at most 4 decimals, no trailing zeros ("25", "0.5"). Twin of ccPlain() in blockRuntime.mjs.
+function cc_plain($v) {
+    $s = number_format((float)$v, 4, '.', '');
+    if (strpos($s, '.') !== false) $s = rtrim(rtrim($s, '0'), '.');
+    return $s === '-0' ? '0' : $s;
+}
+// An amount: rounded half up at $dec decimals, thousands separators, "1,234.56" or "1.234,56" (eu), the currency before
+// or after (with a no-break space). Twin of ccMoney() in src/render/renderBlock.mjs and of money() in blockRuntime.mjs.
+function cc_money($v, $dec, $eu, $cur, $after) {
+    $s = cc_fmt_num($v, $dec);
+    if ($eu) $s = strtr($s, [',' => '.', '.' => ',']);
+    return $after ? $s . "\xC2\xA0" . $cur : $cur . $s;
+}
 // Code Snippet languages: [id, label]. Twin of CODE_LANGS in src/render/renderBlock.mjs.
 const CC_CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['json', 'JSON'], ['php', 'PHP'], ['shell', 'Shell'], ['text', '']];
 
@@ -430,6 +447,141 @@ function ccShareInit(root, editor) {
 }
 // cc-share:end
 (function(){var r=document.getElementById('%ID%');if(r)ccShareInit(r,false);})();
+CCJS;
+const CC_CALC_SCRIPT = <<<'CCJS'
+// cc-calc:begin
+function ccPlain(v) {
+  var s = v.toFixed(4);
+  if (s.indexOf('.') > -1) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  return s;
+}
+function ccCalcInit(root) {
+  var dec = parseInt(root.getAttribute('data-dec'), 10) || 0, eu = root.getAttribute('data-fmt') === 'eu';
+  var cur = root.getAttribute('data-cur') || '', after = root.getAttribute('data-pos') === 'after';
+  var base = parseFloat(root.getAttribute('data-base')) || 0, disc = parseFloat(root.getAttribute('data-disc')) || 0;
+  var perM = root.getAttribute('data-per-m') || '', perY = root.getAttribute('data-per-y') || '', saveTpl = root.getAttribute('data-save') || '';
+  var ranges = root.querySelectorAll('.cc-calc-range'), addons = root.querySelectorAll('.cc-calc-addon'), radios = root.querySelectorAll('.cc-calc-billing input');
+  var amount = root.querySelector('.cc-calc-amount'), per = root.querySelector('.cc-calc-per'), save = root.querySelector('.cc-calc-save'), i;
+  var money = function (v) {
+    var m = Math.pow(10, dec), r = Math.floor(Math.abs(v) * m + 0.5 + 1e-9) / m;
+    if (v < 0) r = -r;
+    if (r === 0) r = 0;
+    var parts = r.toFixed(dec).split('.'), s;
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    s = parts.join('.');
+    if (eu) s = s.replace(/[,.]/g, function (ch) { return ch === ',' ? '.' : ','; });
+    return after ? s + ' ' + cur : cur + s;
+  };
+  var line = function (key, cost, f, show) {
+    var li = root.querySelector('.cc-calc-line[data-line="' + key + '"]');
+    if (!li) return;
+    li.hidden = !show;
+    li.querySelector('.cc-calc-line-amt').textContent = money(cost * f);
+  };
+  var update = function () {
+    var yearly = false, total = base, f, k;
+    for (k = 0; k < radios.length; k++) { if (radios[k].checked && radios[k].value === 'yearly') yearly = true; }
+    f = yearly ? 12 * (1 - disc / 100) : 1;
+    line('base', base, f, true);
+    for (k = 0; k < ranges.length; k++) {
+      var inp = ranges[k], val = parseFloat(inp.value) || 0, unit = inp.getAttribute('data-unit') || '';
+      var cost = Math.max(0, val - (parseFloat(inp.getAttribute('data-incl')) || 0)) * (parseFloat(inp.getAttribute('data-price')) || 0);
+      total += cost;
+      var out = root.querySelector('.cc-calc-val[data-for="' + inp.id + '"]');
+      if (out) out.textContent = ccPlain(val) + (unit ? ' ' + unit : '');
+      line(inp.getAttribute('data-line'), cost, f, cost !== 0);
+    }
+    for (k = 0; k < addons.length; k++) {
+      var price = parseFloat(addons[k].getAttribute('data-price')) || 0;
+      if (addons[k].checked) total += price;
+      line(addons[k].getAttribute('data-line'), price, f, addons[k].checked);
+    }
+    if (amount) amount.textContent = money(total * f);
+    if (per) per.textContent = yearly ? perY : perM;
+    if (save) {
+      var saved = total * 12 - total * f;
+      save.hidden = !(yearly && saved > 0);
+      save.textContent = saveTpl.split('{amount}').join(money(saved));
+    }
+  };
+  for (i = 0; i < ranges.length; i++) ranges[i].addEventListener('input', update);
+  for (i = 0; i < addons.length; i++) addons[i].addEventListener('change', update);
+  for (i = 0; i < radios.length; i++) radios[i].addEventListener('change', update);
+  update();
+}
+// cc-calc:end
+(function(){var r=document.getElementById('%ID%');if(r)ccCalcInit(r);})();
+CCJS;
+const CC_WIZARD_SCRIPT = <<<'CCJS'
+// cc-wizard:begin
+function ccWizardInit(root, editor) {
+  var form = root.querySelector('.cc-wz-form');
+  if (!form || root.getAttribute('data-ready')) return;
+  var steps = root.querySelectorAll('.cc-wz-step'), n = steps.length, cur = 0, i;
+  var back = root.querySelector('.cc-wz-back'), next = root.querySelector('.cc-wz-next'), submit = root.querySelector('.cc-wz-submit');
+  var prog = root.querySelector('.cc-wz-progress'), fill = root.querySelector('.cc-wz-fill'), count = root.querySelector('.cc-wz-count');
+  var dots = root.querySelectorAll('.cc-wz-dot'), tpl = root.getAttribute('data-step-label') || 'Step {n} of {total}';
+  root.setAttribute('data-ready', '1');
+  form.setAttribute('novalidate', '');
+  var groups = root.querySelectorAll('.cc-wz-group[data-req="1"]');
+  var clear = function (boxes) { return function () { boxes[0].setCustomValidity(''); }; };
+  for (i = 0; i < groups.length; i++) {
+    var boxes = groups[i].querySelectorAll('input[type="checkbox"]');
+    for (var b = 0; b < boxes.length; b++) boxes[b].addEventListener('change', clear(boxes));
+  }
+  if (n < 2) return;
+  var show = function (k, focus) {
+    cur = k;
+    for (i = 0; i < n; i++) steps[i].hidden = i !== k;
+    back.hidden = k === 0;
+    next.hidden = k === n - 1;
+    submit.hidden = k !== n - 1;
+    if (prog) prog.hidden = false;
+    if (fill) fill.style.width = (((k + 1) / n) * 100).toFixed(1) + '%';
+    if (count) count.textContent = tpl.split('{n}').join(String(k + 1)).split('{total}').join(String(n));
+    for (i = 0; i < dots.length; i++) {
+      dots[i].className = 'cc-wz-dot' + (i < k ? ' is-done' : '') + (i === k ? ' is-current' : '');
+      if (i === k) dots[i].setAttribute('aria-current', 'step'); else dots[i].removeAttribute('aria-current');
+    }
+    // the step itself takes the focus (it is announced with its title): Firefox ignores focus() on a <legend> that has just become visible
+    if (focus && !editor) steps[k].focus();
+  };
+  var firstInvalid = function (k) {
+    var gs = steps[k].querySelectorAll('.cc-wz-group[data-req="1"]'), g, bx, any, j;
+    for (g = 0; g < gs.length; g++) {
+      bx = gs[g].querySelectorAll('input[type="checkbox"]');
+      any = false;
+      for (j = 0; j < bx.length; j++) { if (bx[j].checked) any = true; }
+      if (bx.length) bx[0].setCustomValidity(any ? '' : 'Please choose at least one option.');
+    }
+    var els = steps[k].querySelectorAll('input, select, textarea');
+    for (j = 0; j < els.length; j++) { if (!els[j].checkValidity()) return els[j]; }
+    return null;
+  };
+  back.addEventListener('click', function () { show(cur - 1, true); });
+  next.addEventListener('click', function () {
+    var bad = editor ? null : firstInvalid(cur);
+    if (bad) { bad.reportValidity(); return; }
+    show(cur + 1, true);
+  });
+  form.addEventListener('submit', function (e) {
+    if (editor) { e.preventDefault(); return; }
+    var bad, k;
+    if (cur < n - 1) {
+      e.preventDefault();
+      bad = firstInvalid(cur);
+      if (bad) bad.reportValidity(); else show(cur + 1, true);
+      return;
+    }
+    for (k = 0; k < n; k++) {
+      bad = firstInvalid(k);
+      if (bad) { e.preventDefault(); show(k, false); bad.reportValidity(); return; }
+    }
+  });
+  show(0, false);
+}
+// cc-wizard:end
+(function(){var r=document.getElementById('%ID%');if(r)ccWizardInit(r,false);})();
 CCJS;
 // Scrollytelling: the step in the middle of the screen decides which image shows ([data-active]); %ID% = the block's id
 const CC_STORY_SCRIPT = <<<'CCJS'
@@ -2274,6 +2426,166 @@ function render_block($block) {
                 . '<pre class="cc-code-pre" style="flex:1; margin:0; padding:16px; white-space:pre; tab-size:2; font:inherit;"><code class="cc-code-code" style="font:inherit;">' . htmlspecialchars($code) . '</code></pre>'
                 . '</div></div>' . "\n</figure>\n"
                 . '<script>' . str_replace('%ID%', $innerId, CC_CODE_SCRIPT) . "</script>\n";
+        }
+
+        case 'PRICE_CALCULATOR': {
+            $c = $block['content'] ?? [];
+            $objs = function ($v) { return array_values(array_filter(is_array($v) ? $v : [], 'is_array')); };
+            $sliders = array_slice($objs($c['sliders'] ?? []), 0, 6);
+            $addons = array_slice($objs($c['addons'] ?? []), 0, 8);
+            $cur = mb_substr(trim(cc_str($c['currency'] ?? '')), 0, 6);
+            $after = ($c['currencyPos'] ?? '') === 'after';
+            $eu = ($c['numberFormat'] ?? '') === 'eu';
+            $dec = cc_int($c['decimals'] ?? null, 0, 0, 2);
+            $base = cc_num($c['basePrice'] ?? null, 0, 1e7, 0);
+            $disc = cc_num($c['yearlyDiscount'] ?? null, 0, 90, 0);
+            $toggle = ($c['billingToggle'] ?? false) === true;
+            $yearly = $toggle && ($c['defaultBilling'] ?? '') === 'yearly';
+            $f = $yearly ? 12 * (1 - $disc / 100) : 1;
+            $word = function ($v, $d) { $t = trim(cc_str($v)); if ($t === '') $t = $d; return htmlspecialchars(mb_substr($t, 0, 30)); };
+            $perM = ' / ' . $word($c['periodMonth'] ?? '', 'month');
+            $perY = ' / ' . $word($c['periodYear'] ?? '', 'year');
+            $st = trim(cc_str($c['saveText'] ?? '')); if ($st === '') $st = 'You save {amount} a year';
+            $saveTpl = htmlspecialchars(mb_substr($st, 0, 80));
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $title = cc_esc($c['title'] ?? '');
+            $intro = cc_br(cc_str($c['intro'] ?? ''));
+            $curHtml = htmlspecialchars($cur);   // the symbol goes into the page as text: escaped
+            $money = function ($v) use ($dec, $eu, $curHtml, $after) { return cc_money($v, $dec, $eu, $curHtml, $after); };
+            $total = $base; $controls = ''; $lines = '';
+            $lineStyle = 'display:flex; justify-content:space-between; gap:12px; font-size:14px; color:#475569; padding:4px 0;';
+            if ($base > 0) $lines .= '<li class="cc-calc-line" data-line="base" style="' . $lineStyle . '"><span class="cc-calc-line-label">' . $word($c['baseLabel'] ?? '', 'Base price') . '</span><span class="cc-calc-line-amt">' . $money($base * $f) . '</span></li>';
+            foreach ($sliders as $i => $sl) {
+                $min = cc_num($sl['min'] ?? null, -1e9, 1e9, 0);
+                $max = cc_num($sl['max'] ?? null, -1e9, 1e9, 100);
+                if ($max <= $min) $max = $min + 1;
+                $step = cc_num($sl['step'] ?? null, 0.01, 1e6, 1);
+                $val = min($max, max($min, cc_num($sl['value'] ?? null, -1e9, 1e9, $min)));
+                $price = cc_num($sl['price'] ?? null, 0, 1e7, 0);
+                $incl = cc_num($sl['included'] ?? null, 0, 1e9, 0);
+                $unit = htmlspecialchars(mb_substr(trim(cc_str($sl['unit'] ?? '')), 0, 30));
+                $label = cc_esc($sl['label'] ?? '');
+                $cost = max(0, $val - $incl) * $price;
+                $total += $cost;
+                $sid = $innerId . '-s' . $i;
+                $controls .= '<div class="cc-calc-row" style="margin-bottom:22px;"><div class="cc-calc-head" style="display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; font-weight:600; font-size:15px; color:#0f172a;"><label for="' . $sid . '">' . $label . '</label><output class="cc-calc-val" for="' . $sid . '" data-for="' . $sid . '">' . cc_plain($val) . ($unit !== '' ? ' ' . $unit : '') . '</output></div>'
+                    . '<input type="range" class="cc-calc-range" id="' . $sid . '" min="' . cc_plain($min) . '" max="' . cc_plain($max) . '" step="' . cc_plain($step) . '" value="' . cc_plain($val) . '" data-price="' . cc_plain($price) . '" data-incl="' . cc_plain($incl) . '" data-unit="' . $unit . '" data-line="s' . $i . '" style="width:100%; accent-color:' . $accent . ';"></div>';
+                $lines .= '<li class="cc-calc-line"' . ($cost != 0 ? '' : ' hidden') . ' data-line="s' . $i . '" style="' . $lineStyle . '"><span class="cc-calc-line-label">' . $label . '</span><span class="cc-calc-line-amt">' . $money($cost * $f) . '</span></li>';
+            }
+            foreach ($addons as $i => $ad) {
+                $price = cc_num($ad['price'] ?? null, 0, 1e7, 0);
+                $on = ($ad['checked'] ?? false) === true;
+                $label = cc_esc($ad['label'] ?? '');
+                if ($on) $total += $price;
+                $controls .= '<label class="cc-calc-addon-row" style="display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:15px; color:#0f172a; cursor:pointer;"><input type="checkbox" class="cc-calc-addon" data-price="' . cc_plain($price) . '" data-line="a' . $i . '"' . ($on ? ' checked' : '') . ' style="width:18px; height:18px; accent-color:' . $accent . ';"><span class="cc-calc-addon-label" style="flex:1;">' . $label . '</span><span class="cc-calc-addon-price" style="color:#64748b; font-size:14px;">+ ' . $money($price) . $perM . '</span></label>';
+                $lines .= '<li class="cc-calc-line"' . ($on ? '' : ' hidden') . ' data-line="a' . $i . '" style="' . $lineStyle . '"><span class="cc-calc-line-label">' . $label . '</span><span class="cc-calc-line-amt">' . $money($price * $f) . '</span></li>';
+            }
+            $saved = $total * 12 - $total * $f;
+            $saveShown = $yearly && $saved > 0;
+            $btnText = cc_esc($c['buttonText'] ?? '');
+            $note = cc_br(cc_str($c['note'] ?? ''));
+            $id = '#' . $innerId;
+            $billing = $toggle
+                ? '<div class="cc-calc-billing" role="radiogroup" aria-label="Billing period" style="display:inline-flex; padding:4px; background:#f1f5f9; border-radius:999px; margin-bottom:24px;">'
+                    . '<label class="cc-calc-pill"><input type="radio" name="' . $innerId . '-billing" value="monthly"' . ($yearly ? '' : ' checked') . '><span>' . $word($c['monthlyLabel'] ?? '', 'Monthly') . '</span></label>'
+                    . '<label class="cc-calc-pill"><input type="radio" name="' . $innerId . '-billing" value="yearly"' . ($yearly ? ' checked' : '') . '><span>' . $word($c['yearlyLabel'] ?? '', 'Yearly') . ($disc > 0 ? '<em class="cc-calc-badge"> -' . cc_plain($disc) . '%</em>' : '') . '</span></label></div>'
+                : '';
+            return $customCss . '<style>' . $id . ' .cc-calc-pill input{position:absolute;opacity:0;pointer-events:none}' . $id . ' .cc-calc-pill span{display:inline-block;padding:8px 18px;border-radius:999px;font-weight:600;font-size:14px;color:#475569;cursor:pointer}' . $id . ' .cc-calc-pill input:checked+span{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(15,23,42,0.15)}' . $id . ' .cc-calc-pill input:focus-visible+span{outline:2px solid ' . $accent . ';outline-offset:2px}' . $id . ' .cc-calc-badge{font-style:normal;color:' . $accent . ';font-weight:700}' . $id . ' .cc-calc-btn:hover{filter:brightness(.92)}' . $id . ' input[type=range]:focus-visible,' . $id . ' .cc-calc-addon:focus-visible{outline:2px solid ' . $accent . ';outline-offset:2px}</style>'
+                . '<div id="' . $innerId . '" class="cc-calc' . $animClass . $innerClass . '" data-base="' . cc_plain($base) . '" data-disc="' . cc_plain($disc) . '" data-dec="' . $dec . '" data-fmt="' . ($eu ? 'eu' : 'en') . '" data-cur="' . htmlspecialchars($cur) . '" data-pos="' . ($after ? 'after' : 'before') . '" data-per-m="' . $perM . '" data-per-y="' . $perY . '" data-save="' . $saveTpl . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-calc-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'
+                . ($title !== '' ? '<div class="cc-calc-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">' . $title . '</div>' : '')
+                . ($intro !== '' ? '<p class="cc-calc-intro" style="margin:0 0 20px 0; font-size:15px; line-height:1.6; color:#475569;">' . $intro . '</p>' : '')
+                . $billing
+                . '<div class="cc-calc-controls">' . $controls . '</div>'
+                . '<div class="cc-calc-summary" style="border-top:1px solid #e2e8f0; padding-top:18px; margin-top:8px;">'
+                . ($lines !== '' ? '<ul class="cc-calc-lines" style="list-style:none; margin:0 0 12px 0; padding:0;">' . $lines . '</ul>' : '')
+                . '<div class="cc-calc-total-row" role="status" aria-live="polite" aria-atomic="true" style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;"><span class="cc-calc-total-label" style="font-weight:700; font-size:15px; color:#0f172a;">' . $word($c['totalLabel'] ?? '', 'Estimated total') . '</span><span><strong class="cc-calc-amount" style="font-size:40px; font-weight:800; line-height:1.1; color:#0f172a;">' . $money($total * $f) . '</strong><span class="cc-calc-per" style="font-size:15px; color:#64748b;">' . ($yearly ? $perY : $perM) . '</span></span></div>'
+                . '<div class="cc-calc-save"' . ($saveShown ? '' : ' hidden') . ' style="margin-top:6px; text-align:right; font-size:14px; font-weight:600; color:' . $accent . ';">' . ($saveShown ? str_replace('{amount}', $money($saved), $saveTpl) : '') . '</div>'
+                . ($btnText !== '' ? '<a class="cc-calc-btn" href="' . htmlspecialchars(cc_block_url(cc_str($c['buttonUrl'] ?? ''))) . '" style="display:block; margin-top:20px; padding:14px 24px; text-align:center; border-radius:10px; background:' . $accent . '; color:#ffffff; font-weight:700; text-decoration:none;">' . $btnText . '</a>' : '')
+                . ($note !== '' ? '<p class="cc-calc-note" style="margin:12px 0 0 0; font-size:13px; line-height:1.5; color:#64748b;">' . $note . '</p>' : '')
+                . '</div></div>' . "\n</div>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_CALC_SCRIPT) . "</script>\n";
+        }
+
+        case 'WIZARD': {
+            $c = $block['content'] ?? [];
+            $objs = function ($v) { return array_values(array_filter(is_array($v) ? $v : [], 'is_array')); };
+            $steps = array_slice($objs($c['steps'] ?? []), 0, 8);
+            $n = count($steps);
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $dots = ($c['progress'] ?? '') === 'steps';
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $text = function ($v, $d, $max) { $t = trim(cc_str($v)); if ($t === '') $t = $d; return htmlspecialchars(mb_substr($t, 0, $max)); };
+            $title = cc_esc($c['title'] ?? '');
+            $intro = cc_br(cc_str($c['intro'] ?? ''));
+            $stepLabel = $text($c['stepLabel'] ?? '', 'Step {n} of {total}', 60);
+            $successMsg = trim(cc_str($c['successMsg'] ?? '')); if ($successMsg === '') $successMsg = 'Thank you! We will be in touch.';
+            $raw_email = trim(cc_str($c['email'] ?? ''));
+            // Same registry as the Form block: submit_form.php accepts only these fields (in this order) and shows only this message
+            $form_id = !empty($c['customId'])
+                ? 'f_' . preg_replace('/[^a-zA-Z0-9_-]/', '', cc_str($c['customId']))
+                : 'f_' . substr(sha1('w|' . ($block['id'] ?? '') . '|' . $raw_email), 0, 16);
+            $fi = 0; $stepsHtml = ''; $dotsHtml = ''; $regLabels = [];
+            foreach ($steps as $si => $st) {
+                $fields = array_slice($objs($st['fields'] ?? []), 0, 12);
+                $stTitle = cc_esc($st['title'] ?? '');
+                $desc = cc_br(cc_str($st['description'] ?? ''));
+                $inner = '';
+                foreach ($fields as $f) {
+                    if ($fi >= 40) break;
+                    $name = 'field_' . $fi; $fid = $innerId . '-f' . $fi;
+                    $labelRaw = cc_str($f['label'] ?? '');
+                    $label = htmlspecialchars($labelRaw);
+                    $type = in_array($f['type'] ?? '', CC_WIZARD_TYPES, true) ? $f['type'] : 'text';
+                    $req = ($f['required'] ?? false) === true ? ' required' : '';
+                    $opts = array_map(function ($o) { return mb_substr($o, 0, 100); }, array_slice(cc_lines(cc_str($f['options'] ?? '')), 0, 20));
+                    $regLabels[] = mb_substr($labelRaw, 0, 200);
+                    $fi++;
+                    $inner .= '<input type="hidden" name="_label_' . $name . '" value="' . $label . '">' . "\n";
+                    if ($type === 'radio' || $type === 'checkboxes') {
+                        $radio = $type === 'radio';
+                        $inner .= '<fieldset class="cc-wz-field cc-wz-group" data-req="' . (!$radio && $req !== '' ? '1' : '0') . '" style="border:0; margin:0 0 16px 0; padding:0; min-width:0;"><legend class="cc-wz-label" style="padding:0;">' . $label . '</legend>';
+                        foreach ($opts as $o) $inner .= '<label class="cc-wz-opt" style="display:flex; align-items:center; gap:8px; margin:6px 0; font-size:15px; color:#0f172a;"><input type="' . ($radio ? 'radio' : 'checkbox') . '" name="' . $name . ($radio ? '' : '[]') . '" value="' . htmlspecialchars($o) . '"' . ($radio ? $req : '') . ' style="width:18px; height:18px; accent-color:' . $accent . ';"><span>' . htmlspecialchars($o) . '</span></label>';
+                        $inner .= '</fieldset>' . "\n";
+                    } elseif ($type === 'consent') {
+                        $inner .= '<div class="cc-wz-field"><label class="cc-wz-opt" style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#475569;"><input type="checkbox" id="' . $fid . '" name="' . $name . '" value="Yes"' . $req . ' style="width:18px; height:18px; margin-top:2px; accent-color:' . $accent . ';"><span>' . $label . '</span></label></div>' . "\n";
+                    } elseif ($type === 'select') {
+                        $inner .= '<div class="cc-wz-field"><label class="cc-wz-label" for="' . $fid . '">' . $label . '</label><select id="' . $fid . '" name="' . $name . '"' . $req . ' style="' . CC_WZ_INPUT . '"><option value="">' . $text($f['placeholder'] ?? '', 'Choose an option', 60) . '</option>';
+                        foreach ($opts as $o) $inner .= '<option value="' . htmlspecialchars($o) . '">' . htmlspecialchars($o) . '</option>';
+                        $inner .= '</select></div>' . "\n";
+                    } elseif ($type === 'textarea') {
+                        $inner .= '<div class="cc-wz-field"><label class="cc-wz-label" for="' . $fid . '">' . $label . '</label><textarea id="' . $fid . '" name="' . $name . '"' . $req . ' rows="4" style="' . CC_WZ_INPUT . '"></textarea></div>' . "\n";
+                    } else {
+                        $inner .= '<div class="cc-wz-field"><label class="cc-wz-label" for="' . $fid . '">' . $label . '</label><input type="' . $type . '" id="' . $fid . '" name="' . $name . '"' . $req . ' style="' . CC_WZ_INPUT . '"></div>' . "\n";
+                    }
+                }
+                $stepsHtml .= '<fieldset class="cc-wz-step" data-i="' . $si . '" tabindex="-1" style="border:0; margin:0; padding:0; min-width:0;"><legend class="cc-wz-step-title" style="padding:0; font-size:20px; font-weight:700; color:#0f172a; margin-bottom:4px;">' . ($stTitle !== '' ? $stTitle : 'Step ' . ($si + 1)) . '</legend>'
+                    . ($desc !== '' ? '<p class="cc-wz-step-desc" style="margin:0 0 16px 0; font-size:14px; color:#64748b;">' . $desc . '</p>' : '')
+                    . $inner . '</fieldset>' . "\n";
+                $dotsHtml .= '<li class="cc-wz-dot' . ($si === 0 ? ' is-current' : '') . '"' . ($si === 0 ? ' aria-current="step"' : '') . '><span class="cc-wz-dot-n">' . ($si + 1) . '</span><span class="cc-wz-dot-t">' . ($stTitle !== '' ? $stTitle : 'Step ' . ($si + 1)) . '</span></li>';
+            }
+            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $regLabels, 'success' => $successMsg];
+            $pct = $n > 0 ? number_format(100 / $n, 1, '.', '') : '100.0';
+            $progress = '<div class="cc-wz-progress" hidden style="margin-bottom:24px;">'
+                . ($dots ? '<ol class="cc-wz-dots" style="list-style:none; display:flex; gap:8px; margin:0 0 10px 0; padding:0;">' . $dotsHtml . '</ol>' : '<div class="cc-wz-track" style="height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden;"><div class="cc-wz-fill" style="height:100%; width:' . $pct . '%; background:' . $accent . '; border-radius:999px;"></div></div>')
+                . '<div class="cc-wz-count" aria-live="polite" style="margin-top:8px; font-size:13px; color:#64748b;">' . str_replace(['{n}', '{total}'], ['1', (string)$n], $stepLabel) . '</div></div>';
+            $id = '#' . $innerId;
+            return $customCss . '<style>' . $id . ' .cc-wz-label{display:block;margin-bottom:6px;font-weight:600;font-size:14px;color:#0f172a}' . $id . ' .cc-wz-field{margin-bottom:16px}' . $id . ' input:focus-visible,' . $id . ' select:focus,' . $id . ' textarea:focus{outline:2px solid ' . $accent . ';outline-offset:1px}'
+                . $id . ' .cc-wz-dot{display:flex;align-items:center;gap:8px;flex:1;font-size:13px;color:#94a3b8}' . $id . ' .cc-wz-dot-n{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#e2e8f0;color:#475569;font-weight:700;flex-shrink:0}'
+                . $id . ' .cc-wz-dot.is-current .cc-wz-dot-n,' . $id . ' .cc-wz-dot.is-done .cc-wz-dot-n{background:' . $accent . ';color:#fff}' . $id . ' .cc-wz-dot.is-current{color:#0f172a;font-weight:600}' . $id . ' .cc-wz-fill{transition:width .3s ease}' . $id . ' .cc-wz-step:focus{outline:none}' . $id . ' button:hover{filter:brightness(.94)}'
+                . '@media(max-width:600px){' . $id . ' .cc-wz-dot-t{display:none}' . $id . ' .cc-wz-card{padding:20px !important}}@media(prefers-reduced-motion:reduce){' . $id . ' .cc-wz-fill{transition:none}}</style>'
+                . '<div id="' . $innerId . '" class="cc-wizard' . $animClass . $innerClass . '" data-step-label="' . $stepLabel . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-wz-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'
+                . ($title !== '' ? '<div class="cc-wz-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">' . $title . '</div>' : '')
+                . ($intro !== '' ? '<p class="cc-wz-intro" style="margin:0 0 20px 0; font-size:15px; line-height:1.6; color:#475569;">' . $intro . '</p>' : '')
+                . $progress
+                . '<form id="' . $form_id . '" class="cc-wz-form" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST">' . "\n" . '<input type="hidden" name="_form" value="' . $form_id . '">' . "\n" . '<input type="hidden" name="_success" value="' . htmlspecialchars($successMsg) . '">' . "\n" . '<input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">' . "\n"
+                . $stepsHtml
+                . '<div class="cc-wz-nav" style="display:flex; align-items:center; gap:10px; margin-top:24px;"><button type="button" class="cc-wz-back" hidden style="' . CC_WZ_BTN . ' background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;">' . $text($c['backText'] ?? '', 'Back', 30) . '</button><span style="flex:1;"></span>'
+                . '<button type="button" class="cc-wz-next" hidden style="' . CC_WZ_BTN . ' background:' . $accent . '; color:#ffffff; border:none;">' . $text($c['nextText'] ?? '', 'Next', 30) . '</button>'
+                . '<button type="submit" class="cc-wz-submit" style="' . CC_WZ_BTN . ' background:' . $accent . '; color:#ffffff; border:none;">' . $text($c['btnText'] ?? '', 'Send', 30) . '</button></div>' . "\n</form>\n</div>\n</div>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_WIZARD_SCRIPT) . "</script>\n";
         }
 
         default: return "<!-- Unknown element: " . preg_replace('/[^A-Za-z0-9_]/', '', (string)$block['type']) . " -->\n";

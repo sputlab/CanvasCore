@@ -199,6 +199,22 @@ $r = $ed->api('get_pages');
 check('editors don\'t receive a form\'s own email address', strpos($r['body'], 'secret-inbox') === false && strpos($r['body'], 'p-form') !== false);
 check('…admins do', strpos($own->api('get_pages')['body'], 'secret-inbox') !== false);
 
+echo "\nMULTI-STEP FORM RECIPIENTS ARE ADMIN-ONLY TOO\n";
+$wiz = function ($id, $email) { return ['id' => $id, 'type' => 'WIZARD', 'content' => ['email' => $email, 'steps' => [['title' => 'A', 'fields' => [['label' => 'Name', 'type' => 'text']]]]], 'styles' => []]; };
+$own->api('save_page', ['id' => 'p-wiz', 'title' => 'W', 'slug' => 'wizard', 'publish' => true, 'blocks' => [$wiz('w1', 'wizard-secret@corp.example')]]);
+$r = $ed->api('get_pages');
+check('editors don\'t receive a multi-step form\'s own email address', strpos($r['body'], 'wizard-secret') === false && strpos($r['body'], 'p-wiz') !== false);
+check('…admins do', strpos($own->api('get_pages')['body'], 'wizard-secret') !== false);
+$ed->api('save_page', ['id' => 'p-wiz', 'title' => 'W again', 'slug' => 'wizard', 'publish' => true, 'blocks' => [$wiz('w1', 'hacker@evil.example')]]);
+$stored = (string)db()->query("SELECT content_json FROM pages WHERE id = 'p-wiz'")->fetchColumn();
+check('an editor can\'t change it: the admin\'s address stays on save, theirs is not stored', strpos($stored, 'wizard-secret@corp.example') !== false && strpos($stored, 'hacker@evil.example') === false, $stored);
+$ed->api('save_page', ['id' => 'p-wiz2', 'title' => 'W3', 'slug' => 'wizard-two', 'publish' => true, 'blocks' => [$wiz('w2', 'hacker2@evil.example')]]);
+$stored2 = (string)db()->query("SELECT content_json FROM pages WHERE id = 'p-wiz2'")->fetchColumn();
+check('a multi-step form made by an editor has no recipient of its own (the global one is used)', $stored2 !== '' && strpos($stored2, 'hacker2@evil.example') === false, $stored2);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$regJson = (string)@file_get_contents($data . '/forms.json');
+check('the published registry holds the admin\'s address for that form and none of the editors\'', strpos($regJson, 'wizard-secret@corp.example') !== false && strpos($regJson, 'hacker') === false, $regJson);
+
 echo "\nSESSIONS END WITH THE ACCOUNT\n";
 $ed2 = new Client(); $ed2->login('eddie', 'Editor-pass-2');
 $own->api('force_password', ['id' => $edId, 'password' => 'Reset-pass-123']);

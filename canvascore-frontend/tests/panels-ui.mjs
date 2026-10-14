@@ -86,8 +86,8 @@ function addAndSelect(type) {
   return b;
 }
 
-const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET'];
-const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author', REVIEW_SUMMARY: 'Rating', TESTIMONIAL_WALL: 'Testimonials', HOVER_GRID: 'Grid Items', SCROLLYTELLING: 'Story Steps', HOTSPOTS: 'Hotspot Image', TABLE_OF_CONTENTS: 'Table of Contents', SHARE_BAR: 'Share Bar', CODE_SNIPPET: 'Code' };
+const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD'];
+const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author', REVIEW_SUMMARY: 'Rating', TESTIMONIAL_WALL: 'Testimonials', HOVER_GRID: 'Grid Items', SCROLLYTELLING: 'Story Steps', HOTSPOTS: 'Hotspot Image', TABLE_OF_CONTENTS: 'Table of Contents', SHARE_BAR: 'Share Bar', CODE_SNIPPET: 'Code', PRICE_CALCULATOR: 'Calculator Texts', WIZARD: 'Steps and Fields' };
 let failedRun = false;
 try {
   console.log('\nADD BLOCK — the blocks.json defaults reach the editor');
@@ -253,6 +253,42 @@ try {
   click(checkbox('Line numbers')); await sleep(40);
   check('CODE_SNIPPET: line numbers update the store; the copy button is on by default', content().lineNumbers === true && checkbox('Copy button').checked);
 
+  addAndSelect('PRICE_CALCULATOR'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Sliders'));
+  click(buttonByText('Sliders')); await sleep(40);
+  click(buttonByText('+ Add slider')); await sleep(40);
+  check('PRICE_CALCULATOR: "+ Add slider" adds a slider with all expected fields', content().sliders.length === 3 && ['label', 'unit', 'min', 'max', 'step', 'value', 'included', 'price'].every((k) => k in content().sliders[2]));
+  click(buttonByText('Add-ons')); await sleep(40);
+  click(buttonByText('+ Add add-on')); await sleep(40);
+  check('PRICE_CALCULATOR: "+ Add add-on" adds an add-on (not ticked)', content().addons.length === 3 && content().addons[2].checked === false && 'price' in content().addons[2]);
+  setValue(field('Currency symbol'), '$'); await sleep(40);
+  setValue(field('Number format'), 'eu'); await sleep(40);
+  check('PRICE_CALCULATOR: the currency and the number format update the store', content().currency === '$' && content().numberFormat === 'eu');
+  click(buttonByText('Monthly / Yearly')); await sleep(40);
+  check('PRICE_CALCULATOR: the yearly options are shown for a calculator with the switch', !!field('Discount for paying yearly (%)'));
+  click(checkbox('Let visitors switch between monthly and yearly')); await sleep(40);
+  check('PRICE_CALCULATOR: switching the option off hides them and updates the store', content().billingToggle === false && !field('Discount for paying yearly (%)'));
+
+  addAndSelect('WIZARD'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add step'));
+  const emailField = () => $$('input[type="email"]').find((i) => i.placeholder === 'Leave blank for Global Email');
+  st().userRole = 'admin'; mount(React.createElement(PropertyPanel)); await waitFor(() => emailField());
+  const adminSees = !!emailField();
+  st().userRole = 'editor'; mount(React.createElement(PropertyPanel)); await sleep(60);
+  const editorSees = !!emailField();
+  st().userRole = 'admin'; mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add step'));
+  check('WIZARD: the receiving email is offered to admins and not to editors', adminSees === true && editorSees === false, JSON.stringify({ adminSees, editorSees }));
+  click(buttonByText('+ Add step')); await sleep(40);
+  check('WIZARD: "+ Add step" adds a step with an empty field list', content().steps.length === 4 && Array.isArray(content().steps[3].fields) && content().steps[3].fields.length === 0);
+  click($$('button').filter((b) => b.textContent.trim() === '+ Add field')[0]); await sleep(40);
+  check('WIZARD: "+ Add field" adds a field to that step only, with all expected fields', content().steps[0].fields.length === 3 && ['label', 'type', 'required', 'options', 'placeholder'].every((k) => k in content().steps[0].fields[2]) && content().steps[1].fields.length === 2);
+  const selects = $$('select').filter((s2) => [...s2.options].some((o) => o.value === 'checkboxes'));
+  const choiceLists = () => $$('label').filter((l) => l.textContent.trim().startsWith('Choices (one per line)')).length;
+  check('WIZARD: only choose-one, drop-down and choose-several fields have a list of choices (the default form has a radio: 1; the new text field adds none)', choiceLists() === 2 && content().steps[0].fields[2].type === 'text', String(choiceLists()));
+  setValue(selects[2], 'select'); await sleep(40);
+  check('WIZARD: changing a field to a drop-down shows its list of choices and the empty-choice text, and keeps the other steps', content().steps[0].fields[2].type === 'select' && choiceLists() === 3 && $$('label').some((l) => l.textContent.trim().startsWith('Text before a choice is made')) && content().steps[1].fields.length === 2, String(choiceLists()));
+  const newChoices = $$('label').filter((l) => l.textContent.trim().startsWith('Choices (one per line)')).map((l) => l.parentElement.querySelector('textarea'))[0];
+  setValue(newChoices, 'a\nb'); await sleep(40);
+  check('WIZARD: the choices are stored as text, one per line', content().steps[0].fields[2].options === 'a\nb');
+
   addAndSelect('BEFORE_AFTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('button').some((b) => b.textContent.includes('Before / After')));
   const imgs = $$('input[placeholder="Image URL"]');
   setValue(imgs[0], 'https://x.example/prima.jpg'); setValue(imgs[1], 'https://x.example/dopo.jpg'); await sleep(40);
@@ -276,7 +312,7 @@ try {
   check('BUSINESS: "+ Add weekly hours" restores the 7 days', content().hours.length === 7 && content().hours[0].day === 'Monday');
 
   console.log('\nCANVAS — every block is drawn in the editor (canonical renderer)');
-  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author', REVIEW_SUMMARY: 'cc-review-summary', TESTIMONIAL_WALL: 'cc-testimonial-wall', HOVER_GRID: 'cc-hover-grid', SCROLLYTELLING: 'cc-story', HOTSPOTS: 'cc-hotspots', TABLE_OF_CONTENTS: 'cc-toc', SHARE_BAR: 'cc-share', CODE_SNIPPET: 'cc-code' };
+  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author', REVIEW_SUMMARY: 'cc-review-summary', TESTIMONIAL_WALL: 'cc-testimonial-wall', HOVER_GRID: 'cc-hover-grid', SCROLLYTELLING: 'cc-story', HOTSPOTS: 'cc-hotspots', TABLE_OF_CONTENTS: 'cc-toc', SHARE_BAR: 'cc-share', CODE_SNIPPET: 'cc-code', PRICE_CALCULATOR: 'cc-calc', WIZARD: 'cc-wizard' };
   for (const t of TYPES) {
     const b = addAndSelect(t);
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));
@@ -312,6 +348,28 @@ try {
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [hs.id] }, React.createElement(SortableBlock, { block: hs }))));
     await waitFor(() => doc.querySelector('.cc-hotspots'));
     check('HOTSPOTS canvas: the block receives the mouse, so pins can be hovered', doc.querySelector('.cc-hotspots').parentElement.style.pointerEvents === 'auto' && doc.querySelectorAll('.cc-hs-pin').length === 3);
+
+    const calcBlock = addAndSelect('PRICE_CALCULATOR');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [calcBlock.id] }, React.createElement(SortableBlock, { block: calcBlock }))));
+    await waitFor(() => doc.querySelector('.cc-calc'));
+    const calcStart = doc.querySelector('.cc-calc-amount').textContent;
+    const rng = doc.querySelector('.cc-calc-range');
+    // the editor attaches the script's listeners just after the HTML is in the page: keep moving the slider until it answers
+    // 29 base + (20 - 3 free) * 8 + (50 - 10 free) * 0.5 + 9 for the ticked add-on = 194
+    await waitFor(() => { rng.value = '20'; rng.dispatchEvent(new w.Event('input', { bubbles: true })); return doc.querySelector('.cc-calc-amount').textContent === '€194'; });
+    check('PRICE_CALCULATOR canvas: moving a slider in the editor updates the total (so the design can be tried), and the block receives the mouse', calcStart === '€74' && doc.querySelector('.cc-calc-amount').textContent === '€194' && doc.querySelector('.cc-calc').parentElement.style.pointerEvents === 'auto', doc.querySelector('.cc-calc-amount').textContent);
+
+    const wzBlock = addAndSelect('WIZARD');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [wzBlock.id] }, React.createElement(SortableBlock, { block: wzBlock }))));
+    await waitFor(() => doc.querySelector('.cc-wizard'));
+    await waitFor(() => doc.querySelector('.cc-wz-progress') && !doc.querySelector('.cc-wz-progress').hidden);
+    const stepsShown = () => [...doc.querySelectorAll('.cc-wz-step')].map((e) => (e.hidden ? 0 : 1)).join('');
+    check('MULTI-STEP FORM canvas: starts on step 1 with the progress shown', stepsShown() === '100' && doc.querySelector('.cc-wz-count').textContent === 'Step 1 of 3');
+    click(doc.querySelector('.cc-wz-next')); await sleep(30);
+    check('MULTI-STEP FORM canvas: Next walks to the next step even with required fields empty (nothing is validated in the editor)', stepsShown() === '010' && doc.querySelector('.cc-wz-count').textContent === 'Step 2 of 3');
+    click(doc.querySelector('.cc-wz-next')); await sleep(30);
+    const sub = new w.Event('submit', { bubbles: true, cancelable: true }); doc.querySelector('.cc-wz-form').dispatchEvent(sub);
+    check('MULTI-STEP FORM canvas: Send does nothing in the editor (the form is never submitted)', stepsShown() === '001' && sub.defaultPrevented === true);
 
     // Table of Contents: lists the headings of the page being edited, and follows them
     const tocBlock = addAndSelect('TABLE_OF_CONTENTS');
