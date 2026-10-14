@@ -15,6 +15,7 @@ import Login from './components/Login';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import SessionExpiredOverlay from './components/SessionExpiredOverlay';
 import SessionWarning from './components/SessionWarning';
+import DemoBanner from './components/DemoBanner';
 import DraftRestorePrompt from './components/DraftRestorePrompt';
 import AdminLayout from './components/AdminLayout';
 import Backup from './components/Backup';
@@ -69,6 +70,7 @@ export default function App() {
         {view}
       </div>
       {sessionWarning && !sessionExpired && <SessionWarning />}
+      <DemoBanner />
       {sessionExpired && <SessionExpiredOverlay />}
       <DraftRestorePrompt />
       <Toaster />

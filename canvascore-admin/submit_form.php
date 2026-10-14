@@ -109,6 +109,9 @@ $headers .= "Reply-To: $from\r\n";
 $headers .= "MIME-Version: 1.0\r\n";
 $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
 
+// Demo mode: the submission is stored, but a public demo never sends mail
+if (cc_demo_on()) cc_finish($successMsg);
+
 if (@mail($to, $subject, $body, $headers)) {
     cc_finish($successMsg);
 } else {

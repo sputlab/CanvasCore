@@ -69,6 +69,7 @@ try {
     $favicon_url  = trim($settings['faviconUrl'] ?? '');
     $default_og   = trim($settings['defaultOgImage'] ?? '');
     $robots_allow = !isset($settings['robotsAllow']) || !empty($settings['robotsAllow']);
+    if (cc_demo_on()) $robots_allow = false;   // a public demo is never indexed
     $abs = function ($u) use ($site_url) {
         $u = trim((string)$u);
         if ($u === '') return '';
@@ -121,7 +122,7 @@ try {
     $finish = function ($html, $canonical, $noindex) use ($feed_links, $cookie_html, $base_url, &$media_meta) {
         $head = '';
         if ($canonical !== '') $head .= '<link rel="canonical" href="' . htmlspecialchars($canonical) . '">' . "\n";
-        if ($noindex) $head .= '<meta name="robots" content="noindex">' . "\n";
+        if ($noindex || cc_demo_on()) $head .= '<meta name="robots" content="noindex">' . "\n";
         $head .= $feed_links;
         if ($head !== '') $html = preg_replace('#</head>#i', $head . '</head>', $html, 1);
         if ($cookie_html !== '') $html = preg_replace('#</body>#i', str_replace('{{BASE_URL}}', $base_url, $cookie_html) . '</body>', $html, 1);

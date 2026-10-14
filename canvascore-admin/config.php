@@ -75,6 +75,7 @@ function cc_security_headers() {
     header('Referrer-Policy: same-origin');
     header('Cross-Origin-Opener-Policy: same-origin');
     header_remove('X-Powered-By');
+    if (cc_demo_on()) header('X-Robots-Tag: noindex, nofollow');
 }
 
 // The admin folder itself (Apache): security headers for the editor page too (it is a static file, so PHP can't
@@ -1022,5 +1023,51 @@ function cc_public_branding(array $settings) {
     $fav = trim((string)($settings['faviconUrl'] ?? ''));
     if ($fav !== '' && !preg_match('~^(https?://|/(?!/)|[A-Za-z0-9._-][A-Za-z0-9._/-]*$)~i', $fav)) $fav = '';
     return ['siteName' => mb_substr(trim((string)($settings['siteName'] ?? '')), 0, 120), 'faviconUrl' => $fav];
+}
+
+// Demo mode: on only when <data dir>/demo.json exists (never in a normal installation). The file holds the public
+// demo login, the reset interval shown on the sign-in screen and in the editor, and how many pages and collection
+// items visitors may create; while on, passwords and uploads are locked, form mails are not sent and the site is
+// not indexed. $override: the config to use (tests); null reads the file.
+function cc_demo_config($override = null) {
+    static $demo = false;
+    if ($override !== null) $demo = $override ?: null;
+    if ($demo === false) {
+        $raw = @json_decode((string)@file_get_contents(cc_data_dir() . '/demo.json'), true);
+        $demo = is_array($raw) && trim((string)($raw['username'] ?? '')) !== ''
+            ? ['username' => (string)$raw['username'], 'password' => (string)($raw['password'] ?? ''), 'resetMinutes' => max(1, min(60, (int)($raw['resetMinutes'] ?? 10))),
+               'maxNewPages' => max(0, (int)($raw['maxNewPages'] ?? 5)), 'maxNewItems' => max(0, (int)($raw['maxNewItems'] ?? 5))]
+            : null;
+    }
+    return $demo;
+}
+function cc_demo_on() { return cc_demo_config() !== null; }
+
+// Seconds until the next reset, for a scheduled task with the crontab line "*/<resetMinutes> * * * *" on this server
+function cc_demo_next_reset($now = null) {
+    $m = cc_demo_config()['resetMinutes'] ?? 10;
+    $now = $now ?? time();
+    $into = (int)date('i', $now) * 60 + (int)date('s', $now);
+    return min((intdiv((int)date('i', $now), $m) + 1) * $m * 60, 3600) - $into;
+}
+
+// Demo mode: takes one of the new pages ('pages') or collection items ('items') visitors may create until the next
+// reset. False when none is left. The count is kept in <data dir>/demo-usage.json, which the reset wipes.
+function cc_demo_take($kind) {
+    $demo = cc_demo_config();
+    if (!$demo) return true;
+    $limit = $kind === 'pages' ? $demo['maxNewPages'] : $demo['maxNewItems'];
+    $h = @fopen(cc_data_dir() . '/demo-usage.json', 'c+');
+    if (!$h) return false;
+    flock($h, LOCK_EX);
+    $used = json_decode((string)stream_get_contents($h), true);
+    if (!is_array($used)) $used = [];
+    $ok = (int)($used[$kind] ?? 0) < $limit;
+    if ($ok) {
+        $used[$kind] = (int)($used[$kind] ?? 0) + 1;
+        ftruncate($h, 0); rewind($h); fwrite($h, json_encode($used)); fflush($h);
+    }
+    flock($h, LOCK_UN); fclose($h);
+    return $ok;
 }
 
