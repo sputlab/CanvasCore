@@ -415,5 +415,71 @@ section('AUTHOR_BIO');
   check('centered layout without the card', (() => { const h = php('AUTHOR_BIO', { name: 'x', layout: 'centered', boxed: false }); return /flex-direction:column; align-items:center/.test(h) && !/background:#f8fafc/.test(h); })());
 }
 
+// =============================================================== LOGOS strip: direction and fading edges
+section('LOGOS strip options');
+{
+  const logos = [{ src: 'a.png', alt: 'A' }, { src: 'b.png', alt: 'B' }];
+  const old = php('LOGOS', { layout: 'marquee', speed: 30, logos });
+  check('a strip saved before these options renders as before (left, no fade)', /linear infinite\}/.test(old) && !/mask-image/.test(old));
+  const r = php('LOGOS', { layout: 'marquee', speed: 30, direction: 'right', fade: true, logos });
+  check('direction right: the same loop plays in reverse', /linear infinite reverse\}/.test(r));
+  check('fade: the edges are masked, and the mask is removed when motion is reduced', /\.cc-logos-marquee\{-webkit-mask-image:linear-gradient\(90deg/.test(r) && /prefers-reduced-motion:reduce\)\{[^@]*-webkit-mask-image:none;mask-image:none/.test(r));
+  check('only the exact values switch the options on (direction "up", fade "yes" → off)', (() => { const h = php('LOGOS', { layout: 'marquee', direction: 'up', fade: 'yes', logos }); return !/reverse/.test(h) && !/mask-image/.test(h); })());
+  check('the grid layout ignores both options', !/reverse|mask-image/.test(php('LOGOS', { layout: 'grid', direction: 'right', fade: true, logos })));
+}
+
+// =============================================================== REVIEW_SUMMARY
+section('REVIEW_SUMMARY');
+{
+  const dist = [{ stars: 5, count: 75 }, { stars: 4, count: 20 }, { stars: 3, count: 5 }, { stars: 2, count: 0 }, { stars: 1, count: 0 }];
+  const d = $(php('REVIEW_SUMMARY', { title: 'Rating', average: 4.76, total: 1280, totalLabel: 'reviews', source: 'Google', distribution: dist }));
+  check('average with one decimal, total with thousands separator, label and source', d('.cc-rs-average').text() === '4.8' && d('.cc-rs-total').text() === '1,280 reviews' && d('.cc-rs-source').text() === 'Google');
+  check('stars: an accessible label and a fill proportional to the average (4.76/5 = 95.2%)', d('.cc-rs-stars').attr('role') === 'img' && d('.cc-rs-stars').attr('aria-label') === '4.8 out of 5 stars' && /width:95\.2%/.test(d('.cc-rs-stars-fill').attr('style')));
+  check('one bar per row, widths are each row\'s share of all reviews', d('.cc-rs-row').length === 5 && /width:75\.0%/.test(d('.cc-rs-bar-fill').eq(0).attr('style')) && /width:0\.0%/.test(d('.cc-rs-bar-fill').eq(4).attr('style')));
+  check('percentages next to the bars by default', d('.cc-rs-row-value').map((_, e) => d(e).text()).get().join() === '75%,20%,5%,0%,0%');
+  check('…or the number of reviews, or nothing', $(php('REVIEW_SUMMARY', { distribution: dist, rowValue: 'count' }))('.cc-rs-row-value').eq(0).text() === '75' && $(php('REVIEW_SUMMARY', { distribution: dist, rowValue: 'none' }))('.cc-rs-row-value').length === 0);
+  check('no reviews at all: empty bars, no division by zero', /width:0\.0%/.test(php('REVIEW_SUMMARY', { distribution: [{ stars: 5, count: 0 }] })));
+  const bad = php('REVIEW_SUMMARY', { average: 99, total: -5, title: '<script>x</script>', color: 'red;}', linkText: 'L', linkUrl: 'javascript:alert(1)', distribution: [{ stars: 42, count: 'x' }, 'junk'] });
+  check('out-of-range values are clamped (average 5.0, total 0, stars 5) and junk rows skipped', $(bad)('.cc-rs-average').text() === '5.0' && $(bad)('.cc-rs-total').text() === '0' && $(bad)('.cc-rs-row-label').text() === '5 ★' && $(bad)('.cc-rs-row').length === 1);
+  check('hostile values: escaped title, unsafe color replaced, no javascript: link', !/<script>x/.test(bad) && !/red;\}/.test(bad) && !/href="javascript:/i.test(bad));
+  check('no rating markup for search engines', !/application\/ld\+json|itemprop|AggregateRating/.test(php('REVIEW_SUMMARY', { average: 4.5, total: 10, distribution: dist })));
+  check('breakdown can be hidden', $(php('REVIEW_SUMMARY', { distribution: dist, showDistribution: false }))('.cc-rs-dist').length === 0);
+}
+
+// =============================================================== TESTIMONIAL_WALL
+section('TESTIMONIAL_WALL');
+{
+  const h = php('TESTIMONIAL_WALL', { columns: 3, items: [
+    { quote: 'Line one\nLine two', name: 'Laura Bianchi', role: 'Owner', avatar: 'l.jpg', rating: 4 },
+    { quote: 'Short', name: 'Tom Becker', role: '', avatar: '', rating: 0 } ] });
+  const d = $(h);
+  check('one card per testimonial, as <figure> with <blockquote> and <figcaption>', d('figure.cc-tw-card').length === 2 && d('figure blockquote').length === 2 && d('figure figcaption').length === 2);
+  check('quote keeps its line breaks; name and role shown', d('.cc-tw-quote').eq(0).html() === 'Line one<br>Line two' && d('.cc-tw-name').eq(0).text() === 'Laura Bianchi' && d('.cc-tw-role').eq(0).text() === 'Owner');
+  check('rating: an accessible label, 4 filled stars and 1 empty one; 0 = no stars', d('.cc-tw-rating').length === 1 && d('.cc-tw-rating').attr('aria-label') === '4 out of 5 stars' && d('.cc-tw-rating > span').text().length === 1);
+  check('photo, or initials when there is none', d('img.cc-tw-avatar').attr('src') === 'l.jpg' && d('.cc-tw-initials').text() === 'TB');
+  check('masonry columns: 3 on desktop, 2 on tablets, 1 on phones', /column-count:3;/.test(h) && /max-width:768px\)\{#tb \.cc-tw-grid\{column-count:2/.test(h) && /max-width:480px\)\{#tb \.cc-tw-grid\{column-count:1/.test(h));
+  check('cards never split across columns', /break-inside:avoid/.test(h));
+  const bad = php('TESTIMONIAL_WALL', { columns: 9, showRatings: false, items: [{ quote: '<img src=x onerror=a>', name: '<b>n</b>', avatar: 'javascript:x', rating: 99 }, 'junk', null] });
+  check('hostile values: escaped, no javascript: photo, junk items skipped, columns clamped to 4', !/<img src=x|<b>n/.test(bad) && !/javascript:/.test(bad) && $(bad)('.cc-tw-card').length === 1 && /column-count:4;/.test(bad));
+  check('ratings can be hidden', $(bad)('.cc-tw-rating').length === 0);
+}
+
+// =============================================================== HOVER_GRID
+section('HOVER_GRID');
+{
+  const h = php('HOVER_GRID', { columns: 3, effect: 'slide', items: [
+    { image: 'a.jpg', alt: 'Branding work', title: 'Branding', text: 'Logos', href: 'servizi/index.html' },
+    { image: 'b.jpg', alt: '', title: 'No link', text: '' } ] });
+  const d = $(h);
+  check('items with a link are <a> to the page, the others <div>', d('.cc-hg-item').eq(0).is('a') && d('.cc-hg-item').eq(0).attr('href') === '{{BASE_URL}}servizi/' && d('.cc-hg-item').eq(1).is('div'));
+  check('image with alt text, title and text in the reveal layer', d('.cc-hg-img').eq(0).attr('alt') === 'Branding work' && d('.cc-hg-reveal').eq(0).find('.cc-hg-title').text() === 'Branding' && d('.cc-hg-reveal').eq(1).find('.cc-hg-text').length === 0);
+  check('revealed on hover and on keyboard focus', /\.cc-hg-item:hover \.cc-hg-reveal,#tb \.cc-hg-item:focus-within \.cc-hg-reveal,#tb \.cc-hg-item:focus \.cc-hg-reveal\{opacity:1;transform:none\}/.test(h));
+  check('always visible on touch screens (no hover)', /@media\(hover:none\)\{#tb \.cc-hg-reveal\{opacity:1 !important/.test(h));
+  check('no motion for visitors who prefer reduced motion', /prefers-reduced-motion:reduce\)\{#tb \.cc-hg-reveal,#tb \.cc-hg-img\{transition:none/.test(h));
+  check('effect class: slide or fade (unknown → slide)', /cc-hg-slide/.test(h) && /cc-hg-fade/.test(php('HOVER_GRID', { effect: 'fade', items: [] })) && /cc-hg-slide/.test(php('HOVER_GRID', { effect: 'boom', items: [] })));
+  const bad = php('HOVER_GRID', { columns: 0, aspectRatio: '99 / 1', overlay: 'url(x)', items: [{ image: 'javascript:alert(1)', href: 'javascript:alert(2)', title: '<img src=x>' }, 'junk'] });
+  check('hostile values: shape and overlay fall back to defaults, no javascript: image or link, escaped, junk skipped', /aspect-ratio:4 \/ 3/.test(bad) && /rgba\(15,23,42,0\.72\)/.test(bad) && !/src="javascript:|href="javascript:/i.test(bad) && !/<img src=x>/.test(bad) && $(bad)('.cc-hg-item').length === 1 && /repeat\(1, 1fr\)/.test(bad));
+}
+
 console.log(`\n${fails === 0 ? 'BLOCK CONTENT OK' : fails + ' checks failed'} (${total} checks)`);
 process.exit(fails === 0 ? 0 : 1);

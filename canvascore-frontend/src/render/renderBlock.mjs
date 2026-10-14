@@ -744,7 +744,12 @@ export function renderBlock(block, opts = {}) {
       let css = gray ? `#${innerId} .cc-logo-item:hover img,#${innerId} .cc-logo-item:focus-visible img{filter:none !important; opacity:1 !important}` : '';
       let body;
       if (marquee) {
-        css += `@keyframes ccMq_${innerId}{from{transform:translateX(0)}to{transform:translateX(-50%)}}#${innerId} .cc-logos-track{animation:ccMq_${innerId} ${speed}s linear infinite}#${innerId} .cc-logos-marquee:hover .cc-logos-track{animation-play-state:paused}@media(prefers-reduced-motion:reduce){#${innerId} .cc-logos-track{animation:none; flex-wrap:wrap; width:auto !important}#${innerId} .cc-logos-set[aria-hidden="true"]{display:none}}`;
+        // direction: right plays the same loop backwards; fade: edges fade out (both off when missing, as before)
+        const reverse = c.direction === 'right' ? ' reverse' : '';
+        const fade = c.fade === true;
+        css += `@keyframes ccMq_${innerId}{from{transform:translateX(0)}to{transform:translateX(-50%)}}#${innerId} .cc-logos-track{animation:ccMq_${innerId} ${speed}s linear infinite${reverse}}#${innerId} .cc-logos-marquee:hover .cc-logos-track{animation-play-state:paused}`
+          + (fade ? `#${innerId} .cc-logos-marquee{-webkit-mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)}` : '')
+          + `@media(prefers-reduced-motion:reduce){#${innerId} .cc-logos-track{animation:none; flex-wrap:wrap; width:auto !important}#${innerId} .cc-logos-set[aria-hidden="true"]{display:none}${fade ? `#${innerId} .cc-logos-marquee{-webkit-mask-image:none;mask-image:none}` : ''}}`;
         const setStyle = `display:flex; align-items:center; gap:${gap}px; padding-right:${gap}px;`;
         body = `<div class="cc-logos-marquee" style="overflow:hidden;"><div class="cc-logos-track" style="display:flex; width:max-content;"><div class="cc-logos-set" style="${setStyle}">${set1}</div><div class="cc-logos-set" aria-hidden="true" style="${setStyle}">${set2}</div></div></div>`;
       } else {
@@ -1017,6 +1022,113 @@ export function renderBlock(block, opts = {}) {
         + (bio !== '' ? `<p class="cc-author-bio" style="margin:10px 0 0 0; font-size:15px; line-height:1.6; color:#334155;">${bio}</p>` : '')
         + (links !== '' ? `<div class="cc-author-links" style="display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:14px; justify-content:${centered ? 'center' : 'flex-start'};">${links}</div>` : '')
         + `</div></div>\n</aside>\n`;
+    }
+
+    case 'REVIEW_SUMMARY': {
+      const c = content;
+      const color = ccColor(c.color, '#f59e0b');
+      const stacked = c.layout === 'stacked';
+      const avg = ccNum(c.average, 0, 5, 0);
+      const avgTxt = ccFmtNum(avg, 1);
+      const total = ccNum(c.total, 0, 1e9, 0);
+      const title = ccEsc(c.title);
+      const totalLabel = ccEsc(c.totalLabel);
+      const source = ccEsc(c.source);
+      const linkText = ccEsc(c.linkText);
+      const mode = ['percent', 'count', 'none'].includes(c.rowValue) ? c.rowValue : 'percent';
+      const rows = (Array.isArray(c.distribution) ? c.distribution : []).filter((r) => r && typeof r === 'object');
+      const counts = rows.map((r) => ccNum(r.count, 0, 1e9, 0));
+      const sum = counts.reduce((a, b) => a + b, 0);
+      let dist = '';
+      rows.forEach((r, i) => {
+        const pct = sum > 0 ? counts[i] / sum * 100 : 0;
+        const value = mode === 'percent' ? ccFmtNum(pct, 0) + '%' : (mode === 'count' ? ccFmtNum(counts[i], 0) : '');
+        dist += `<li class="cc-rs-row" style="display:flex; align-items:center; gap:10px; font-size:14px;">`
+          + `<span class="cc-rs-row-label" style="width:34px; flex-shrink:0; color:#475569;">${ccInt(r.stars, 5, 1, 5)} &#9733;</span>`
+          + `<span class="cc-rs-bar" style="flex:1; height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden;"><span class="cc-rs-bar-fill" style="display:block; height:100%; width:${ccFmtNum(pct, 1)}%; background:${color}; border-radius:999px;"></span></span>`
+          + (value !== '' ? `<span class="cc-rs-row-value" style="width:48px; text-align:right; flex-shrink:0; color:#64748b;">${value}</span>` : '')
+          + `</li>`;
+      });
+      const showDist = c.showDistribution !== false && dist !== '';
+      return customCss + `<style>@media(max-width:640px){#${innerId} .cc-rs-card{flex-direction:column !important;align-items:stretch !important}}</style>`
+        + `<div id="${innerId}" class="cc-review-summary${animClass}${innerClass}" style="${styleAttr}">\n`
+        + `<div class="cc-rs-card" style="display:flex; flex-direction:${stacked ? 'column' : 'row'}; gap:32px; align-items:${stacked ? 'stretch' : 'center'}; background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:28px;">`
+        + `<div class="cc-rs-score" style="flex:0 0 auto; text-align:center;">`
+        + (title !== '' ? `<div class="cc-rs-title" style="font-size:14px; font-weight:700; color:#475569; margin-bottom:8px;">${title}</div>` : '')
+        + `<div class="cc-rs-average" style="font-size:52px; font-weight:800; line-height:1; color:#0f172a;">${avgTxt}</div>`
+        + `<div class="cc-rs-stars" role="img" aria-label="${avgTxt} out of 5 stars" style="position:relative; display:inline-block; margin-top:8px; font-size:26px; line-height:1; letter-spacing:2px; color:#e2e8f0;">&#9733;&#9733;&#9733;&#9733;&#9733;`
+        + `<span class="cc-rs-stars-fill" aria-hidden="true" style="position:absolute; top:0; left:0; bottom:0; width:${ccFmtNum(avg / 5 * 100, 1)}%; overflow:hidden; white-space:nowrap; color:${color};">&#9733;&#9733;&#9733;&#9733;&#9733;</span></div>`
+        + `<div class="cc-rs-total" style="margin-top:8px; font-size:14px; color:#64748b;">${ccFmtNum(total, 0)}${totalLabel !== '' ? ' ' + totalLabel : ''}</div>`
+        + (source !== '' ? `<div class="cc-rs-source" style="margin-top:4px; font-size:12px; color:#94a3b8;">${source}</div>` : '')
+        + (linkText !== '' ? `<a class="cc-rs-link" href="${escapeHtml(resolveBlockUrl(ccStr(c.linkUrl)))}" style="display:inline-block; margin-top:12px; font-size:14px; font-weight:700; color:var(--brand-color, #3b82f6); text-decoration:none;">${linkText} &rarr;</a>` : '')
+        + `</div>`
+        + (showDist ? `<ul class="cc-rs-dist" style="flex:1; min-width:0; list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;">${dist}</ul>` : '')
+        + `</div>\n</div>\n`;
+    }
+
+    case 'TESTIMONIAL_WALL': {
+      const c = content;
+      const items = (Array.isArray(c.items) ? c.items : []).filter((it) => it && typeof it === 'object');
+      const cols = ccInt(c.columns, 3, 1, 4);
+      const gap = ccInt(c.gap, 20, 0, 48);
+      const card = c.cardStyle !== 'minimal';
+      const showRatings = c.showRatings !== false;
+      const starColor = ccColor(c.starColor, '#f59e0b');
+      let cards = '';
+      for (const it of items) {
+        const name = ccEsc(it.name);
+        const role = ccEsc(it.role);
+        const quote = ccBr(ccStr(it.quote));
+        const avatar = ccImgUrl(ccStr(it.avatar));
+        const rating = ccInt(it.rating, 0, 0, 5);
+        const astyle = 'width:40px; height:40px; border-radius:50%; flex-shrink:0; ';
+        const media = avatar !== ''
+          ? `<img class="cc-tw-avatar" src="${escapeHtml(avatar)}" alt="" loading="lazy" style="${astyle}object-fit:cover; display:block;">`
+          : `<span class="cc-tw-initials" aria-hidden="true" style="${astyle}background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; text-transform:uppercase;">${escapeHtml(ccInitials(ccStr(it.name)))}</span>`;
+        cards += `<figure class="cc-tw-card" style="break-inside:avoid; display:inline-block; width:100%; box-sizing:border-box; margin:0 0 ${gap}px 0; ${card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:22px; box-shadow:0 2px 8px rgba(15,23,42,0.04);' : 'padding:8px 0;'}">`
+          + (showRatings && rating > 0 ? `<div class="cc-tw-rating" role="img" aria-label="${rating} out of 5 stars" style="color:${starColor}; font-size:16px; letter-spacing:2px; margin-bottom:10px;">${'&#9733;'.repeat(rating)}${rating < 5 ? `<span style="color:#e2e8f0;">${'&#9733;'.repeat(5 - rating)}</span>` : ''}</div>` : '')
+          + `<blockquote class="cc-tw-quote" style="margin:0; font-size:15px; line-height:1.6; color:#334155;">${quote}</blockquote>`
+          + `<figcaption class="cc-tw-author" style="display:flex; align-items:center; gap:10px; margin-top:16px;">${media}<span style="min-width:0;">`
+          + `<span class="cc-tw-name" style="display:block; font-weight:700; font-size:14px; color:#0f172a;">${name}</span>`
+          + (role !== '' ? `<span class="cc-tw-role" style="display:block; font-size:13px; color:#64748b;">${role}</span>` : '')
+          + `</span></figcaption></figure>`;
+      }
+      return customCss + `<style>@media(max-width:768px){#${innerId} .cc-tw-grid{column-count:${Math.min(cols, 2)} !important}}@media(max-width:480px){#${innerId} .cc-tw-grid{column-count:1 !important}}</style>`
+        + `<div id="${innerId}" class="cc-testimonial-wall${animClass}${innerClass}" style="${styleAttr}">\n`
+        + `<div class="cc-tw-grid" style="column-count:${cols}; column-gap:${gap}px;">${cards}</div>\n</div>\n`;
+    }
+
+    case 'HOVER_GRID': {
+      const c = content;
+      const items = (Array.isArray(c.items) ? c.items : []).filter((it) => it && typeof it === 'object');
+      const cols = ccInt(c.columns, 3, 1, 4);
+      const gap = ccInt(c.gap, 16, 0, 48);
+      const radius = ccInt(c.radius, 12, 0, 40);
+      const ar = ['1 / 1', '4 / 3', '3 / 2', '16 / 9', '3 / 4'].includes(c.aspectRatio) ? c.aspectRatio : '4 / 3';
+      const effect = c.effect === 'fade' ? 'fade' : 'slide';
+      const overlay = ccColor(c.overlay, 'rgba(15,23,42,0.72)');
+      let cells = '';
+      for (const it of items) {
+        const img = ccImgUrl(ccStr(it.image));
+        const href = ccStr(it.href).trim();
+        const tag = href !== '' ? 'a' : 'div';
+        const title = ccEsc(it.title);
+        const text = ccEsc(it.text);
+        cells += `<${tag} class="cc-hg-item"${href !== '' ? ` href="${escapeHtml(resolveBlockUrl(href))}"` : ''} style="position:relative; display:block; overflow:hidden; border-radius:${radius}px; aspect-ratio:${ar}; background:#e2e8f0; color:#fff; text-decoration:none;">`
+          + (img !== '' ? `<img class="cc-hg-img" src="${escapeHtml(img)}" alt="${ccEsc(it.alt)}" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">` : '')
+          + `<div class="cc-hg-reveal" style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-end; padding:20px; background:${overlay};">`
+          + (title !== '' ? `<h3 class="cc-hg-title" style="margin:0; font-size:18px; line-height:1.3; color:#fff;">${title}</h3>` : '')
+          + (text !== '' ? `<p class="cc-hg-text" style="margin:6px 0 0 0; font-size:14px; line-height:1.5; color:rgba(255,255,255,0.88);">${text}</p>` : '')
+          + `</div></${tag}>`;
+      }
+      return customCss + `<style>#${innerId} .cc-hg-reveal{transition:opacity .3s ease, transform .3s ease}#${innerId}.cc-hg-fade .cc-hg-reveal{opacity:0}#${innerId}.cc-hg-slide .cc-hg-reveal{opacity:0;transform:translateY(16px)}`
+        + `#${innerId} .cc-hg-item:hover .cc-hg-reveal,#${innerId} .cc-hg-item:focus-within .cc-hg-reveal,#${innerId} .cc-hg-item:focus .cc-hg-reveal{opacity:1;transform:none}`
+        + `#${innerId} .cc-hg-img{transition:transform .5s ease}#${innerId} .cc-hg-item:hover .cc-hg-img{transform:scale(1.05)}`
+        + `@media(hover:none){#${innerId} .cc-hg-reveal{opacity:1 !important;transform:none !important}}`
+        + `@media(prefers-reduced-motion:reduce){#${innerId} .cc-hg-reveal,#${innerId} .cc-hg-img{transition:none !important}#${innerId} .cc-hg-item:hover .cc-hg-img{transform:none}}`
+        + `@media(max-width:768px){#${innerId} .cc-hg-grid{grid-template-columns:repeat(${Math.min(cols, 2)}, 1fr) !important}}@media(max-width:480px){#${innerId} .cc-hg-grid{grid-template-columns:1fr !important}}</style>`
+        + `<div id="${innerId}" class="cc-hover-grid cc-hg-${effect}${animClass}${innerClass}" style="${styleAttr}">\n`
+        + `<div class="cc-hg-grid" style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:${gap}px;">${cells}</div>\n</div>\n`;
     }
 
     default:

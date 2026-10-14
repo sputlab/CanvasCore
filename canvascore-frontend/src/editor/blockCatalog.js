@@ -5,6 +5,7 @@ import {
   MonitorPlay, Code, PanelLeft, Star, MessageSquareQuote, Info, Mail, Rows3, PanelTop, HelpCircle, Images,
   GalleryHorizontal, GitCompare, Timer, ListOrdered, Hash, BarChart3, Table2, History, CreditCard, Users,
   Building2, Store, MapPin, Library, Crown, Square, Search, LayoutDashboard, Columns2, TrendingUp, CircleUserRound,
+  StarHalf, MessagesSquare, SquareMousePointer,
 } from 'lucide-react';
 
 export const CATEGORIES = [
@@ -41,11 +42,13 @@ export const BLOCKS = [
   { type: 'SPLIT_CTA', label: 'Split CTA', icon: Columns2, category: 'sections', color: '#fcd34d', keywords: 'call to action two buttons banner' },
   { type: 'CASE_STUDY', label: 'Case Study', icon: TrendingUp, category: 'sections', color: '#3b82f6', keywords: 'success story result client metric' },
   { type: 'AUTHOR_BIO', label: 'Author Bio', icon: CircleUserRound, category: 'sections', color: '#a78bfa', keywords: 'writer profile about person' },
+  { type: 'TESTIMONIAL_WALL', label: 'Testimonial Wall', icon: MessagesSquare, category: 'sections', color: '#3b82f6', keywords: 'reviews quotes masonry customers' },
 
   { type: 'ACCORDION', label: 'Accordion', icon: Rows3, category: 'interactive', color: '#10b981', keywords: 'collapse expand faq' },
   { type: 'TABS', label: 'Tabs', icon: PanelTop, category: 'interactive', color: '#10b981', keywords: 'tabbed panels' },
   { type: 'FAQ', label: 'FAQ', icon: HelpCircle, category: 'interactive', color: '#10b981', keywords: 'questions answers' },
   { type: 'SLIDER', label: 'Slider', icon: Images, category: 'interactive', color: '#10b981', keywords: 'carousel slideshow' },
+  { type: 'HOVER_GRID', label: 'Hover Reveal Grid', icon: SquareMousePointer, category: 'interactive', color: '#10b981', keywords: 'portfolio services image overlay cards' },
   { type: 'GALLERY', label: 'Gallery', icon: GalleryHorizontal, category: 'interactive', color: '#10b981', keywords: 'images lightbox photos' },
   { type: 'BEFORE_AFTER', label: 'Before / After', icon: GitCompare, category: 'interactive', color: '#10b981', keywords: 'compare slider' },
   { type: 'COUNTDOWN', label: 'Countdown', icon: Timer, category: 'interactive', color: '#10b981', keywords: 'timer launch event date' },
@@ -57,6 +60,7 @@ export const BLOCKS = [
   { type: 'TIMELINE', label: 'Timeline', icon: History, category: 'data', color: '#f59e0b', keywords: 'history milestones' },
   { type: 'PRICING', label: 'Pricing', icon: CreditCard, category: 'data', color: '#f59e0b', keywords: 'plans price table' },
   { type: 'TEAM', label: 'Team', icon: Users, category: 'data', color: '#f59e0b', keywords: 'people members staff' },
+  { type: 'REVIEW_SUMMARY', label: 'Review Summary', icon: StarHalf, category: 'data', color: '#f59e0b', keywords: 'rating stars score reviews average' },
   { type: 'LOGOS', label: 'Logo Cloud', icon: Building2, category: 'data', color: '#f59e0b', keywords: 'clients partners brands' },
 
   { type: 'BUSINESS', label: 'Business Info', icon: Store, category: 'business', color: '#22d3ee', keywords: 'address hours contact opening' },

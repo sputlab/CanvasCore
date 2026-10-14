@@ -86,8 +86,8 @@ function addAndSelect(type) {
   return b;
 }
 
-const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO'];
-const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author' };
+const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID'];
+const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author', REVIEW_SUMMARY: 'Rating', TESTIMONIAL_WALL: 'Testimonials', HOVER_GRID: 'Grid Items' };
 let failedRun = false;
 try {
   console.log('\nADD BLOCK — the blocks.json defaults reach the editor');
@@ -190,6 +190,31 @@ try {
   click(buttonByText('+ Add link')); await sleep(40);
   check('AUTHOR_BIO: name and a new link update the store', content().name === 'Sam Lee' && content().links.length === 3 && content().links[2].label === 'New link');
 
+  addAndSelect('LOGOS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Logos Layout'));
+  click(buttonByText('Logos Layout')); await sleep(40);
+  check('LOGOS: direction, fade and speed are hidden for the grid layout', !field('Direction') && !checkbox('Fade the edges') && !$$('input[type="range"]').length);
+  setValue(field('Layout'), 'marquee'); await sleep(40);
+  setValue(field('Direction'), 'right'); await sleep(40);
+  click(checkbox('Fade the edges')); await sleep(40);
+  const speed = $$('input[type="range"]')[0];
+  setValue(speed, '60'); await sleep(40);
+  check('LOGOS strip: direction, fading edges and the speed slider update the store', content().direction === 'right' && content().fade === false && content().speed === 60, JSON.stringify({ d: content().direction, f: content().fade, s: content().speed }));
+  check('LOGOS strip: the slider label shows the loop time', $$('label').some((l) => l.textContent.includes('one loop every 60 s')));
+
+  addAndSelect('REVIEW_SUMMARY'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Average rating (0–5)'));
+  setValue(field('Average rating (0–5)'), '4.2'); await sleep(40);
+  check('REVIEW_SUMMARY: the average updates the store as a number', content().average === 4.2);
+
+  addAndSelect('TESTIMONIAL_WALL'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add testimonial'));
+  click(buttonByText('+ Add testimonial')); await sleep(40);
+  check('TESTIMONIAL_WALL: "+ Add testimonial" adds one with all expected fields', content().items.length === 7 && ['quote', 'name', 'role', 'avatar', 'rating'].every((k) => k in content().items[6]));
+
+  addAndSelect('HOVER_GRID'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add item'));
+  click(buttonByText('+ Add item')); await sleep(40);
+  click(buttonByText('Hover Layout')); await sleep(40);
+  setValue(field('Reveal effect'), 'fade'); await sleep(40);
+  check('HOVER_GRID: adding an item and changing the effect update the store', content().items.length === 4 && content().effect === 'fade');
+
   addAndSelect('BEFORE_AFTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('button').some((b) => b.textContent.includes('Before / After')));
   const imgs = $$('input[placeholder="Image URL"]');
   setValue(imgs[0], 'https://x.example/prima.jpg'); setValue(imgs[1], 'https://x.example/dopo.jpg'); await sleep(40);
@@ -213,7 +238,7 @@ try {
   check('BUSINESS: "+ Add weekly hours" restores the 7 days', content().hours.length === 7 && content().hours[0].day === 'Monday');
 
   console.log('\nCANVAS — every block is drawn in the editor (canonical renderer)');
-  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author' };
+  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author', REVIEW_SUMMARY: 'cc-review-summary', TESTIMONIAL_WALL: 'cc-testimonial-wall', HOVER_GRID: 'cc-hover-grid' };
   for (const t of TYPES) {
     const b = addAndSelect(t);
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));

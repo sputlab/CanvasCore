@@ -132,12 +132,25 @@ const fixtures = [
   { id: 'ab2', type: 'AUTHOR_BIO', styles: {}, content: { layout: 'centered', boxed: false, label: '', name: 'solo', role: '', bio: '', photo: '',
       links: ['x', null, { label: '', url: 'a.example' }, { label: 'Bad', url: 'javascript:alert(1)' }, { label: 'Empty', url: '' }] } },
   { id: 'ab3', type: 'AUTHOR_BIO', styles: {}, content: { name: ['x'], bio: { a: 1 }, photo: 'vbscript:x', links: 'nope' } },
+  { id: 'lg3', type: 'LOGOS', styles: {}, content: { layout: 'marquee', speed: 45, direction: 'right', fade: true, logos: [{ src: 'a.png', alt: 'A' }, { src: 'b.png', alt: 'B' }] } },
+  { id: 'lg4', type: 'LOGOS', styles: {}, content: { layout: 'marquee', direction: 'up', fade: 'yes', logos: [{ src: 'a.png', alt: 'A' }] } },
+  { id: 'rs1', type: 'REVIEW_SUMMARY', styles: { width: '100%' }, content: { layout: 'side', title: 'Rating', average: 4.76, total: 1280, totalLabel: 'reviews', source: 'Google', color: '#ef4444', rowValue: 'count', linkText: 'All', linkUrl: 'recensioni/index.html',
+      distribution: [{ stars: 5, count: 1000 }, { stars: 4, count: 200 }, { stars: 3, count: 50 }, { stars: 2, count: 20 }, { stars: 1, count: 10 }] } },
+  { id: 'rs2', type: 'REVIEW_SUMMARY', styles: {}, content: { layout: 'stacked', average: 9, total: -3, rowValue: 'none', distribution: [{ stars: 9, count: 'x' }, 'junk', { stars: 0, count: 0 }] } },
+  { id: 'rs3', type: 'REVIEW_SUMMARY', styles: {}, content: { average: 'abc', showDistribution: false, color: 'red;}', distribution: [{ stars: 5, count: 3 }] } },
+  { id: 'rs4', type: 'REVIEW_SUMMARY', styles: {}, content: {} },
+  { id: 'tw1', type: 'TESTIMONIAL_WALL', styles: { width: '100%' }, content: { columns: 4, gap: 12, cardStyle: 'card', showRatings: true, starColor: '#000', items: [
+      { quote: 'One\nTwo', name: 'Laura Bianchi', role: 'Owner', avatar: 'l.jpg', rating: 5 }, { quote: 'Q', name: 'Tom', role: '', avatar: '', rating: 3 }, { quote: 'Q', name: '', rating: 0 }, 'junk' ] } },
+  { id: 'tw2', type: 'TESTIMONIAL_WALL', styles: {}, content: { columns: 9, gap: -1, cardStyle: 'minimal', showRatings: false, items: [{ quote: '<b>x</b>', name: ['n'], avatar: 'javascript:x', rating: 99 }] } },
+  { id: 'hg1', type: 'HOVER_GRID', styles: { width: '100%' }, content: { columns: 4, gap: 8, radius: 0, aspectRatio: '16 / 9', effect: 'fade', overlay: 'rgba(0,0,0,0.5)', items: [
+      { image: 'a.jpg', alt: 'A', title: 'T', text: 'X', href: 'servizi/index.html' }, { image: '', title: '', text: '' }, null ] } },
+  { id: 'hg2', type: 'HOVER_GRID', styles: {}, content: { columns: 0, aspectRatio: '99 / 1', effect: 'boom', overlay: 'url(x)', items: [{ image: 'javascript:alert(1)', href: 'javascript:alert(2)', title: '<img src=x>' }] } },
 ];
 
 // Fixtures from the REAL DEFAULTS (blocks.json): exactly what the editor creates with addBlock.
 {
   const defs = JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks.json', import.meta.url)), 'utf-8'));
-  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO']) {
+  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID']) {
     const def = defs.types[type];
     if (!def) { console.error(`blocks.json: type ${type} is missing`); process.exit(1); }
     fixtures.push({ id: 'def_' + type.toLowerCase(), type, styles: { ...(defs._baseStyles || {}), ...(def.styles || {}) }, content: JSON.parse(JSON.stringify(def.content || {})) });
@@ -201,7 +214,7 @@ function diff(a, b, path = '') {
 
 // For these blocks the generated CSS carries LOGIC (radio tabs, open state, responsive):
 // besides the structure we also compare the text of the <style> tags.
-const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO']);
+const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID']);
 function styleTexts(html) {
   const $ = load(`<div id="__root__">${html}</div>`, null, false);
   return $('style').map((_, e) => $(e).text().replace(/\s+/g, ' ').replace(/:\s+/g, ':').replace(/,\s+/g, ',').trim()).get();

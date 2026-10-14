@@ -603,6 +603,8 @@
         "gap": 40,
         "grayscale": true,
         "speed": 30,
+        "direction": "left",
+        "fade": true,
         "logos": [
           {
             "src": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%2760%27 viewBox=%270 0 160 60%27%3E%3Crect width=%27100%25%27 height=%27100%25%27 fill=%27%23e2e8f0%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 fill=%27%2364748b%27 font-family=%27system-ui,sans-serif%27 font-size=%2712%27 text-anchor=%27middle%27 dominant-baseline=%27middle%27%3ELogo 1%3C/text%3E%3C/svg%3E",
@@ -917,6 +919,141 @@
           {
             "label": "LinkedIn",
             "url": "linkedin.com/in/example"
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "REVIEW_SUMMARY": {
+      "content": {
+        "layout": "side",
+        "title": "Customer rating",
+        "average": 4.8,
+        "total": 1280,
+        "totalLabel": "reviews",
+        "source": "Based on verified reviews",
+        "color": "#f59e0b",
+        "showDistribution": true,
+        "rowValue": "percent",
+        "linkText": "",
+        "linkUrl": "",
+        "distribution": [
+          {
+            "stars": 5,
+            "count": 1010
+          },
+          {
+            "stars": 4,
+            "count": 190
+          },
+          {
+            "stars": 3,
+            "count": 50
+          },
+          {
+            "stars": 2,
+            "count": 18
+          },
+          {
+            "stars": 1,
+            "count": 12
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "TESTIMONIAL_WALL": {
+      "content": {
+        "columns": 3,
+        "gap": 20,
+        "cardStyle": "card",
+        "showRatings": true,
+        "starColor": "#f59e0b",
+        "items": [
+          {
+            "quote": "Setting up the site took an afternoon. Changing it now takes minutes.",
+            "name": "Laura Bianchi",
+            "role": "Studio owner",
+            "avatar": "",
+            "rating": 5
+          },
+          {
+            "quote": "Clear, fast and nothing to break. Exactly what a small team needs.",
+            "name": "Tom Becker",
+            "role": "Operations",
+            "avatar": "",
+            "rating": 5
+          },
+          {
+            "quote": "We moved our whole blog in a weekend. The collections make publishing news effortless, and the pages load instantly on mobile.",
+            "name": "Sara Conti",
+            "role": "Editor",
+            "avatar": "",
+            "rating": 4
+          },
+          {
+            "quote": "Support answered every question the same day.",
+            "name": "Ben Ortiz",
+            "role": "Freelancer",
+            "avatar": "",
+            "rating": 5
+          },
+          {
+            "quote": "Our clients edit their own pages now, without calling us.",
+            "name": "Nina Park",
+            "role": "Agency partner",
+            "avatar": "",
+            "rating": 5
+          },
+          {
+            "quote": "Simple to learn, and the result looks professional.",
+            "name": "Marco Ricci",
+            "role": "Restaurant owner",
+            "avatar": "",
+            "rating": 4
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "HOVER_GRID": {
+      "content": {
+        "columns": 3,
+        "gap": 16,
+        "radius": 12,
+        "aspectRatio": "4 / 3",
+        "effect": "slide",
+        "overlay": "rgba(15,23,42,0.72)",
+        "items": [
+          {
+            "image": "",
+            "alt": "",
+            "title": "Branding",
+            "text": "Logos, colours and a voice that fits.",
+            "href": ""
+          },
+          {
+            "image": "",
+            "alt": "",
+            "title": "Web design",
+            "text": "Sites that are clear, fast and easy to update.",
+            "href": ""
+          },
+          {
+            "image": "",
+            "alt": "",
+            "title": "Photography",
+            "text": "Product and team photos for every page.",
+            "href": ""
           }
         ]
       },
