@@ -1061,6 +1061,136 @@
         "width": "100%",
         "padding": "20px 0"
       }
+    },
+    "SCROLLYTELLING": {
+      "content": {
+        "side": "left",
+        "ratio": "4 / 3",
+        "stickyTop": 80,
+        "stepHeight": 70,
+        "gap": 48,
+        "steps": [
+          {
+            "title": "Start with a plan",
+            "text": "Every project begins with a short conversation about what you want to achieve.",
+            "image": "",
+            "alt": ""
+          },
+          {
+            "title": "Build it together",
+            "text": "We share progress often, so nothing comes as a surprise.",
+            "image": "",
+            "alt": ""
+          },
+          {
+            "title": "Launch and improve",
+            "text": "After launch we keep measuring and improving what matters.",
+            "image": "",
+            "alt": ""
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "HOTSPOTS": {
+      "content": {
+        "image": "",
+        "alt": "",
+        "ratio": "16 / 9",
+        "radius": 12,
+        "pinColor": "#3b82f6",
+        "pinTextColor": "#ffffff",
+        "pulse": true,
+        "pins": [
+          {
+            "x": 26,
+            "y": 38,
+            "title": "Feature one",
+            "text": "A short description of what is here.",
+            "linkText": "",
+            "href": ""
+          },
+          {
+            "x": 64,
+            "y": 30,
+            "title": "Feature two",
+            "text": "Another detail worth pointing out.",
+            "linkText": "",
+            "href": ""
+          },
+          {
+            "x": 48,
+            "y": 74,
+            "title": "Feature three",
+            "text": "And one more thing to notice.",
+            "linkText": "",
+            "href": ""
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "TABLE_OF_CONTENTS": {
+      "content": {
+        "title": "On this page",
+        "levels": "h2",
+        "numbered": false,
+        "highlight": true,
+        "sticky": false,
+        "stickyTop": 90,
+        "offset": 80,
+        "layout": "card",
+        "accent": ""
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "SHARE_BAR": {
+      "content": {
+        "title": "Share this page",
+        "message": "",
+        "networks": [
+          "facebook",
+          "x",
+          "linkedin",
+          "whatsapp",
+          "email",
+          "copy"
+        ],
+        "style": "buttons",
+        "shape": "pill",
+        "colors": "brand",
+        "size": 40,
+        "align": "left"
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "CODE_SNIPPET": {
+      "content": {
+        "language": "js",
+        "filename": "example.js",
+        "theme": "dark",
+        "fontSize": 14,
+        "maxHeight": 0,
+        "lineNumbers": false,
+        "copyButton": true,
+        "code": "function greet(name) {\n  // say hello\n  return `Hello, ${name}!`;\n}\n\nconsole.log(greet('world'));"
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
     }
   }
 }

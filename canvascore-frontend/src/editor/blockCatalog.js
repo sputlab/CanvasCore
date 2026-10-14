@@ -5,7 +5,7 @@ import {
   MonitorPlay, Code, PanelLeft, Star, MessageSquareQuote, Info, Mail, Rows3, PanelTop, HelpCircle, Images,
   GalleryHorizontal, GitCompare, Timer, ListOrdered, Hash, BarChart3, Table2, History, CreditCard, Users,
   Building2, Store, MapPin, Library, Crown, Square, Search, LayoutDashboard, Columns2, TrendingUp, CircleUserRound,
-  StarHalf, MessagesSquare, SquareMousePointer,
+  StarHalf, MessagesSquare, SquareMousePointer, ScrollText, MapPinned, TableOfContents, Share2, Code2,
 } from 'lucide-react';
 
 export const CATEGORIES = [
@@ -28,6 +28,7 @@ export const BLOCKS = [
   { type: 'IMAGE', label: 'Image', icon: ImageIcon, category: 'basic', color: '#a78bfa', keywords: 'picture photo' },
   { type: 'BUTTON', label: 'Button', icon: SquareChartGantt, category: 'basic', color: '#f472b6', keywords: 'link cta call to action' },
   { type: 'DIVIDER', label: 'Divider', icon: SeparatorHorizontal, category: 'basic', color: '#f59e0b', keywords: 'separator line wave spacer' },
+  { type: 'CODE_SNIPPET', label: 'Code Snippet', icon: Code2, category: 'basic', color: '#f59e0b', keywords: 'code highlight syntax copy programming' },
   { type: 'VIDEO', label: 'Video', icon: MonitorPlay, category: 'basic', color: '#ef4444', keywords: 'youtube vimeo embed' },
   { type: 'HTML', label: 'Custom HTML', icon: Code, category: 'basic', color: '#f59e0b', keywords: 'code embed script', admin: true },
 
@@ -42,12 +43,14 @@ export const BLOCKS = [
   { type: 'SPLIT_CTA', label: 'Split CTA', icon: Columns2, category: 'sections', color: '#fcd34d', keywords: 'call to action two buttons banner' },
   { type: 'CASE_STUDY', label: 'Case Study', icon: TrendingUp, category: 'sections', color: '#3b82f6', keywords: 'success story result client metric' },
   { type: 'AUTHOR_BIO', label: 'Author Bio', icon: CircleUserRound, category: 'sections', color: '#a78bfa', keywords: 'writer profile about person' },
+  { type: 'SCROLLYTELLING', label: 'Scrollytelling', icon: ScrollText, category: 'sections', color: '#fdba74', keywords: 'story sticky image scroll steps narrative' },
   { type: 'TESTIMONIAL_WALL', label: 'Testimonial Wall', icon: MessagesSquare, category: 'sections', color: '#3b82f6', keywords: 'reviews quotes masonry customers' },
 
   { type: 'ACCORDION', label: 'Accordion', icon: Rows3, category: 'interactive', color: '#10b981', keywords: 'collapse expand faq' },
   { type: 'TABS', label: 'Tabs', icon: PanelTop, category: 'interactive', color: '#10b981', keywords: 'tabbed panels' },
   { type: 'FAQ', label: 'FAQ', icon: HelpCircle, category: 'interactive', color: '#10b981', keywords: 'questions answers' },
   { type: 'SLIDER', label: 'Slider', icon: Images, category: 'interactive', color: '#10b981', keywords: 'carousel slideshow' },
+  { type: 'HOTSPOTS', label: 'Product Hotspots', icon: MapPinned, category: 'interactive', color: '#10b981', keywords: 'pins image points annotations tour' },
   { type: 'HOVER_GRID', label: 'Hover Reveal Grid', icon: SquareMousePointer, category: 'interactive', color: '#10b981', keywords: 'portfolio services image overlay cards' },
   { type: 'GALLERY', label: 'Gallery', icon: GalleryHorizontal, category: 'interactive', color: '#10b981', keywords: 'images lightbox photos' },
   { type: 'BEFORE_AFTER', label: 'Before / After', icon: GitCompare, category: 'interactive', color: '#10b981', keywords: 'compare slider' },
@@ -66,6 +69,8 @@ export const BLOCKS = [
   { type: 'BUSINESS', label: 'Business Info', icon: Store, category: 'business', color: '#22d3ee', keywords: 'address hours contact opening' },
   { type: 'MAPS', label: 'Map', icon: MapPin, category: 'business', color: '#22d3ee', keywords: 'google maps location' },
   { type: 'COLLECTION_LIST', label: 'Collection List', icon: Library, category: 'business', color: '#22d3ee', keywords: 'blog posts news items dynamic' },
+  { type: 'TABLE_OF_CONTENTS', label: 'Table of Contents', icon: TableOfContents, category: 'business', color: '#22d3ee', keywords: 'toc index headings navigation anchor' },
+  { type: 'SHARE_BAR', label: 'Share Bar', icon: Share2, category: 'business', color: '#22d3ee', keywords: 'social share facebook whatsapp copy link print' },
   { type: 'SEARCH', label: 'Site Search', icon: Search, category: 'business', color: '#22d3ee', keywords: 'search find query results' },
 ];
 

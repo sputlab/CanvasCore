@@ -9,6 +9,7 @@ import { load } from 'cheerio';
 import { JSDOM } from 'jsdom';
 import { renderBlock } from '../src/render/renderBlock.mjs';
 import { fillLogosMarquee, marqueeSpeed } from '../src/render/logosMarquee.mjs';
+import { ccTokens } from '../src/render/blockRuntime.mjs';
 
 const phpScript = fileURLToPath(new URL('./render_php.php', import.meta.url));
 const php = (type, content, styles = {}) => execFileSync('php', [phpScript], { input: JSON.stringify({ id: 'tb', type, styles, content }) }).toString();
@@ -442,6 +443,266 @@ section('Placeholder images survive saving');
   check('the default block placeholders are PNG images (saving keeps them)', defs.length > 0 && defs.every((u) => u.startsWith('data:image/png;base64,') && !blanked(u)), `${defs.filter(blanked).length} would be blanked`);
   check('the starter pages\' placeholders are PNG images too', starters.length > 0 && starters.every((u) => u.startsWith('data:image/png;base64,') && !blanked(u)), `${starters.filter(blanked).length} would be blanked`);
   check('the editor\'s placeholder is a PNG (and the rule does not blank it)', !blanked('data:image/png;base64,iVBORw0KGgo='));
+}
+
+// =============================================================== batch 3: scripts shared by the editor canvas and published pages
+section('Shared scripts (Code Snippet, Table of Contents, Share Bar)');
+const RUNTIME_SRC = readFileSync(new URL('../src/render/blockRuntime.mjs', import.meta.url), 'utf-8');
+const COMPILER_SRC = readFileSync(new URL('../../canvascore-admin/compiler.php', import.meta.url), 'utf-8');
+const regionOf = (src, name) => { const m = src.match(new RegExp(`// cc-${name}:begin\\n[\\s\\S]*?// cc-${name}:end\\n`)); return m ? m[0] : null; };
+{
+  for (const name of ['hl', 'code', 'toc', 'share']) {
+    const a = regionOf(RUNTIME_SRC, name), b = regionOf(COMPILER_SRC, name);
+    check(`"${name}": the text in the compiler is identical to the editor's (blockRuntime.mjs)`, !!a && a === b);
+    check(`"${name}": nothing in it can end or confuse a <script> element`, !!a && !/<\/script|<!--|-->/i.test(a));
+  }
+}
+const pub = (html, { title = 'Page title', url = 'https://example.com/page/?x=1#top', clipboard = true, share = false, io = false, reduced = false } = {}) => {
+  const calls = { written: [], printed: 0, shared: [], exec: 0 }; const ios = [];
+  const dom = new JSDOM(`<!doctype html><html><head><title>${title}</title></head><body><main>${html}</main></body></html>`, {
+    runScripts: 'dangerously', url, pretendToBeVisual: true,
+    beforeParse(win) {
+      win.matchMedia = () => ({ matches: reduced });
+      win.print = () => { calls.printed++; };
+      win.requestAnimationFrame = (cb) => { cb(); return 1; };
+      if (clipboard) Object.defineProperty(win.navigator, 'clipboard', { value: { writeText: (t) => { calls.written.push(t); return Promise.resolve(); } }, configurable: true });
+      if (share) Object.defineProperty(win.navigator, 'share', { value: (d) => { calls.shared.push(d); return Promise.resolve(); }, configurable: true });
+      if (io) win.IntersectionObserver = class { constructor(cb, o) { this.cb = cb; this.o = o; this.t = []; ios.push(this); } observe(x) { this.t.push(x); } disconnect() {} };
+      win.document.execCommand = () => { calls.exec++; return true; };
+    },
+  });
+  return { win: dom.window, doc: dom.window.document, calls, ios, click: (el) => el.dispatchEvent(new dom.window.Event('click', { bubbles: true })) };
+};
+const settle = () => new Promise((r) => setTimeout(r, 20));
+
+// =============================================================== CODE_SNIPPET: highlighter
+section('CODE_SNIPPET highlighter');
+{
+  const cls = (code, lang) => ccTokens(code, lang).map(([c, t]) => (c ? c + ':' : '') + t);
+  const has = (code, lang, ...want) => { const got = cls(code, lang); return want.every((w) => got.includes(w)); };
+  check('JavaScript: keywords, strings, comments, numbers, function calls', has('const x = "a"; // note\nfoo(42)', 'js', 'k:const', 's:"a"', 'c:// note', 'n:42', 'f:foo'));
+  check('JavaScript: template strings and block comments', has('`a ${b}` /* c */', 'js', 's:`a ${b}`', 'c:/* c */'));
+  check('JavaScript: a keyword inside a word is not a keyword (iffy, xif)', !cls('iffy xif', 'js').some((t) => t.startsWith('k:')));
+  check('JSON: keys, string values, numbers and literals', has('{"name": "x", "n": -3.5, "ok": true, "z": null}', 'json', 'a:"name"', 's:"x"', 'n:-3.5', 'k:true', 'k:null'));
+  check('CSS: at-rules, properties, colors, lengths, comments', has('@media (x) { a { color: #fff; margin: 12px; } } /* c */', 'css', 'k:@media', 'a:color', 'n:#fff', 'n:12px', 'c:/* c */'));
+  check('CSS: digits inside names (h1, .col2) are left alone', !cls('h1 .col2 { }', 'css').some((t) => t.startsWith('n:')));
+  check('HTML: tags, attributes, strings, comments', has('<div class="a" id=\'b\'>x</div><!-- c -->', 'html', 't:<div', 'a:class', 's:"a"', 'a:id', 's:\'b\'', 't:>', 't:</div', 'c:<!-- c -->'));
+  check('PHP: open tag, variables, keywords, strings, comments, calls', has('<?php $a = strlen("x"); // c\nreturn $a;', 'php', 'k:<?php', 'v:$a', 'f:strlen', 's:"x"', 'c:// c', 'k:return'));
+  check('Shell: comments, variables, keywords, strings', has('# c\nif [ "$HOME" ]; then echo ${A} fi', 'shell', 'c:# c', 'k:if', 'k:then', 'k:echo', 'v:${A}', 's:"$HOME"'.replace('$HOME', '$HOME')));
+  check('plain text and unknown languages: one token, no colors', cls('const x', 'text').length === 1 && cls('const x', 'cobol').length === 1 && cls('const x', undefined).length === 1);
+  const corpus = ['', 'a', '"unterminated', "'x\\", '/* never closed', '`open ${', 'x = "a\\"b" + \'c\'', 'é 日本語 😀 "😀"', 'a\r\nb\r\n', '<<<EOF\n$x\nEOF', '\\', '"', '--'];
+  check('lossless: the tokens always add up to the original text, in every language', ['js', 'json', 'css', 'html', 'php', 'shell', 'text', 'x'].every((lang) => corpus.every((code) => ccTokens(code, lang).map((t) => t[1]).join('') === code)));
+  check('an unterminated block comment colors the rest; a quote cut short by a line break is left plain (strings never span lines)', has('a /* never', 'js', 'c:/* never') && !cls('a "never\nb', 'js').some((t) => t.startsWith('s:')) && has('x = "never', 'js', 's:"never'));
+  const big = 'const a = "x"; // c\n'.repeat(2500);
+  const t0 = Date.now(); const bigTokens = ccTokens(big, 'js');
+  check('50,000 characters are highlighted in well under a second', Date.now() - t0 < 1500 && bigTokens.map((t) => t[1]).join('') === big, `${Date.now() - t0}ms`);
+  const t1 = Date.now(); ccTokens('"' + '\\'.repeat(20000) + 'x', 'js'); ccTokens('/*'.repeat(20000), 'css'); ccTokens('<' + 'a='.repeat(10000), 'html');
+  check('pathological input does not hang the highlighter', Date.now() - t1 < 1500, `${Date.now() - t1}ms`);
+}
+
+// =============================================================== CODE_SNIPPET
+section('CODE_SNIPPET');
+{
+  const code = '<?php\n// hello\n$x = "a";\nreturn $x;\n\n\n';
+  const h = php('CODE_SNIPPET', { language: 'php', filename: 'index.php', code, lineNumbers: true });
+  const d = $(h);
+  check('the code is plain escaped text in <pre><code> (colors are added in the browser), trailing blank lines trimmed', d('pre code').text() === '<?php\n// hello\n$x = "a";\nreturn $x;' && d('pre code span').length === 0);
+  check('file name and language in the bar, with a copy button that stays hidden until the script runs', d('.cc-code-file').text() === 'index.php' && d('.cc-code-lang').text() === 'PHP' && d('button.cc-code-copy').attr('hidden') !== undefined);
+  check('line numbers: one per line, in a gutter hidden from screen readers', d('.cc-code-gutter').text() === '1\n2\n3\n4' && d('.cc-code-gutter').attr('aria-hidden') === 'true');
+  check('the language is recorded for the script; unknown languages become plain text', d('figure').attr('data-lang') === 'php' && $(php('CODE_SNIPPET', { language: 'cobol', code: 'x' }))('figure').attr('data-lang') === 'text');
+  check('plain text without a file name and without a copy button has no bar at all', $(php('CODE_SNIPPET', { language: 'text', code: 'x', copyButton: false }))('.cc-code-bar').length === 0);
+  check('Windows line breaks become \\n, and the dark/light themes use their own colors', $(php('CODE_SNIPPET', { code: 'a\r\nb\r\n' }))('code').text() === 'a\nb' && /background:#0f172a/.test(h) && /background:#f8fafc/.test(php('CODE_SNIPPET', { theme: 'light', code: 'x' })));
+  check('maximum height and text size are applied and clamped', /max-height:300px/.test(php('CODE_SNIPPET', { code: 'x', maxHeight: 300 })) && /max-height:1200px/.test(php('CODE_SNIPPET', { code: 'x', maxHeight: 99999 })) && !/max-height/.test(php('CODE_SNIPPET', { code: 'x', maxHeight: -5 })) && /font:20px\/1\.6/.test(php('CODE_SNIPPET', { code: 'x', fontSize: 999 })));
+  const bad = php('CODE_SNIPPET', { language: '"><script>x</script>', filename: '<img src=x onerror=a>', code: '</code></pre></figure><script>alert(1)</script><img src=x onerror=a>' });
+  const bd = $(bad);
+  check('hostile code and file name stay text: no element comes out of them', bd('img').length === 0 && bd('code').children().length === 0 && /&lt;\/script&gt;/.test(bad) && bd('figure').length === 1);
+  check('the block has exactly one <script> (the highlighter), and no "</script" inside the code text', [...bad.matchAll(/<script>/g)].length === 1 && bad.split('</script>').length === 2);
+  check('the code is limited to 50,000 characters', $(php('CODE_SNIPPET', { code: 'x'.repeat(60000) }))('code').text().length === 50000);
+  check('code that is not text is ignored', $(php('CODE_SNIPPET', { code: { o: 1 } }))('code').text() === '');
+
+  // the published script, run in jsdom
+  const src = 'const total = 42; // count\nfoo("a")';
+  const p = pub(php('CODE_SNIPPET', { language: 'js', code: src }));
+  const pc = p.doc.querySelector('.cc-code-code');
+  check('published: the code is colored (keywords, strings, numbers, comments, calls) and its text is unchanged', pc.textContent === src && ['k', 's', 'n', 'c', 'f'].every((k) => pc.querySelector('.cc-tk-' + k)));
+  const spans = [...pc.children].map((e) => e.className.replace('cc-tk-', '') + ':' + e.textContent);
+  check('published: exactly the tokens the editor canvas produces', JSON.stringify(spans) === JSON.stringify(ccTokens(src, 'js').filter((t) => t[0]).map((t) => t[0] + ':' + t[1])));
+  const btn = p.doc.querySelector('.cc-code-copy');
+  check('published: the copy button appears', btn.hidden === false);
+  p.click(btn); await settle();
+  check('published: it copies the code (not the colors) and says "Copied" for a moment', p.calls.written[0] === src && btn.textContent === 'Copied');
+  const nc = pub(php('CODE_SNIPPET', { language: 'js', code: 'a' }), { clipboard: false });
+  nc.click(nc.doc.querySelector('.cc-code-copy'));
+  check('published: without the clipboard API it falls back to selecting and copying', nc.calls.exec === 1 && !nc.doc.querySelector('textarea'));
+  const hostile = pub(php('CODE_SNIPPET', { language: 'html', code: '<img src=x onerror="alert(1)"><script>alert(2)</script>' }));
+  check('published: HTML in the code is only ever text: no element is created, no script runs', hostile.doc.querySelectorAll('.cc-code-code img, .cc-code-code script').length === 0 && hostile.doc.querySelector('.cc-code-code').textContent === '<img src=x onerror="alert(1)"><script>alert(2)</script>');
+}
+
+// =============================================================== TABLE_OF_CONTENTS
+section('TABLE_OF_CONTENTS');
+{
+  const h = php('TABLE_OF_CONTENTS', { title: 'On this page', levels: 'h2h3', numbered: true, sticky: true, stickyTop: 120, offset: 100 });
+  const d = $(h);
+  check('the block starts hidden and empty: only the script makes it appear', d('nav.cc-toc').attr('hidden') !== undefined && d('.cc-toc-list').children().length === 0 && d('nav').attr('aria-label') === 'On this page');
+  check('settings are handed to the script as attributes (levels, numbering, highlighting, offset)', d('nav').attr('data-levels') === 'h2h3' && d('nav').attr('data-numbered') === '1' && d('nav').attr('data-highlight') === '1' && d('nav').attr('data-offset') === '100');
+  check('sticky: position and distance from the top; not sticky by default', /position:sticky; top:120px/.test(h) && !/sticky/.test(php('TABLE_OF_CONTENTS', {})));
+  check('a nameless contents list is still labelled for screen readers', $(php('TABLE_OF_CONTENTS', { title: '' }))('nav').attr('aria-label') === 'Table of contents');
+  const bad = php('TABLE_OF_CONTENTS', { title: '<img src=x onerror=a>', levels: 'h9', stickyTop: 9999, offset: -1, accent: 'red;}' });
+  check('hostile values: escaped title, unknown level → H2, numbers clamped, unsafe accent replaced', !/<img src=x/.test(bad) && $(bad)('nav').attr('data-levels') === 'h2' && $(bad)('nav').attr('data-offset') === '0' && !/red;\}/.test(bad));
+
+  const page = '<div class="cc-text"><h1>Title</h1><h2>Intro</h2><p>x</p><h3>Sub one</h3><h2 id="keep">Keep</h2><h2>Intro</h2><h2>   </h2><h3>Sub two</h3></div>';
+  const make = (c, extra = '') => pub(php('TABLE_OF_CONTENTS', c) + page + extra);
+  await settle();
+  const t = make({ levels: 'h2h3', numbered: true });
+  await settle();
+  const items = [...t.doc.querySelectorAll('.cc-toc-item')];
+  check('published: lists the H2 and H3 headings of the page in order, skipping empty ones and the page title', items.map((li) => li.textContent).join('|') === '1. Intro|1.1. Sub one|2. Keep|3. Intro|3.1. Sub two', items.map((li) => li.textContent).join('|'));
+  check('published: sub-headings are marked as such', items.map((li) => /cc-toc-l3/.test(li.className) ? 3 : 2).join('') === '23223');
+  check('published: headings get unique ids (a duplicate name gets -2), an existing id is kept', [...t.doc.querySelectorAll('a')].map((a) => a.getAttribute('href')).join() === '#intro,#sub-one,#keep,#intro-2,#sub-two' && t.doc.getElementById('keep').textContent === 'Keep');
+  check('published: the block appears, the "no headings" hint stays hidden, headings leave room for a sticky header', t.doc.querySelector('nav').hidden === false && t.doc.querySelector('.cc-toc-empty').hidden === true && t.doc.getElementById('intro').style.scrollMarginTop === '80px');
+  const only2 = make({});
+  await settle();
+  check('published: by default only H2 headings, not numbered', [...only2.doc.querySelectorAll('.cc-toc-item')].map((li) => li.textContent).join('|') === 'Intro|Keep|Intro' && only2.doc.querySelectorAll('.cc-toc-num').length === 0);
+  const none = pub(php('TABLE_OF_CONTENTS', {}) + '<p>No headings here</p>');
+  await settle();
+  check('published: a page without headings keeps the block hidden', none.doc.querySelector('nav').hidden === true);
+  const inside = pub('<div class="cc-text"><h2>Own</h2></div>' + php('TABLE_OF_CONTENTS', { title: 'Own title' }));
+  await settle();
+  check('published: the contents list never lists its own title or entries', [...inside.doc.querySelectorAll('.cc-toc-item')].map((li) => li.textContent).join() === 'Own');
+  const xss = pub(php('TABLE_OF_CONTENTS', {}) + '<div class="cc-text"><h2><img src=x onerror="alert(1)">Safe <b>bold</b></h2></div>');
+  await settle();
+  check('published: heading text becomes text in the list (no markup is copied)', xss.doc.querySelector('.cc-toc-item').textContent === 'Safe bold' && xss.doc.querySelectorAll('.cc-toc-item img, .cc-toc-item b').length === 0);
+  // highlighting the section being read
+  const hl = make({ levels: 'h2' });
+  await settle();
+  const heads = [...hl.doc.querySelectorAll('main h2')].filter((e) => e.textContent.trim());
+  heads.forEach((e, i) => { e.getBoundingClientRect = () => ({ top: [-300, -40, 500][i] }); });
+  hl.win.dispatchEvent(new hl.win.Event('scroll'));
+  const active = [...hl.doc.querySelectorAll('.cc-toc-item')].map((li) => /is-active/.test(li.className));
+  check('published: while scrolling, the last heading that has passed the top is highlighted (and marked current)', JSON.stringify(active) === '[false,true,false]' && hl.doc.querySelector('.is-active a').getAttribute('aria-current') === 'true');
+  // the very end of the page: the last heading may never reach the top, but it is the one being read
+  const endPage = make({ levels: 'h2' });
+  await settle();
+  const endHeads = [...endPage.doc.querySelectorAll('main h2')].filter((e) => e.textContent.trim());
+  endHeads.forEach((e, i) => { e.getBoundingClientRect = () => ({ top: [-900, -500, 300][i] }); });
+  Object.defineProperty(endPage.win, 'pageYOffset', { value: 1500, configurable: true });
+  Object.defineProperty(endPage.win, 'innerHeight', { value: 800, configurable: true });
+  Object.defineProperty(endPage.doc.documentElement, 'scrollHeight', { value: 2300, configurable: true });
+  endPage.win.dispatchEvent(new endPage.win.Event('scroll'));
+  check('published: at the very bottom of the page the last heading is highlighted even if it never reached the top', JSON.stringify([...endPage.doc.querySelectorAll('.cc-toc-item')].map((li) => /is-active/.test(li.className))) === '[false,false,true]');
+  // which headings count: the author's own, not the design headings of other blocks
+  const mixed = pub(php('TABLE_OF_CONTENTS', { levels: 'h2h3' })
+    + '<div class="cc-text"><h2>Text heading</h2><h3 class="cc-special">Classed heading</h3></div>'
+    + '<div class="cc-story"><ol><li><h3 class="cc-story-title">Story step</h3></li></ol></div>'
+    + '<div class="cc-collection"><h3 style="margin:0">Collection card title</h3></div>'
+    + '<div class="cc-hero"><h2>Hero heading</h2></div><div class="cc-img-text"><h2>Image text heading</h2></div><div class="cc-html-block"><h2>Custom html heading</h2></div>'
+    + '<h2>Loose heading outside any block</h2>');
+  await settle();
+  check('published: lists headings written in Text, Hero, Image + Text and Custom HTML blocks; leaves out the titles that belong to other blocks (Scrollytelling, Collection List...), classed headings and loose ones', [...mixed.doc.querySelectorAll('.cc-toc-item')].map((li) => li.textContent).join('|') === 'Text heading|Hero heading|Image text heading|Custom html heading', [...mixed.doc.querySelectorAll('.cc-toc-item')].map((li) => li.textContent).join('|'));
+  const off = make({ levels: 'h2', highlight: false });
+  await settle();
+  check('published: highlighting can be switched off (no scroll listener work)', off.doc.querySelectorAll('.is-active').length === 0);
+}
+
+// =============================================================== SHARE_BAR
+section('SHARE_BAR');
+{
+  const all = ['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email', 'copy', 'print', 'share'];
+  const h = php('SHARE_BAR', { title: 'Share', networks: [...all].reverse() });
+  const d = $(h);
+  check('the networks always come in the same order, whatever order they were chosen in', d('.cc-share-btn').map((_, e) => d(e).attr('class').split(' ')[1].replace('cc-share-', '')).get().join() === all.join());
+  check('social links are <a> that open in a new tab without handing over the window; the others are buttons', d('a.cc-share-btn').length === 6 && d('a.cc-share-btn').toArray().every((a) => d(a).attr('target') === '_blank' && d(a).attr('rel') === 'noopener noreferrer') && d('button.cc-share-btn').length === 3 && d('button.cc-share-btn').toArray().every((b) => d(b).attr('type') === 'button'));
+  check('the bar starts hidden (it is useless without the script)', d('.cc-share').attr('hidden') !== undefined);
+  check('every button has an accessible name', d('.cc-share-btn').toArray().every((b) => (d(b).attr('aria-label') || '').length > 3) && d('.cc-share-x').attr('aria-label') === 'Share on X' && d('.cc-share-email').attr('aria-label') === 'Share by email');
+  check('"buttons" shows the names, "icons" only the symbols', d('.cc-share-label').length === 9 && $(php('SHARE_BAR', { networks: all, style: 'icons' }))('.cc-share-label').length === 0);
+  check('only known networks are used; nothing chosen means no buttons', $(php('SHARE_BAR', { networks: ['evil', 7, null, 'x'] }))('.cc-share-btn').length === 1 && $(php('SHARE_BAR', { networks: 'facebook' }))('.cc-share-btn').length === 0 && $(php('SHARE_BAR', {}))('.cc-share-btn').length === 0);
+  check('colors: network colors, white with border, dark; shapes; size is clamped', /background:#1877f2/.test(h) && /border:1px solid #cbd5e1/.test(php('SHARE_BAR', { networks: ['x'], colors: 'mono' })) && /background:#0f172a/.test(php('SHARE_BAR', { networks: ['x'], colors: 'dark' })) && /border-radius:0;/.test(php('SHARE_BAR', { networks: ['x'], shape: 'square' })) && /height:64px/.test(php('SHARE_BAR', { networks: ['x'], size: 9999 })) && /height:28px/.test(php('SHARE_BAR', { networks: ['x'], size: 1 })));
+  const bad = php('SHARE_BAR', { title: '<img src=x onerror=a>', message: '"><script>alert(1)</script>', networks: ['x'] });
+  check('hostile title and message are escaped (the message lives in an attribute)', !/<img src=x/.test(bad) && !/"><script>alert/.test(bad) && $(bad)('.cc-share').attr('data-msg') === '"><script>alert(1)</script>');
+
+  const p = pub(php('SHARE_BAR', { networks: all, message: 'Read this & that' }), { share: true });
+  const href = (n) => p.doc.querySelector(`a[data-net="${n}"]`).href;
+  const u = encodeURIComponent('https://example.com/page/?x=1');
+  check('published: the bar appears and every link points at the current page (without the #fragment)', p.doc.querySelector('.cc-share').hidden === false && href('facebook') === `https://www.facebook.com/sharer/sharer.php?u=${u}` && href('linkedin') === `https://www.linkedin.com/sharing/share-offsite/?url=${u}`);
+  check('published: the message goes into X, WhatsApp, Telegram and the email', href('x') === `https://twitter.com/intent/tweet?url=${u}&text=${encodeURIComponent('Read this & that')}` && href('whatsapp') === `https://wa.me/?text=${encodeURIComponent('Read this & that https://example.com/page/?x=1')}` && href('telegram').includes('text=' + encodeURIComponent('Read this & that')) && href('email') === `mailto:?subject=${encodeURIComponent('Read this & that')}&body=${u}`);
+  const dflt = pub(php('SHARE_BAR', { networks: ['x'] }));
+  check('published: without a message, the page title is used', dflt.doc.querySelector('a[data-net="x"]').href.endsWith('&text=' + encodeURIComponent('Page title')));
+  const copyBtn = p.doc.querySelector('[data-act="copy"]');
+  p.click(copyBtn); await settle();
+  check('published: "Copy link" copies the page address and confirms', p.calls.written[0] === 'https://example.com/page/?x=1' && copyBtn.querySelector('.cc-share-label').textContent === 'Copied');
+  p.click(p.doc.querySelector('[data-act="print"]'));
+  check('published: "Print" opens the print dialog', p.calls.printed === 1);
+  p.click(p.doc.querySelector('[data-act="share"]'));
+  check('published: "Share" uses the phone\'s share sheet with the title and address', p.calls.shared.length === 1 && p.calls.shared[0].url === 'https://example.com/page/?x=1' && p.calls.shared[0].title === 'Read this & that');
+  const noShare = pub(php('SHARE_BAR', { networks: ['share', 'copy'] }));
+  check('published: "Share" is removed where the browser has no share sheet', noShare.doc.querySelector('[data-act="share"]').hidden === true && noShare.doc.querySelector('[data-act="copy"]').hidden === false);
+  const evil = pub(php('SHARE_BAR', { networks: ['x', 'email'], message: '"><script>window.pwned=1</script>' }));
+  check('published: a hostile message cannot inject anything (it is only URL-encoded)', evil.win.pwned === undefined && evil.doc.querySelectorAll('main script').length === 1 && evil.doc.querySelector('a[data-net="x"]').href.includes('%22%3E%3Cscript%3E'));
+}
+
+// =============================================================== SCROLLYTELLING
+section('SCROLLYTELLING');
+{
+  const steps = [{ title: 'One', text: 'a\nb', image: 'one.jpg', alt: 'First image' }, { title: 'Two', text: 'second' }, { title: 'Three', image: 'three.jpg' }];
+  const h = php('SCROLLYTELLING', { steps });
+  const d = $(h);
+  check('one image (or numbered placeholder) and one text per step, in order', d('.cc-story-img').length === 3 && d('.cc-story-step').length === 3 && d('img.cc-story-img').eq(0).attr('alt') === 'First image' && d('.cc-story-ph').text() === '2' && d('.cc-story-title').map((_, e) => d(e).text()).get().join() === 'One,Two,Three');
+  check('text keeps its line breaks', d('.cc-story-text').eq(0).html() === 'a<br>b');
+  check('the first image is the one showing before any scrolling (the rules for every step are in the stylesheet)', d('.cc-story').attr('data-active') === '0' && /#tb\[data-active="0"\] \.cc-story-img\[data-i="0"\]\{opacity:1\}/.test(h) && /#tb\[data-active="2"\] \.cc-story-img\[data-i="2"\]\{opacity:1\}/.test(h));
+  check('the image side: left by default, right on request (the image column is ordered after the text)', !/order:2/.test(h) && /order:2/.test(php('SCROLLYTELLING', { steps, side: 'right' })));
+  check('on phones the image sticks to the top above the text, shorter, in one column', /max-width:768px\)\{#tb \.cc-story-grid\{grid-template-columns:1fr !important/.test(h) && /max-height:36vh/.test(h) && /min-height:55vh/.test(h));
+  check('the dimming of inactive steps only applies once the script is running (.cc-story-on)', /\.cc-story-on \.cc-story-step\{opacity:\.35/.test(h) && !/class="cc-story-step"[^>]*opacity/.test(h));
+  check('motion is switched off for visitors who prefer reduced motion', /prefers-reduced-motion:reduce\)\{#tb \.cc-story-img,#tb\.cc-story-on \.cc-story-step\{transition:none/.test(h));
+  const bad = php('SCROLLYTELLING', { side: 'x', ratio: '99 / 1', stickyTop: 'abc', stepHeight: 9999, gap: -5, steps: [{ title: '<img src=x onerror=a>', text: { o: 1 }, image: 'javascript:alert(1)' }, 'junk', null] });
+  check('hostile values: escaped, no javascript: image, junk steps skipped, numbers clamped, unknown shape → 4:3', !/<img src=x/.test(bad) && !/src="javascript:/i.test(bad) && $(bad)('.cc-story-step').length === 1 && /min-height:120vh/.test(bad) && /gap:0px/.test(bad) && /aspect-ratio:4 \/ 3/.test(bad) && /top:80px/.test(bad));
+  check('at most 12 steps', $(php('SCROLLYTELLING', { steps: Array.from({ length: 20 }, (_, i) => ({ title: 'S' + i })) }))('.cc-story-step').length === 12);
+  check('no steps: an empty block and no script', $(php('SCROLLYTELLING', {}))('.cc-story-step').length === 0 && !/<script/.test(php('SCROLLYTELLING', {})));
+
+  const p = pub(h, { io: true });
+  const root = p.doc.querySelector('.cc-story');
+  check('published: the script starts watching the steps around the middle of the screen', root.classList.contains('cc-story-on') && p.ios[0].t.length === 3 && p.ios[0].o.rootMargin === '-45% 0px -45% 0px');
+  const els = [...p.doc.querySelectorAll('.cc-story-step')];
+  p.ios[0].cb([{ isIntersecting: true, target: els[2] }]);
+  check('published: the step in the middle decides the active image', root.getAttribute('data-active') === '2');
+  p.ios[0].cb([{ isIntersecting: false, target: els[2] }, { isIntersecting: true, target: els[1] }]);
+  check('published: leaving a step does not change anything by itself; entering another one does', root.getAttribute('data-active') === '1');
+  const noIo = pub(h);
+  check('published: without IntersectionObserver nothing is dimmed and the first image stays', !noIo.doc.querySelector('.cc-story').classList.contains('cc-story-on') && noIo.doc.querySelector('.cc-story').getAttribute('data-active') === '0');
+  const one = pub(php('SCROLLYTELLING', { steps: [{ title: 'Only' }] }), { io: true });
+  check('published: a single step needs no watching', one.ios.length === 0);
+}
+
+// =============================================================== HOTSPOTS
+section('HOTSPOTS');
+{
+  const pins = [{ x: 10, y: 20, title: 'Top left', text: 'a\nb', linkText: 'More', href: 'prodotti/index.html' }, { x: 50, y: 60, title: 'Middle low' }, { x: 90, y: 90, text: 'No title' }, { x: 25, y: 55 }, { x: 75.4, y: 55.5 }];
+  const h = php('HOTSPOTS', { image: 'p.jpg', alt: 'The product', pins });
+  const d = $(h);
+  check('image with alt text, one numbered pin per hotspot', d('img.cc-hs-img').attr('alt') === 'The product' && d('.cc-hs-pin').length === 5 && d('.cc-hs-num').map((_, e) => d(e).text()).get().join() === '1,2,3,4,5');
+  check('pins sit at their position in percent', /left:10\.0%; top:20\.0%/.test(h) && /left:75\.4%; top:55\.5%/.test(h));
+  const pos = (i) => d('.cc-hs-pin').eq(i).attr('class').replace('cc-hs-pin ', '');
+  check('the text opens below a pin in the top half, above it in the bottom half; away from the nearest side edge', [pos(0), pos(1), pos(2), pos(3), pos(4)].join('|') === 'cc-hs-below cc-hs-left|cc-hs-above cc-hs-center|cc-hs-above cc-hs-right|cc-hs-below cc-hs-center|cc-hs-above cc-hs-right', [pos(0), pos(1), pos(2), pos(3), pos(4)].join('|'));
+  check('each pin is a real button named by its title ("Hotspot N" without one), described by its text', d('button.cc-hs-btn').eq(0).attr('aria-label') === 'Top left' && d('button.cc-hs-btn').eq(2).attr('aria-label') === 'Hotspot 3' && d('button.cc-hs-btn').eq(0).attr('aria-describedby') === 'tb-p0' && d('#tb-p0').attr('role') === 'tooltip');
+  check('the text, line breaks and an internal link', d('#tb-p0 .cc-hs-text').html() === 'a<br>b' && d('#tb-p0 .cc-hs-link').attr('href') === '{{BASE_URL}}prodotti/' && d('#tb-p0 .cc-hs-link').text() === 'More →');
+  check('it opens on hover and on keyboard focus even without the script, and the pulse is switched off for reduced motion', /\.cc-hs-pin:hover \.cc-hs-pop,#tb \.cc-hs-pin:focus-within \.cc-hs-pop/.test(h) && /prefers-reduced-motion:reduce\)\{#tb \.cc-hs-ring\{animation:none;display:none/.test(h));
+  check('the pulsing ring can be switched off; without an image there is a grey box in the chosen shape', $(php('HOTSPOTS', { pulse: false, pins }))('.cc-hs-ring').length === 0 && /aspect-ratio:4 \/ 3/.test(php('HOTSPOTS', { ratio: '4 / 3', pins })) && $(php('HOTSPOTS', { pins }))('.cc-hs-ph').length === 1);
+  const bad = php('HOTSPOTS', { image: 'javascript:alert(1)', pinColor: 'red;}', pins: [{ x: 'abc', y: 500, title: '<img src=x onerror=a>', linkText: 'L', href: 'javascript:alert(2)' }, { x: -5, y: -5 }, 'junk', null] });
+  check('hostile values: escaped, no javascript: image or link, unsafe color replaced, positions clamped (abc → centre, 500 → 100, -5 → 0), junk skipped', !/<img src=x/.test(bad) && !/src="javascript:/i.test(bad) && !/href="javascript:/i.test(bad) && !/red;\}/.test(bad) && $(bad)('.cc-hs-pin').length === 2 && /left:50\.0%; top:100\.0%/.test(bad) && /left:0\.0%; top:0\.0%/.test(bad));
+  check('at most 20 pins; none means no script', $(php('HOTSPOTS', { pins: Array.from({ length: 30 }, () => ({ x: 1, y: 1 })) }))('.cc-hs-pin').length === 20 && !/<script/.test(php('HOTSPOTS', {})));
+
+  const p = pub(h);
+  const pinEls = [...p.doc.querySelectorAll('.cc-hs-pin')]; const btns = [...p.doc.querySelectorAll('.cc-hs-btn')];
+  check('published: every pin button announces that it is collapsed', btns.every((b) => b.getAttribute('aria-expanded') === 'false'));
+  p.click(btns[0]);
+  check('published: a click or tap opens that pin\'s text', pinEls[0].classList.contains('is-open') && btns[0].getAttribute('aria-expanded') === 'true');
+  p.click(btns[1]);
+  check('published: opening another pin closes the first', !pinEls[0].classList.contains('is-open') && btns[0].getAttribute('aria-expanded') === 'false' && pinEls[1].classList.contains('is-open'));
+  p.click(btns[1]);
+  check('published: clicking the same pin again closes it', !pinEls[1].classList.contains('is-open'));
+  p.click(btns[2]); p.doc.dispatchEvent(new p.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  check('published: Escape closes it', !pinEls[2].classList.contains('is-open') && btns[2].getAttribute('aria-expanded') === 'false');
+  p.click(btns[3]); p.click(p.doc.body);
+  check('published: a click anywhere else closes it', !pinEls[3].classList.contains('is-open'));
 }
 
 // =============================================================== LOGOS strip: logos repeat to cover the strip

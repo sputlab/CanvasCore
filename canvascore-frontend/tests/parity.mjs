@@ -145,12 +145,32 @@ const fixtures = [
   { id: 'hg1', type: 'HOVER_GRID', styles: { width: '100%' }, content: { columns: 4, gap: 8, radius: 0, aspectRatio: '16 / 9', effect: 'fade', overlay: 'rgba(0,0,0,0.5)', items: [
       { image: 'a.jpg', alt: 'A', title: 'T', text: 'X', href: 'servizi/index.html' }, { image: '', title: '', text: '' }, null ] } },
   { id: 'hg2', type: 'HOVER_GRID', styles: {}, content: { columns: 0, aspectRatio: '99 / 1', effect: 'boom', overlay: 'url(x)', items: [{ image: 'javascript:alert(1)', href: 'javascript:alert(2)', title: '<img src=x>' }] } },
+  { id: 'ss1', type: 'SCROLLYTELLING', styles: { width: '100%' }, content: { side: 'right', ratio: '16 / 9', stickyTop: 100, stepHeight: 80, gap: 24, steps: [
+      { title: 'One', text: 'a\nb', image: 'one.jpg', alt: 'First' }, { title: 'Only a title' }, { text: 'Only text', image: '' }, 'junk', null, { title: 'Bad image', image: 'javascript:alert(1)' } ] } },
+  { id: 'ss2', type: 'SCROLLYTELLING', styles: {}, content: { side: 'x', ratio: '99 / 1', stickyTop: 'abc', stepHeight: 9999, gap: -5, steps: [{ title: '<b>x</b>', text: { o: 1 }, image: 7, alt: ['a'] }] } },
+  { id: 'ss3', type: 'SCROLLYTELLING', styles: {}, content: {} },
+  { id: 'hs1', type: 'HOTSPOTS', styles: { width: '100%' }, content: { image: 'product.jpg', alt: 'Product', radius: 0, pinColor: '#ef4444', pinTextColor: '#000', pulse: false, pins: [
+      { x: 10, y: 20, title: 'Left top', text: 'a\nb', linkText: 'More', href: 'prodotti/index.html' }, { x: 50, y: 60, title: 'Centre bottom' }, { x: 90, y: 90, title: '', text: 'No title' }, { x: 25, y: 55 }, { x: 75, y: 55.5 }, 'junk', null ] } },
+  { id: 'hs2', type: 'HOTSPOTS', styles: {}, content: { image: 'javascript:alert(1)', ratio: '99 / 1', pinColor: 'red;}', pins: [{ x: 'abc', y: 500, title: '<img src=x>', linkText: 'L', href: 'javascript:alert(2)' }, { x: -5, y: -5, title: ['t'] }] } },
+  { id: 'hs3', type: 'HOTSPOTS', styles: {}, content: {} },
+  { id: 'tc1', type: 'TABLE_OF_CONTENTS', styles: { width: '100%' }, content: { title: 'On this page', levels: 'h2h3', numbered: true, highlight: false, sticky: true, stickyTop: 120, offset: 100, layout: 'plain', accent: '#10b981' } },
+  { id: 'tc2', type: 'TABLE_OF_CONTENTS', styles: {}, content: { title: '<b>x</b>', levels: 'h9', numbered: 'yes', sticky: 'yes', stickyTop: 9999, offset: -1, layout: 'weird', accent: 'red;}' } },
+  { id: 'tc3', type: 'TABLE_OF_CONTENTS', styles: {}, content: {} },
+  { id: 'sb1', type: 'SHARE_BAR', styles: { width: '100%' }, content: { title: 'Share', message: 'Read this', networks: ['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email', 'copy', 'print', 'share'], style: 'icons', shape: 'square', colors: 'dark', size: 48, align: 'center' } },
+  { id: 'sb2', type: 'SHARE_BAR', styles: {}, content: { title: 'T', networks: ['copy', 'x', 'evil', 7, null, 'facebook'], style: 'buttons', shape: 'rounded', colors: 'mono', size: 9999, align: 'right' } },
+  { id: 'sb3', type: 'SHARE_BAR', styles: {}, content: { title: '<b>x</b>', message: '"><script>x</script>', networks: 'facebook', colors: 'neon', align: 'up' } },
+  { id: 'sb4', type: 'SHARE_BAR', styles: {}, content: {} },
+  { id: 'cn1', type: 'CODE_SNIPPET', styles: { width: '100%' }, content: { language: 'php', filename: 'index.php', theme: 'light', fontSize: 16, maxHeight: 300, lineNumbers: true, copyButton: true, code: '<?php\necho "hi"; // x\n\n$a = [1, 2];' } },
+  { id: 'cn2', type: 'CODE_SNIPPET', styles: {}, content: { language: 'evil', filename: '<b>x</b>', theme: 'neon', fontSize: 999, maxHeight: -5, lineNumbers: 'yes', copyButton: false, code: '</script><script>alert(1)</script>\r\nsecond\r\n\r\n\r\n' } },
+  { id: 'cn3', type: 'CODE_SNIPPET', styles: {}, content: { language: 'text', code: '' } },
+  { id: 'cn4', type: 'CODE_SNIPPET', styles: {}, content: { language: 'js', copyButton: false, code: { o: 1 } } },
+  { id: 'cn5', type: 'CODE_SNIPPET', styles: {}, content: {} },
 ];
 
 // Fixtures from the REAL DEFAULTS (blocks.json): exactly what the editor creates with addBlock.
 {
   const defs = JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks.json', import.meta.url)), 'utf-8'));
-  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID']) {
+  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET']) {
     const def = defs.types[type];
     if (!def) { console.error(`blocks.json: type ${type} is missing`); process.exit(1); }
     fixtures.push({ id: 'def_' + type.toLowerCase(), type, styles: { ...(defs._baseStyles || {}), ...(def.styles || {}) }, content: JSON.parse(JSON.stringify(def.content || {})) });
@@ -214,7 +234,7 @@ function diff(a, b, path = '') {
 
 // For these blocks the generated CSS carries LOGIC (radio tabs, open state, responsive):
 // besides the structure we also compare the text of the <style> tags.
-const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID']);
+const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET']);
 function styleTexts(html) {
   const $ = load(`<div id="__root__">${html}</div>`, null, false);
   return $('style').map((_, e) => $(e).text().replace(/\s+/g, ' ').replace(/:\s+/g, ':').replace(/,\s+/g, ',').trim()).get();

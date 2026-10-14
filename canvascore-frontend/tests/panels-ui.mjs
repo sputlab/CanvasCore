@@ -86,8 +86,8 @@ function addAndSelect(type) {
   return b;
 }
 
-const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID'];
-const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author', REVIEW_SUMMARY: 'Rating', TESTIMONIAL_WALL: 'Testimonials', HOVER_GRID: 'Grid Items' };
+const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET'];
+const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author', REVIEW_SUMMARY: 'Rating', TESTIMONIAL_WALL: 'Testimonials', HOVER_GRID: 'Grid Items', SCROLLYTELLING: 'Story Steps', HOTSPOTS: 'Hotspot Image', TABLE_OF_CONTENTS: 'Table of Contents', SHARE_BAR: 'Share Bar', CODE_SNIPPET: 'Code' };
 let failedRun = false;
 try {
   console.log('\nADD BLOCK — the blocks.json defaults reach the editor');
@@ -215,6 +215,44 @@ try {
   setValue(field('Reveal effect'), 'fade'); await sleep(40);
   check('HOVER_GRID: adding an item and changing the effect update the store', content().items.length === 4 && content().effect === 'fade');
 
+  addAndSelect('SCROLLYTELLING'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add step'));
+  click(buttonByText('+ Add step')); await sleep(40);
+  check('SCROLLYTELLING: "+ Add step" adds a step with all expected fields', content().steps.length === 4 && ['title', 'text', 'image', 'alt'].every((k) => k in content().steps[3]));
+
+  addAndSelect('HOTSPOTS'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('[aria-label^="Pin placement area"]').length);
+  const placer = $$('[aria-label^="Pin placement area"]')[0];
+  placer.getBoundingClientRect = () => ({ left: 100, top: 50, width: 400, height: 200, right: 500, bottom: 250 });
+  check('HOTSPOTS: the first pin is selected and the placer says so', /Pin 1 selected/.test(doc.body.textContent));
+  placer.dispatchEvent(new w.MouseEvent('click', { bubbles: true, clientX: 200, clientY: 100 })); await sleep(40);
+  check('HOTSPOTS: clicking on the placement area moves the selected pin there (in percent of the image)', content().pins[0].x === 25 && content().pins[0].y === 25, JSON.stringify([content().pins[0].x, content().pins[0].y]));
+  click($$('button[aria-label="Select pin 2"]')[0]); await sleep(40);
+  placer.dispatchEvent(new w.MouseEvent('click', { bubbles: true, clientX: 700, clientY: 400 })); await sleep(40);
+  check('HOTSPOTS: selecting another pin and clicking outside the area clamps to the edge', content().pins[1].x === 100 && content().pins[1].y === 100 && content().pins[0].x === 25);
+  click(buttonByText('+ Add pin')); await sleep(40);
+  check('HOTSPOTS: "+ Add pin" adds a centred pin with all expected fields and selects it', content().pins.length === 4 && content().pins[3].x === 50 && ['x', 'y', 'title', 'text', 'linkText', 'href'].every((k) => k in content().pins[3]) && /Pin 4 selected/.test(doc.body.textContent));
+
+  addAndSelect('TABLE_OF_CONTENTS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Contents Layout'));
+  click(buttonByText('Contents Layout')); await sleep(40);
+  check('TABLE_OF_CONTENTS: the distance from the top only appears for a sticky list', !field('Distance from the top px'));
+  click(checkbox('Stay in view while scrolling')); await sleep(40);
+  check('TABLE_OF_CONTENTS: sticky on → the field appears and the store follows', content().sticky === true && !!field('Distance from the top px'));
+  setValue(field('Headings to list'), 'h2h3'); await sleep(40);
+  check('TABLE_OF_CONTENTS: the headings level updates the store', content().levels === 'h2h3');
+
+  addAndSelect('SHARE_BAR'); mount(React.createElement(PropertyPanel)); await waitFor(() => checkbox('Telegram'));
+  check('SHARE_BAR: the default networks are ticked', checkbox('Facebook').checked && !checkbox('Telegram').checked && checkbox('Copy link').checked);
+  click(checkbox('Telegram')); await sleep(40);
+  check('SHARE_BAR: ticking a network adds it in the fixed order (not at the end)', JSON.stringify(content().networks) === JSON.stringify(['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email', 'copy']), JSON.stringify(content().networks));
+  click(checkbox('Facebook')); await sleep(40);
+  check('SHARE_BAR: unticking removes it', !content().networks.includes('facebook') && content().networks.length === 6);
+
+  addAndSelect('CODE_SNIPPET'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Code'));
+  setValue(field('Code'), 'echo 1;'); setValue(field('Language'), 'php'); await sleep(40);
+  check('CODE_SNIPPET: the code and the language update the store', content().code === 'echo 1;' && content().language === 'php');
+  click(buttonByText('Code Display')); await sleep(40);
+  click(checkbox('Line numbers')); await sleep(40);
+  check('CODE_SNIPPET: line numbers update the store; the copy button is on by default', content().lineNumbers === true && checkbox('Copy button').checked);
+
   addAndSelect('BEFORE_AFTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('button').some((b) => b.textContent.includes('Before / After')));
   const imgs = $$('input[placeholder="Image URL"]');
   setValue(imgs[0], 'https://x.example/prima.jpg'); setValue(imgs[1], 'https://x.example/dopo.jpg'); await sleep(40);
@@ -238,7 +276,7 @@ try {
   check('BUSINESS: "+ Add weekly hours" restores the 7 days', content().hours.length === 7 && content().hours[0].day === 'Monday');
 
   console.log('\nCANVAS — every block is drawn in the editor (canonical renderer)');
-  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author', REVIEW_SUMMARY: 'cc-review-summary', TESTIMONIAL_WALL: 'cc-testimonial-wall', HOVER_GRID: 'cc-hover-grid' };
+  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author', REVIEW_SUMMARY: 'cc-review-summary', TESTIMONIAL_WALL: 'cc-testimonial-wall', HOVER_GRID: 'cc-hover-grid', SCROLLYTELLING: 'cc-story', HOTSPOTS: 'cc-hotspots', TABLE_OF_CONTENTS: 'cc-toc', SHARE_BAR: 'cc-share', CODE_SNIPPET: 'cc-code' };
   for (const t of TYPES) {
     const b = addAndSelect(t);
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));
@@ -256,6 +294,40 @@ try {
     await waitFor(() => { range.value = '80'; range.dispatchEvent(new w.Event('input', { bubbles: true })); return ba.style.getPropertyValue('--pos') === '80%'; });
     check('BEFORE_AFTER canvas: moving the slider updates the position (faithful preview)', ba.style.getPropertyValue('--pos') === '80%', ba.style.getPropertyValue('--pos'));
     check('BEFORE_AFTER canvas: the block receives clicks (usable slider)', doc.querySelector('.cc-ba').parentElement.style.pointerEvents === 'auto');
+  }
+  // batch 3 on the canvas: the published scripts don't run there, so the same functions are run by the editor
+  {
+    const codeBlock = addAndSelect('CODE_SNIPPET');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [codeBlock.id] }, React.createElement(SortableBlock, { block: { ...codeBlock, content: { ...codeBlock.content, code: 'const total = 42; // note' } } }))));
+    const kw = await waitFor(() => doc.querySelector('.cc-code-code .cc-tk-k'));
+    check('CODE_SNIPPET canvas: the code is colored and its text is unchanged', !!kw && kw.textContent === 'const' && doc.querySelector('.cc-code-code').textContent === 'const total = 42; // note' && !!doc.querySelector('.cc-code-code .cc-tk-c'));
+    check('CODE_SNIPPET canvas: the copy button is there and the block receives clicks', doc.querySelector('.cc-code-copy').hidden === false && doc.querySelector('.cc-code').parentElement.style.pointerEvents === 'auto');
+
+    const shareBlock = addAndSelect('SHARE_BAR');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [shareBlock.id] }, React.createElement(SortableBlock, { block: shareBlock }))));
+    const bar = await waitFor(() => { const e = doc.querySelector('.cc-share'); return e && !e.hidden ? e : null; });
+    check('SHARE_BAR canvas: the bar is shown (without its page links) so it can be designed', !!bar && doc.querySelectorAll('.cc-share-btn').length === 6 && doc.querySelector('a[data-net="x"]').getAttribute('href') === '#');
+
+    const hs = addAndSelect('HOTSPOTS');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [hs.id] }, React.createElement(SortableBlock, { block: hs }))));
+    await waitFor(() => doc.querySelector('.cc-hotspots'));
+    check('HOTSPOTS canvas: the block receives the mouse, so pins can be hovered', doc.querySelector('.cc-hotspots').parentElement.style.pointerEvents === 'auto' && doc.querySelectorAll('.cc-hs-pin').length === 3);
+
+    // Table of Contents: lists the headings of the page being edited, and follows them
+    const tocBlock = addAndSelect('TABLE_OF_CONTENTS');
+    const textBlock = { id: 'tx1', type: 'TEXT', styles: {}, content: { text: '<h2>First</h2><p>x</p><h2>Second</h2>' } };
+    mount(React.createElement('div', { className: 'cc-canvas' }, React.createElement(DndContext, null, React.createElement(SortableContext, { items: [textBlock.id, tocBlock.id] },
+      React.createElement(SortableBlock, { block: textBlock }), React.createElement(SortableBlock, { block: { ...tocBlock, content: { ...tocBlock.content, levels: 'h2' } } })))));
+    const listed = await waitFor(() => { const li = doc.querySelectorAll('.cc-toc-item'); return li.length === 2 ? li : null; });
+    check('TABLE_OF_CONTENTS canvas: lists the headings of the canvas', !!listed && [...listed].map((li) => li.textContent).join() === 'First,Second', listed ? [...listed].map((li) => li.textContent).join() : 'none');
+    check('TABLE_OF_CONTENTS canvas: the editor\'s headings are not given ids and the list is shown', !doc.querySelector('.cc-canvas h2').id && doc.querySelector('.cc-toc').hidden === false && doc.querySelector('.cc-toc-empty').hidden === true);
+    doc.querySelector('.cc-canvas h2').textContent = 'Renamed';
+    const renamed = await waitFor(() => doc.querySelector('.cc-toc-item') && doc.querySelector('.cc-toc-item').textContent === 'Renamed');
+    check('TABLE_OF_CONTENTS canvas: follows an edit of a heading on its own', !!renamed);
+    mount(React.createElement('div', { className: 'cc-canvas' }, React.createElement(DndContext, null, React.createElement(SortableContext, { items: [tocBlock.id] }, React.createElement(SortableBlock, { block: tocBlock })))));
+    await waitFor(() => doc.querySelector('.cc-toc'));
+    await sleep(80);
+    check('TABLE_OF_CONTENTS canvas: with no headings it stays visible with a hint, so the block can still be selected', doc.querySelector('.cc-toc').hidden === false && doc.querySelector('.cc-toc-empty').hidden === false);
   }
   // table/accordion as a control: static blocks don't capture the mouse (they get selected)
   {

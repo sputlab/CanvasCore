@@ -243,6 +243,208 @@ if(window.IntersectionObserver){var io=new IntersectionObserver(function(es){if(
 if(window.ResizeObserver)new ResizeObserver(fill).observe(box);else window.addEventListener('resize',fill);fill();})();
 CCJS;
 
+// Share Bar networks, in the order they are shown: [id, label, glyph, brand color]. The glyph is a short badge text
+// (social networks) or an inline icon. Twin of SHARE_NETS in src/render/renderBlock.mjs.
+function cc_share_icon($paths) {
+    return '<svg class="cc-share-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' . $paths . '</svg>';
+}
+function cc_share_nets() {
+    return [
+        ['facebook', 'Facebook', 'f', '#1877f2'], ['x', 'X', 'X', '#000000'], ['linkedin', 'LinkedIn', 'in', '#0a66c2'],
+        ['whatsapp', 'WhatsApp', 'W', '#25d366'], ['telegram', 'Telegram', 'T', '#229ed9'],
+        ['email', 'Email', cc_share_icon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>'), '#475569'],
+        ['copy', 'Copy link', cc_share_icon('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'), '#475569'],
+        ['print', 'Print', cc_share_icon('<path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>'), '#475569'],
+        ['share', 'Share', cc_share_icon('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>'), '#475569'],
+    ];
+}
+// Code Snippet languages: [id, label]. Twin of CODE_LANGS in src/render/renderBlock.mjs.
+const CC_CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['json', 'JSON'], ['php', 'PHP'], ['shell', 'Shell'], ['text', '']];
+
+// Scripts of the Code Snippet, Table of Contents and Share Bar blocks. The regions between the "cc-xxx:begin" and
+// "cc-xxx:end" lines are VERBATIM copies from src/render/blockRuntime.mjs (the editor canvas runs the same text):
+// edit both, tests/blocks-content.mjs compares them. %ID% = the block's id.
+const CC_CODE_SCRIPT = <<<'CCJS'
+// cc-hl:begin
+function ccTokens(code, lang) {
+  var STR = /"(?:\\[\s\S]|[^"\\\n])*(?:"|$)|'(?:\\[\s\S]|[^'\\\n])*(?:'|$)/y;
+  var NUM = /\b(?:0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/y;
+  var CSSNUM = /#[0-9a-fA-F]{3,8}\b|-?\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg|fr)?|\.\d+(?:px|em|rem|%|vh|vw|s|ms|deg|fr)?/y;
+  var BLOCK = /\/\*[\s\S]*?(?:\*\/|$)/y;
+  var RULES = {
+    js: [['c', /\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/y], ['s', /`(?:\\[\s\S]|[^`\\])*(?:`|$)/y], ['s', STR], ['n', NUM],
+      ['k', /\b(?:async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|from|function|if|import|in|instanceof|let|new|of|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield|null|true|false|undefined)\b/y],
+      ['f', /[A-Za-z_$][\w$]*(?=\()/y]],
+    json: [['a', /"(?:\\[\s\S]|[^"\\\n])*"(?=\s*:)/y], ['s', STR], ['n', /-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/y], ['k', /\b(?:true|false|null)\b/y]],
+    css: [['c', BLOCK], ['s', STR], ['k', /@[\w-]+/y], ['n', CSSNUM], ['a', /[\w-]+(?=\s*:)/y]],
+    html: [['c', /<[!]--[\s\S]*?(?:--[>]|$)/y], ['t', /<\/?[A-Za-z][\w:-]*/y], ['t', /\/?>/y], ['s', STR], ['a', /[\w:-]+(?==)/y]],
+    php: [['c', /\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/y], ['k', /<\?php|<\?=|\?>/y], ['s', STR], ['v', /\$[A-Za-z_]\w*/y], ['n', NUM],
+      ['k', /\b(?:abstract|and|array|as|break|case|catch|class|clone|const|continue|declare|default|do|echo|else|elseif|empty|extends|final|finally|fn|for|foreach|function|global|if|implements|include|include_once|instanceof|interface|isset|list|match|namespace|new|null|or|print|private|protected|public|require|require_once|return|static|switch|this|throw|trait|true|false|try|unset|use|var|while|yield)\b/y],
+      ['f', /[A-Za-z_]\w*(?=\()/y]],
+    shell: [['c', /#[^\n]*/y], ['s', STR], ['v', /\$\{[^}\n]*\}|\$[A-Za-z_]\w*/y], ['n', NUM],
+      ['k', /\b(?:if|then|else|elif|fi|for|while|do|done|case|esac|function|in|return|exit|export|local|echo|cd|sudo)\b/y]]
+  };
+  var rules = RULES[lang], s = String(code), out = [], plain = '', pos = 0, n = s.length;
+  if (!rules) return [[null, s]];
+  while (pos < n) {
+    var hit = null;
+    for (var i = 0; i < rules.length; i++) {
+      var re = rules[i][1];
+      re.lastIndex = pos;
+      var m = re.exec(s);
+      if (m && m.index === pos && m[0].length > 0) { hit = [rules[i][0], m[0]]; break; }
+    }
+    if (hit) {
+      if (plain) { out.push([null, plain]); plain = ''; }
+      out.push(hit);
+      pos += hit[1].length;
+    } else { plain += s.charAt(pos); pos++; }
+  }
+  if (plain) out.push([null, plain]);
+  return out;
+}
+// cc-hl:end
+// cc-code:begin
+function ccCodeInit(root) {
+  var doc = root.ownerDocument, win = doc.defaultView, code = root.querySelector('.cc-code-code');
+  if (!code) return;
+  var text = code.textContent, toks = ccTokens(text, root.getAttribute('data-lang') || 'text'), frag = doc.createDocumentFragment();
+  for (var i = 0; i < toks.length; i++) {
+    if (toks[i][0]) { var sp = doc.createElement('span'); sp.className = 'cc-tk-' + toks[i][0]; sp.textContent = toks[i][1]; frag.appendChild(sp); }
+    else frag.appendChild(doc.createTextNode(toks[i][1]));
+  }
+  code.textContent = '';
+  code.appendChild(frag);
+  var btn = root.querySelector('.cc-code-copy');
+  if (!btn || btn.getAttribute('data-ready')) return;
+  var label = btn.textContent;
+  btn.setAttribute('data-ready', '1');
+  btn.hidden = false;
+  btn.addEventListener('click', function () {
+    var done = function () { btn.textContent = 'Copied'; win.setTimeout(function () { btn.textContent = label; }, 1600); };
+    if (win.navigator.clipboard && win.navigator.clipboard.writeText) { win.navigator.clipboard.writeText(code.textContent).then(done, function () {}); return; }
+    var ta = doc.createElement('textarea');
+    ta.value = code.textContent; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    doc.body.appendChild(ta); ta.select();
+    try { if (doc.execCommand('copy')) done(); } catch { /* no clipboard access */ }
+    doc.body.removeChild(ta);
+  });
+}
+// cc-code:end
+(function(){var r=document.getElementById('%ID%');if(r)ccCodeInit(r);})();
+CCJS;
+const CC_TOC_SCRIPT = <<<'CCJS'
+// cc-toc:begin
+function ccTocInit(root, editor) {
+  var doc = root.ownerDocument, win = doc.defaultView, scope = root.closest('main') || root.closest('.cc-canvas') || doc.body;
+  var list = root.querySelector('.cc-toc-list'), empty = root.querySelector('.cc-toc-empty');
+  var all = scope.querySelectorAll(root.getAttribute('data-levels') === 'h2h3' ? 'h2, h3' : 'h2'), heads = [], i;
+  // the author's own headings only: in rich text (Text, Image + Text, Hero, Custom HTML) and without a design class
+  // of their own (that leaves out the titles inside Scrollytelling, Cards, Team, Collection List...)
+  for (i = 0; i < all.length; i++) {
+    if (!all[i].closest('.cc-toc') && all[i].closest('.cc-text, .cc-hero, .cc-img-text, .cc-html-block') && !/(^|\s)cc-/.test(all[i].className) && all[i].textContent.trim()) heads.push(all[i]);
+  }
+  var numbered = root.getAttribute('data-numbered') === '1', offset = parseInt(root.getAttribute('data-offset'), 10) || 0;
+  var used = {}, n2 = 0, n3 = 0, links = [];
+  list.textContent = '';
+  for (i = 0; i < heads.length; i++) {
+    var h = heads[i], text = h.textContent.trim().replace(/\s+/g, ' '), l3 = h.tagName === 'H3', id = h.id;
+    if (!id && !editor) {
+      var base = (text.normalize ? text.normalize('NFD').replace(/[̀-ͯ]/g, '') : text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section', k = 2;
+      id = base;
+      while (doc.getElementById(id) || used[id]) { id = base + '-' + k; k++; }
+      h.id = id;
+    }
+    used[id] = 1;
+    if (!editor) h.style.scrollMarginTop = offset + 'px';
+    if (l3) { n3++; } else { n2++; n3 = 0; }
+    var li = doc.createElement('li'), a = doc.createElement('a');
+    li.className = 'cc-toc-item ' + (l3 ? 'cc-toc-l3' : 'cc-toc-l2');
+    a.href = '#' + (editor ? '' : id);
+    if (numbered) { var num = doc.createElement('span'); num.className = 'cc-toc-num'; num.textContent = (l3 ? n2 + '.' + n3 : n2) + '. '; a.appendChild(num); }
+    a.appendChild(doc.createTextNode(text));
+    li.appendChild(a); list.appendChild(li); links.push(a);
+  }
+  root.hidden = !heads.length && !editor;
+  if (empty) empty.hidden = heads.length > 0;
+  if (editor || !heads.length || root.getAttribute('data-highlight') !== '1' || root.getAttribute('data-ready')) return;
+  root.setAttribute('data-ready', '1');
+  var busy = false, mark = function () {
+    busy = false;
+    var cur = -1;
+    for (var j = 0; j < heads.length; j++) { if (heads[j].getBoundingClientRect().top <= offset + 24) cur = j; }
+    // at the very end of the page the last heading may never reach the top: it counts as the one being read
+    if (win.pageYOffset > 0 && win.pageYOffset + win.innerHeight >= doc.documentElement.scrollHeight - 2) cur = heads.length - 1;
+    for (j = 0; j < links.length; j++) {
+      links[j].parentNode.className = links[j].parentNode.className.replace(' is-active', '') + (j === cur ? ' is-active' : '');
+      if (j === cur) links[j].setAttribute('aria-current', 'true'); else links[j].removeAttribute('aria-current');
+    }
+  };
+  win.addEventListener('scroll', function () { if (!busy) { busy = true; win.requestAnimationFrame(mark); } }, { passive: true });
+  mark();
+}
+// cc-toc:end
+(function(){var r=document.getElementById('%ID%');if(!r)return;var go=function(){ccTocInit(r,false);};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();})();
+CCJS;
+const CC_SHARE_SCRIPT = <<<'CCJS'
+// cc-share:begin
+function ccShareInit(root, editor) {
+  var doc = root.ownerDocument, win = doc.defaultView;
+  root.hidden = false;
+  if (editor) return;
+  var url = win.location.href.split('#')[0], msg = root.getAttribute('data-msg') || doc.title, e = win.encodeURIComponent;
+  var hrefs = {
+    facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + e(url),
+    x: 'https://twitter.com/intent/tweet?url=' + e(url) + '&text=' + e(msg),
+    linkedin: 'https://www.linkedin.com/sharing/share-offsite/?url=' + e(url),
+    whatsapp: 'https://wa.me/?text=' + e(msg + ' ' + url),
+    telegram: 'https://t.me/share/url?url=' + e(url) + '&text=' + e(msg),
+    email: 'mailto:?subject=' + e(msg) + '&body=' + e(url)
+  };
+  var nets = root.querySelectorAll('a[data-net]'), acts = root.querySelectorAll('[data-act]'), i;
+  for (i = 0; i < nets.length; i++) { var net = nets[i].getAttribute('data-net'); if (hrefs[net]) nets[i].href = hrefs[net]; }
+  var flash = function (btn, text) {
+    var lab = btn.querySelector('.cc-share-label') || btn, old = lab.textContent;
+    lab.textContent = text;
+    win.setTimeout(function () { lab.textContent = old; }, 1600);
+  };
+  var copy = function (btn) {
+    var done = function () { flash(btn, 'Copied'); };
+    if (win.navigator.clipboard && win.navigator.clipboard.writeText) { win.navigator.clipboard.writeText(url).then(done, function () {}); return; }
+    var ta = doc.createElement('textarea');
+    ta.value = url; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    doc.body.appendChild(ta); ta.select();
+    try { if (doc.execCommand('copy')) done(); } catch { /* no clipboard access */ }
+    doc.body.removeChild(ta);
+  };
+  var wire = function (btn) {
+    var act = btn.getAttribute('data-act');
+    if (act === 'share' && !win.navigator.share) { btn.hidden = true; return; }
+    btn.addEventListener('click', function () {
+      if (act === 'copy') copy(btn);
+      else if (act === 'print') win.print();
+      else if (act === 'share') win.navigator.share({ title: msg, url: url }).catch(function () {});
+    });
+  };
+  for (i = 0; i < acts.length; i++) wire(acts[i]);
+}
+// cc-share:end
+(function(){var r=document.getElementById('%ID%');if(r)ccShareInit(r,false);})();
+CCJS;
+// Scrollytelling: the step in the middle of the screen decides which image shows ([data-active]); %ID% = the block's id
+const CC_STORY_SCRIPT = <<<'CCJS'
+(function(){var r=document.getElementById('%ID%');if(!r||!window.IntersectionObserver)return;var st=r.querySelectorAll('.cc-story-step');if(st.length<2)return;r.classList.add('cc-story-on');
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)r.setAttribute('data-active',e.target.getAttribute('data-i'));});},{rootMargin:'-45% 0px -45% 0px',threshold:0});
+[].forEach.call(st,function(s){io.observe(s);});})();
+CCJS;
+// Product hotspots: a click or tap opens or closes a pin's text (hover and keyboard focus work without the script); %ID% = the block's id
+const CC_HOTSPOTS_SCRIPT = <<<'CCJS'
+(function(){var r=document.getElementById('%ID%');if(!r)return;var pins=[].slice.call(r.querySelectorAll('.cc-hs-pin'));
+function close(keep){pins.forEach(function(p){if(p!==keep){p.classList.remove('is-open');p.querySelector('.cc-hs-btn').setAttribute('aria-expanded','false');}});}
+pins.forEach(function(p){var b=p.querySelector('.cc-hs-btn');b.setAttribute('aria-expanded','false');b.addEventListener('click',function(e){e.stopPropagation();var open=p.classList.toggle('is-open');b.setAttribute('aria-expanded',open?'true':'false');close(p);});});
+document.addEventListener('click',function(){close(null);});document.addEventListener('keydown',function(e){if(e.key==='Escape')close(null);});})();
+CCJS;
+
 // Site search script (SEARCH block); %ID% = the block's id
 const CC_SEARCH_SCRIPT = <<<'CCJS'
 (function(){var r=document.getElementById('%ID%');if(!r)return;var f=r.querySelector('form'),i=r.querySelector('input'),o=r.querySelector('.cc-search-results'),idx=null,lim=+r.getAttribute('data-limit')||10;
@@ -1903,6 +2105,175 @@ function render_block($block) {
                 . '@media(max-width:768px){' . $id . ' .cc-hg-grid{grid-template-columns:repeat(' . min($cols, 2) . ', 1fr) !important}}@media(max-width:480px){' . $id . ' .cc-hg-grid{grid-template-columns:1fr !important}}</style>'
                 . '<div id="' . $innerId . '" class="cc-hover-grid cc-hg-' . $effect . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
                 . '<div class="cc-hg-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:' . $gap . 'px;">' . $cells . '</div>' . "\n</div>\n";
+        }
+
+        case 'SCROLLYTELLING': {
+            $c = $block['content'] ?? [];
+            $steps = array_slice(array_values(array_filter((isset($c['steps']) && is_array($c['steps'])) ? $c['steps'] : [], 'is_array')), 0, 12);
+            $right = ($c['side'] ?? '') === 'right';
+            $ratio = in_array($c['ratio'] ?? '', ['4 / 3', '1 / 1', '3 / 4', '16 / 9', '3 / 2'], true) ? $c['ratio'] : '4 / 3';
+            $top = cc_int($c['stickyTop'] ?? null, 80, 0, 300);
+            $stepH = cc_int($c['stepHeight'] ?? null, 70, 40, 120);
+            $gap = cc_int($c['gap'] ?? null, 48, 0, 120);
+            $imgs = ''; $items = ''; $rules = '';
+            foreach ($steps as $i => $st) {
+                $img = cc_img_url(cc_str($st['image'] ?? ''));
+                $title = cc_esc($st['title'] ?? '');
+                $text = cc_br(cc_str($st['text'] ?? ''));
+                $imgs .= $img !== ''
+                    ? '<img class="cc-story-img" data-i="' . $i . '" src="' . htmlspecialchars($img) . '" alt="' . cc_esc($st['alt'] ?? '') . '" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">'
+                    : '<div class="cc-story-img cc-story-ph" data-i="' . $i . '" aria-hidden="true" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:56px; font-weight:800; color:#94a3b8;">' . ($i + 1) . '</div>';
+                $items .= '<li class="cc-story-step" data-i="' . $i . '" style="min-height:' . $stepH . 'vh; display:flex; flex-direction:column; justify-content:center; padding:24px 0;">'
+                    . ($title !== '' ? '<h3 class="cc-story-title" style="margin:0 0 10px 0; font-size:26px; line-height:1.25;">' . $title . '</h3>' : '')
+                    . ($text !== '' ? '<p class="cc-story-text" style="margin:0; font-size:16px; line-height:1.7; color:#475569;">' . $text . '</p>' : '')
+                    . '</li>';
+                $rules .= '#' . $innerId . '[data-active="' . $i . '"] .cc-story-img[data-i="' . $i . '"]{opacity:1}#' . $innerId . '.cc-story-on[data-active="' . $i . '"] .cc-story-step[data-i="' . $i . '"]{opacity:1}';
+            }
+            $id = '#' . $innerId;
+            return $customCss . '<style>' . $id . ' .cc-story-img{opacity:0;transition:opacity .5s ease}' . $id . '.cc-story-on .cc-story-step{opacity:.35;transition:opacity .4s ease}' . $rules
+                . '@media(max-width:768px){' . $id . ' .cc-story-grid{grid-template-columns:1fr !important;gap:16px !important}' . $id . ' .cc-story-media{order:0 !important;top:0 !important;z-index:2}' . $id . ' .cc-story-frame{aspect-ratio:16 / 9 !important;max-height:36vh}' . $id . ' .cc-story-step{min-height:55vh !important}}'
+                . '@media(prefers-reduced-motion:reduce){' . $id . ' .cc-story-img,' . $id . '.cc-story-on .cc-story-step{transition:none !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-story cc-story-' . ($right ? 'right' : 'left') . $animClass . $innerClass . '" data-active="0" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-story-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:' . $gap . 'px; align-items:start;">'
+                . '<div class="cc-story-media" style="position:sticky; top:' . $top . 'px; align-self:start;' . ($right ? ' order:2;' : '') . '"><div class="cc-story-frame" style="position:relative; aspect-ratio:' . $ratio . '; border-radius:16px; overflow:hidden; background:#e2e8f0;">' . $imgs . '</div></div>'
+                . '<ol class="cc-story-steps" style="list-style:none; margin:0; padding:0;">' . $items . '</ol>'
+                . '</div>' . "\n</div>\n"
+                . ($steps ? '<script>' . str_replace('%ID%', $innerId, CC_STORY_SCRIPT) . "</script>\n" : '');
+        }
+
+        case 'HOTSPOTS': {
+            $c = $block['content'] ?? [];
+            $pins = array_slice(array_values(array_filter((isset($c['pins']) && is_array($c['pins'])) ? $c['pins'] : [], 'is_array')), 0, 20);
+            $img = cc_img_url(cc_str($c['image'] ?? ''));
+            $ratio = in_array($c['ratio'] ?? '', ['16 / 9', '4 / 3', '3 / 2', '1 / 1', '21 / 9'], true) ? $c['ratio'] : '16 / 9';
+            $color = cc_color($c['pinColor'] ?? '', '#3b82f6');
+            $textColor = cc_color($c['pinTextColor'] ?? '', '#ffffff');
+            $radius = cc_int($c['radius'] ?? null, 12, 0, 40);
+            $pulse = ($c['pulse'] ?? true) !== false;
+            $cells = '';
+            foreach ($pins as $i => $p) {
+                $x = cc_num($p['x'] ?? null, 0, 100, 50);
+                $y = cc_num($p['y'] ?? null, 0, 100, 50);
+                $v = $y > 55 ? 'above' : 'below';
+                $h = $x < 25 ? 'left' : ($x > 75 ? 'right' : 'center');
+                $title = cc_esc($p['title'] ?? '');
+                $text = cc_br(cc_str($p['text'] ?? ''));
+                $linkText = cc_esc($p['linkText'] ?? '');
+                $cells .= '<div class="cc-hs-pin cc-hs-' . $v . ' cc-hs-' . $h . '" style="position:absolute; left:' . cc_fmt_num($x, 1) . '%; top:' . cc_fmt_num($y, 1) . '%; transform:translate(-50%, -50%);">'
+                    . '<button type="button" class="cc-hs-btn" aria-describedby="' . $innerId . '-p' . $i . '" aria-label="' . ($title !== '' ? $title : 'Hotspot ' . ($i + 1)) . '" style="position:relative; width:30px; height:30px; padding:0; border-radius:50%; border:2px solid #fff; background:' . $color . '; color:' . $textColor . '; font:700 13px/1 inherit; cursor:pointer; box-shadow:0 2px 8px rgba(15,23,42,0.35);">'
+                    . ($pulse ? '<span class="cc-hs-ring" aria-hidden="true" style="position:absolute; inset:-2px; border-radius:50%; background:' . $color . '; pointer-events:none;"></span>' : '')
+                    . '<span class="cc-hs-num" style="position:relative;">' . ($i + 1) . '</span></button>'
+                    . '<div class="cc-hs-pop" id="' . $innerId . '-p' . $i . '" role="tooltip" style="position:absolute; width:240px; max-width:70vw; padding:14px 16px; background:#fff; color:#0f172a; border-radius:10px; box-shadow:0 12px 32px rgba(15,23,42,0.22); font-size:14px; line-height:1.5; text-align:left;">'
+                    . ($title !== '' ? '<strong class="cc-hs-title" style="display:block; margin-bottom:4px;">' . $title . '</strong>' : '')
+                    . ($text !== '' ? '<span class="cc-hs-text" style="display:block; color:#475569;">' . $text . '</span>' : '')
+                    . ($linkText !== '' ? '<a class="cc-hs-link" href="' . htmlspecialchars(cc_block_url(cc_str($p['href'] ?? ''))) . '" style="display:inline-block; margin-top:8px; font-weight:700; color:var(--brand-color, #3b82f6); text-decoration:none;">' . $linkText . ' &rarr;</a>' : '')
+                    . '</div></div>';
+            }
+            $id = '#' . $innerId;
+            return $customCss . '<style>' . $id . ' .cc-hs-pop{opacity:0;visibility:hidden;transition:opacity .15s ease}' . $id . ' .cc-hs-pin:hover,' . $id . ' .cc-hs-pin:focus-within,' . $id . ' .cc-hs-pin.is-open{z-index:3}'
+                . $id . ' .cc-hs-pin:hover .cc-hs-pop,' . $id . ' .cc-hs-pin:focus-within .cc-hs-pop,' . $id . ' .cc-hs-pin.is-open .cc-hs-pop{opacity:1;visibility:visible}'
+                . $id . ' .cc-hs-below .cc-hs-pop{top:calc(100% + 10px)}' . $id . ' .cc-hs-above .cc-hs-pop{bottom:calc(100% + 10px)}'
+                . $id . ' .cc-hs-center .cc-hs-pop{left:50%;transform:translateX(-50%)}' . $id . ' .cc-hs-left .cc-hs-pop{left:0}' . $id . ' .cc-hs-right .cc-hs-pop{right:0}'
+                . '@keyframes ccHsRing_' . $innerId . '{0%{transform:scale(1);opacity:.5}100%{transform:scale(2.3);opacity:0}}' . $id . ' .cc-hs-ring{animation:ccHsRing_' . $innerId . ' 2s ease-out infinite}'
+                . '@media(prefers-reduced-motion:reduce){' . $id . ' .cc-hs-ring{animation:none;display:none}' . $id . ' .cc-hs-pop{transition:none}}</style>'
+                . '<div id="' . $innerId . '" class="cc-hotspots' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-hs-stage" style="position:relative;">'
+                . ($img !== ''
+                    ? '<img class="cc-hs-img" src="' . htmlspecialchars($img) . '" alt="' . cc_esc($c['alt'] ?? '') . '" loading="lazy" style="display:block; width:100%; height:auto; border-radius:' . $radius . 'px;">'
+                    : '<div class="cc-hs-img cc-hs-ph" aria-hidden="true" style="aspect-ratio:' . $ratio . '; background:#e2e8f0; border-radius:' . $radius . 'px;"></div>')
+                . $cells . '</div>' . "\n</div>\n"
+                . ($pins ? '<script>' . str_replace('%ID%', $innerId, CC_HOTSPOTS_SCRIPT) . "</script>\n" : '');
+        }
+
+        case 'TABLE_OF_CONTENTS': {
+            $c = $block['content'] ?? [];
+            $title = cc_esc($c['title'] ?? '');
+            $levels = ($c['levels'] ?? '') === 'h2h3' ? 'h2h3' : 'h2';
+            $sticky = ($c['sticky'] ?? false) === true;
+            $top = cc_int($c['stickyTop'] ?? null, 90, 0, 300);
+            $offset = cc_int($c['offset'] ?? null, 80, 0, 300);
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $id = '#' . $innerId;
+            return $customCss . '<style>' . $id . ' a{color:inherit;text-decoration:none}' . $id . ' a:hover{color:' . $accent . '}' . $id . ' .cc-toc-item{margin:0;padding:4px 0}' . $id . ' .cc-toc-l3{padding-left:16px;font-size:.93em;opacity:.9}' . $id . ' .is-active>a{color:' . $accent . ';font-weight:700}' . $id . ' .cc-toc-num{opacity:.7}</style>'
+                . '<nav id="' . $innerId . '" class="cc-toc cc-toc-' . ($card ? 'card' : 'plain') . $animClass . $innerClass . '" hidden data-levels="' . $levels . '" data-numbered="' . (($c['numbered'] ?? false) === true ? '1' : '0') . '" data-highlight="' . (($c['highlight'] ?? true) !== false ? '1' : '0') . '" data-offset="' . $offset . '" aria-label="' . ($title !== '' ? $title : 'Table of contents') . '" style="' . $styleAttr . ($sticky ? ' position:sticky; top:' . $top . 'px;' : '') . '">' . "\n"
+                . '<div class="cc-toc-box" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:20px 22px;' : 'padding:0;') . '">'
+                . ($title !== '' ? '<div class="cc-toc-title" style="font-weight:700; font-size:15px; margin-bottom:10px; color:#0f172a;">' . $title . '</div>' : '')
+                . '<ol class="cc-toc-list" style="list-style:none; margin:0; padding:0; font-size:14px; line-height:1.4; color:#475569;"></ol>'
+                . '<p class="cc-toc-empty" hidden style="margin:0; font-size:13px; color:#94a3b8;">The headings of this page appear here.</p>'
+                . '</div>' . "\n</nav>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_TOC_SCRIPT) . "</script>\n";
+        }
+
+        case 'SHARE_BAR': {
+            $c = $block['content'] ?? [];
+            $title = cc_esc($c['title'] ?? '');
+            $chosen = array_values(array_filter((isset($c['networks']) && is_array($c['networks'])) ? $c['networks'] : [], 'is_string'));
+            $icons = ($c['style'] ?? '') === 'icons';
+            $shape = $c['shape'] ?? '';
+            $radius = $shape === 'square' ? '0' : ($shape === 'rounded' ? '8px' : '999px');
+            $colors = in_array($c['colors'] ?? '', ['mono', 'dark'], true) ? $c['colors'] : 'brand';
+            $size = cc_int($c['size'] ?? null, 40, 28, 64);
+            $al = $c['align'] ?? '';
+            $align = $al === 'center' ? 'center' : ($al === 'right' ? 'flex-end' : 'flex-start');
+            $textAlign = $al === 'center' ? 'center' : ($al === 'right' ? 'right' : 'left');
+            $btns = '';
+            foreach (cc_share_nets() as $row) {
+                list($net, $label, $glyph, $brand) = $row;
+                if (!in_array($net, $chosen, true)) continue;
+                $link = in_array($net, ['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email'], true);
+                $paint = $colors === 'brand' ? 'background:' . $brand . '; color:#ffffff; border:1px solid ' . $brand . ';' : ($colors === 'dark' ? 'background:#0f172a; color:#ffffff; border:1px solid #0f172a;' : 'background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;');
+                $inner = (strpos($glyph, '<svg') === 0 ? $glyph : '<span class="cc-share-badge" aria-hidden="true" style="font-weight:800; font-size:14px; line-height:1;">' . $glyph . '</span>')
+                    . ($icons ? '' : '<span class="cc-share-label">' . $label . '</span>');
+                $aria = $link && $net !== 'email' ? 'Share on ' . $label : ($net === 'email' ? 'Share by email' : $label);
+                $st = 'display:inline-flex; align-items:center; justify-content:center; gap:8px; height:' . $size . 'px; min-width:' . $size . 'px; padding:0 ' . ($icons ? 0 : 16) . 'px; box-sizing:border-box; border-radius:' . $radius . '; font:600 14px/1 inherit; text-decoration:none; cursor:pointer; ' . $paint;
+                $btns .= $link
+                    ? '<a class="cc-share-btn cc-share-' . $net . '" data-net="' . $net . '" href="#" target="_blank" rel="noopener noreferrer" aria-label="' . $aria . '" style="' . $st . '">' . $inner . '</a>'
+                    : '<button type="button" class="cc-share-btn cc-share-' . $net . '" data-act="' . $net . '" aria-label="' . $aria . '" style="' . $st . '">' . $inner . '</button>';
+            }
+            return $customCss . '<style>#' . $innerId . ' .cc-share-btn:hover{filter:brightness(.92)}#' . $innerId . ' .cc-share-btn:focus-visible{outline:2px solid var(--brand-color, #3b82f6);outline-offset:2px}</style>'
+                . '<div id="' . $innerId . '" class="cc-share' . $animClass . $innerClass . '" hidden data-msg="' . cc_esc($c['message'] ?? '') . '" style="' . $styleAttr . '">' . "\n"
+                . ($title !== '' ? '<div class="cc-share-title" style="font-weight:700; font-size:15px; color:#0f172a; margin-bottom:10px; text-align:' . $textAlign . ';">' . $title . '</div>' : '')
+                . '<div class="cc-share-list" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:' . $align . ';">' . $btns . '</div>' . "\n</div>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_SHARE_SCRIPT) . "</script>\n";
+        }
+
+        case 'CODE_SNIPPET': {
+            $c = $block['content'] ?? [];
+            $langRow = null;
+            foreach (CC_CODE_LANGS as $l) { if ($l[0] === ($c['language'] ?? '')) { $langRow = $l; break; } }
+            if (!$langRow) $langRow = CC_CODE_LANGS[count(CC_CODE_LANGS) - 1];
+            $lang = $langRow[0];
+            $code = mb_substr(rtrim(preg_replace('/\r\n?/', "\n", cc_str($c['code'] ?? '')), "\n"), 0, 50000);
+            $filename = cc_esc($c['filename'] ?? '');
+            $dark = ($c['theme'] ?? '') !== 'light';
+            $fs = cc_int($c['fontSize'] ?? null, 14, 11, 20);
+            $maxH = cc_int($c['maxHeight'] ?? null, 0, 0, 1200);
+            $copy = ($c['copyButton'] ?? true) !== false;
+            $lineNums = ($c['lineNumbers'] ?? false) === true;
+            $pal = $dark ? ['#0f172a', '#e2e8f0', '#1e293b', '#111c33', '#94a3b8'] : ['#f8fafc', '#0f172a', '#e2e8f0', '#f1f5f9', '#64748b'];
+            $tk = $dark
+                ? ['c' => '#7c8aa5', 's' => '#86efac', 'k' => '#c4b5fd', 'n' => '#fdba74', 'f' => '#7dd3fc', 'v' => '#fca5a5', 't' => '#f472b6', 'a' => '#fcd34d']
+                : ['c' => '#64748b', 's' => '#15803d', 'k' => '#7c3aed', 'n' => '#c2410c', 'f' => '#0369a1', 'v' => '#b91c1c', 't' => '#be185d', 'a' => '#b45309'];
+            $tokCss = '';
+            foreach ($tk as $k => $col) $tokCss .= '#' . $innerId . ' .cc-tk-' . $k . '{color:' . $col . ($k === 'c' ? ';font-style:italic' : '') . '}';
+            $showBar = $filename !== '' || $langRow[1] !== '' || $copy;
+            $lines = substr_count($code, "\n") + 1;
+            $gutter = '';
+            if ($lineNums) { $nums = []; for ($i = 1; $i <= $lines; $i++) $nums[] = $i; $gutter = implode("\n", $nums); }
+            return $customCss . '<style>' . $tokCss . '#' . $innerId . ' .cc-code-copy:hover{filter:brightness(1.2)}</style>'
+                . '<figure id="' . $innerId . '" class="cc-code cc-code-' . ($dark ? 'dark' : 'light') . $animClass . $innerClass . '" data-lang="' . $lang . '" style="' . $styleAttr . ' margin:0; border-radius:12px; overflow:hidden; background:' . $pal[0] . '; color:' . $pal[1] . '; border:1px solid ' . $pal[2] . ';">' . "\n"
+                . ($showBar ? '<div class="cc-code-bar" style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:' . $pal[3] . '; border-bottom:1px solid ' . $pal[2] . '; font:600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:' . $pal[4] . ';">'
+                    . '<span class="cc-code-file" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' . ($filename !== '' ? $filename : $langRow[1]) . '</span>'
+                    . ($filename !== '' && $langRow[1] !== '' ? '<span class="cc-code-lang">' . $langRow[1] . '</span>' : '')
+                    . ($copy ? '<button type="button" class="cc-code-copy" hidden aria-label="Copy the code" style="padding:5px 10px; border-radius:6px; border:1px solid ' . $pal[2] . '; background:transparent; color:inherit; font:600 12px/1 inherit; cursor:pointer;">Copy</button>' : '')
+                    . '</div>' : '')
+                . '<div class="cc-code-scroll" style="overflow:auto;' . ($maxH > 0 ? ' max-height:' . $maxH . 'px;' : '') . '">'
+                . '<div class="cc-code-wrap" style="display:flex; min-width:max-content; font:' . $fs . 'px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">'
+                . ($lineNums ? '<span class="cc-code-gutter" aria-hidden="true" style="flex:0 0 auto; padding:16px 12px 16px 16px; text-align:right; white-space:pre; user-select:none; color:' . $pal[4] . ';">' . $gutter . '</span>' : '')
+                . '<pre class="cc-code-pre" style="flex:1; margin:0; padding:16px; white-space:pre; tab-size:2; font:inherit;"><code class="cc-code-code" style="font:inherit;">' . htmlspecialchars($code) . '</code></pre>'
+                . '</div></div>' . "\n</figure>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_CODE_SCRIPT) . "</script>\n";
         }
 
         default: return "<!-- Unknown element: " . preg_replace('/[^A-Za-z0-9_]/', '', (string)$block['type']) . " -->\n";

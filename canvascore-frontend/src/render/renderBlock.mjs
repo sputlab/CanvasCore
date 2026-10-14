@@ -134,6 +134,20 @@ function ccStr(v) { if (v === null || v === undefined || typeof v === 'object') 
 function ccEsc(v) { return escapeHtml(ccStr(v)); }
 function ccEnc(s) { return encodeURIComponent(String(s ?? '')).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase()); }
 
+// Share Bar networks, in the order they are shown: [id, label, glyph, brand color]. The glyph is a short badge text
+// (social networks) or an inline icon. Twin of CC_SHARE_NETS in compiler.php.
+const SHARE_ICON = (paths) => `<svg class="cc-share-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+const SHARE_NETS = [
+  ['facebook', 'Facebook', 'f', '#1877f2'], ['x', 'X', 'X', '#000000'], ['linkedin', 'LinkedIn', 'in', '#0a66c2'],
+  ['whatsapp', 'WhatsApp', 'W', '#25d366'], ['telegram', 'Telegram', 'T', '#229ed9'],
+  ['email', 'Email', SHARE_ICON('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>'), '#475569'],
+  ['copy', 'Copy link', SHARE_ICON('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'), '#475569'],
+  ['print', 'Print', SHARE_ICON('<path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>'), '#475569'],
+  ['share', 'Share', SHARE_ICON('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>'), '#475569'],
+];
+// Code Snippet languages: [id, label]. Twin of CC_CODE_LANGS in compiler.php.
+const CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['json', 'JSON'], ['php', 'PHP'], ['shell', 'Shell'], ['text', '']];
+
 // opts.fields (editor canvas only): marks the rich text fields as editable in place
 // (data-cc-field + contenteditable) on the same elements the site renders, so editing keeps the layout.
 export function renderBlock(block, opts = {}) {
@@ -1130,6 +1144,164 @@ export function renderBlock(block, opts = {}) {
         + `@media(max-width:768px){#${innerId} .cc-hg-grid{grid-template-columns:repeat(${Math.min(cols, 2)}, 1fr) !important}}@media(max-width:480px){#${innerId} .cc-hg-grid{grid-template-columns:1fr !important}}</style>`
         + `<div id="${innerId}" class="cc-hover-grid cc-hg-${effect}${animClass}${innerClass}" style="${styleAttr}">\n`
         + `<div class="cc-hg-grid" style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:${gap}px;">${cells}</div>\n</div>\n`;
+    }
+
+    case 'SCROLLYTELLING': {
+      const c = content;
+      const steps = (Array.isArray(c.steps) ? c.steps : []).filter((st) => st && typeof st === 'object').slice(0, 12);
+      const right = c.side === 'right';
+      const ratio = ['4 / 3', '1 / 1', '3 / 4', '16 / 9', '3 / 2'].includes(c.ratio) ? c.ratio : '4 / 3';
+      const top = ccInt(c.stickyTop, 80, 0, 300);
+      const stepH = ccInt(c.stepHeight, 70, 40, 120);
+      const gap = ccInt(c.gap, 48, 0, 120);
+      let imgs = '', items = '', rules = '';
+      steps.forEach((st, i) => {
+        const img = ccImgUrl(ccStr(st.image));
+        const title = ccEsc(st.title);
+        const text = ccBr(ccStr(st.text));
+        imgs += img !== ''
+          ? `<img class="cc-story-img" data-i="${i}" src="${escapeHtml(img)}" alt="${ccEsc(st.alt)}" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">`
+          : `<div class="cc-story-img cc-story-ph" data-i="${i}" aria-hidden="true" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:56px; font-weight:800; color:#94a3b8;">${i + 1}</div>`;
+        items += `<li class="cc-story-step" data-i="${i}" style="min-height:${stepH}vh; display:flex; flex-direction:column; justify-content:center; padding:24px 0;">`
+          + (title !== '' ? `<h3 class="cc-story-title" style="margin:0 0 10px 0; font-size:26px; line-height:1.25;">${title}</h3>` : '')
+          + (text !== '' ? `<p class="cc-story-text" style="margin:0; font-size:16px; line-height:1.7; color:#475569;">${text}</p>` : '')
+          + `</li>`;
+        rules += `#${innerId}[data-active="${i}"] .cc-story-img[data-i="${i}"]{opacity:1}#${innerId}.cc-story-on[data-active="${i}"] .cc-story-step[data-i="${i}"]{opacity:1}`;
+      });
+      return customCss + `<style>#${innerId} .cc-story-img{opacity:0;transition:opacity .5s ease}#${innerId}.cc-story-on .cc-story-step{opacity:.35;transition:opacity .4s ease}${rules}`
+        + `@media(max-width:768px){#${innerId} .cc-story-grid{grid-template-columns:1fr !important;gap:16px !important}#${innerId} .cc-story-media{order:0 !important;top:0 !important;z-index:2}#${innerId} .cc-story-frame{aspect-ratio:16 / 9 !important;max-height:36vh}#${innerId} .cc-story-step{min-height:55vh !important}}`
+        + `@media(prefers-reduced-motion:reduce){#${innerId} .cc-story-img,#${innerId}.cc-story-on .cc-story-step{transition:none !important}}</style>`
+        + `<div id="${innerId}" class="cc-story cc-story-${right ? 'right' : 'left'}${animClass}${innerClass}" data-active="0" style="${styleAttr}">\n`
+        + `<div class="cc-story-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:${gap}px; align-items:start;">`
+        + `<div class="cc-story-media" style="position:sticky; top:${top}px; align-self:start;${right ? ' order:2;' : ''}"><div class="cc-story-frame" style="position:relative; aspect-ratio:${ratio}; border-radius:16px; overflow:hidden; background:#e2e8f0;">${imgs}</div></div>`
+        + `<ol class="cc-story-steps" style="list-style:none; margin:0; padding:0;">${items}</ol>`
+        + `</div>\n</div>\n`;
+    }
+
+    case 'HOTSPOTS': {
+      const c = content;
+      const pins = (Array.isArray(c.pins) ? c.pins : []).filter((p) => p && typeof p === 'object').slice(0, 20);
+      const img = ccImgUrl(ccStr(c.image));
+      const ratio = ['16 / 9', '4 / 3', '3 / 2', '1 / 1', '21 / 9'].includes(c.ratio) ? c.ratio : '16 / 9';
+      const color = ccColor(c.pinColor, '#3b82f6');
+      const textColor = ccColor(c.pinTextColor, '#ffffff');
+      const radius = ccInt(c.radius, 12, 0, 40);
+      const pulse = c.pulse !== false;
+      let cells = '';
+      pins.forEach((p, i) => {
+        const x = ccNum(p.x, 0, 100, 50);
+        const y = ccNum(p.y, 0, 100, 50);
+        const v = y > 55 ? 'above' : 'below';
+        const h = x < 25 ? 'left' : (x > 75 ? 'right' : 'center');
+        const title = ccEsc(p.title);
+        const text = ccBr(ccStr(p.text));
+        const linkText = ccEsc(p.linkText);
+        cells += `<div class="cc-hs-pin cc-hs-${v} cc-hs-${h}" style="position:absolute; left:${ccFmtNum(x, 1)}%; top:${ccFmtNum(y, 1)}%; transform:translate(-50%, -50%);">`
+          + `<button type="button" class="cc-hs-btn" aria-describedby="${innerId}-p${i}" aria-label="${title !== '' ? title : 'Hotspot ' + (i + 1)}" style="position:relative; width:30px; height:30px; padding:0; border-radius:50%; border:2px solid #fff; background:${color}; color:${textColor}; font:700 13px/1 inherit; cursor:pointer; box-shadow:0 2px 8px rgba(15,23,42,0.35);">`
+          + (pulse ? `<span class="cc-hs-ring" aria-hidden="true" style="position:absolute; inset:-2px; border-radius:50%; background:${color}; pointer-events:none;"></span>` : '')
+          + `<span class="cc-hs-num" style="position:relative;">${i + 1}</span></button>`
+          + `<div class="cc-hs-pop" id="${innerId}-p${i}" role="tooltip" style="position:absolute; width:240px; max-width:70vw; padding:14px 16px; background:#fff; color:#0f172a; border-radius:10px; box-shadow:0 12px 32px rgba(15,23,42,0.22); font-size:14px; line-height:1.5; text-align:left;">`
+          + (title !== '' ? `<strong class="cc-hs-title" style="display:block; margin-bottom:4px;">${title}</strong>` : '')
+          + (text !== '' ? `<span class="cc-hs-text" style="display:block; color:#475569;">${text}</span>` : '')
+          + (linkText !== '' ? `<a class="cc-hs-link" href="${escapeHtml(resolveBlockUrl(ccStr(p.href)))}" style="display:inline-block; margin-top:8px; font-weight:700; color:var(--brand-color, #3b82f6); text-decoration:none;">${linkText} &rarr;</a>` : '')
+          + `</div></div>`;
+      });
+      const id = '#' + innerId;
+      return customCss + `<style>${id} .cc-hs-pop{opacity:0;visibility:hidden;transition:opacity .15s ease}${id} .cc-hs-pin:hover,${id} .cc-hs-pin:focus-within,${id} .cc-hs-pin.is-open{z-index:3}`
+        + `${id} .cc-hs-pin:hover .cc-hs-pop,${id} .cc-hs-pin:focus-within .cc-hs-pop,${id} .cc-hs-pin.is-open .cc-hs-pop{opacity:1;visibility:visible}`
+        + `${id} .cc-hs-below .cc-hs-pop{top:calc(100% + 10px)}${id} .cc-hs-above .cc-hs-pop{bottom:calc(100% + 10px)}`
+        + `${id} .cc-hs-center .cc-hs-pop{left:50%;transform:translateX(-50%)}${id} .cc-hs-left .cc-hs-pop{left:0}${id} .cc-hs-right .cc-hs-pop{right:0}`
+        + `@keyframes ccHsRing_${innerId}{0%{transform:scale(1);opacity:.5}100%{transform:scale(2.3);opacity:0}}${id} .cc-hs-ring{animation:ccHsRing_${innerId} 2s ease-out infinite}`
+        + `@media(prefers-reduced-motion:reduce){${id} .cc-hs-ring{animation:none;display:none}${id} .cc-hs-pop{transition:none}}</style>`
+        + `<div id="${innerId}" class="cc-hotspots${animClass}${innerClass}" style="${styleAttr}">\n`
+        + `<div class="cc-hs-stage" style="position:relative;">`
+        + (img !== ''
+          ? `<img class="cc-hs-img" src="${escapeHtml(img)}" alt="${ccEsc(c.alt)}" loading="lazy" style="display:block; width:100%; height:auto; border-radius:${radius}px;">`
+          : `<div class="cc-hs-img cc-hs-ph" aria-hidden="true" style="aspect-ratio:${ratio}; background:#e2e8f0; border-radius:${radius}px;"></div>`)
+        + cells + `</div>\n</div>\n`;
+    }
+
+    case 'TABLE_OF_CONTENTS': {
+      const c = content;
+      const title = ccEsc(c.title);
+      const levels = c.levels === 'h2h3' ? 'h2h3' : 'h2';
+      const sticky = c.sticky === true;
+      const top = ccInt(c.stickyTop, 90, 0, 300);
+      const offset = ccInt(c.offset, 80, 0, 300);
+      const card = c.layout !== 'plain';
+      const accent = ccColor(c.accent, 'var(--brand-color, #3b82f6)');
+      const id = '#' + innerId;
+      return customCss + `<style>${id} a{color:inherit;text-decoration:none}${id} a:hover{color:${accent}}${id} .cc-toc-item{margin:0;padding:4px 0}${id} .cc-toc-l3{padding-left:16px;font-size:.93em;opacity:.9}${id} .is-active>a{color:${accent};font-weight:700}${id} .cc-toc-num{opacity:.7}</style>`
+        + `<nav id="${innerId}" class="cc-toc cc-toc-${card ? 'card' : 'plain'}${animClass}${innerClass}" hidden data-levels="${levels}" data-numbered="${c.numbered === true ? '1' : '0'}" data-highlight="${c.highlight !== false ? '1' : '0'}" data-offset="${offset}" aria-label="${title !== '' ? title : 'Table of contents'}" style="${styleAttr}${sticky ? ` position:sticky; top:${top}px;` : ''}">\n`
+        + `<div class="cc-toc-box" style="${card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:20px 22px;' : 'padding:0;'}">`
+        + (title !== '' ? `<div class="cc-toc-title" style="font-weight:700; font-size:15px; margin-bottom:10px; color:#0f172a;">${title}</div>` : '')
+        + `<ol class="cc-toc-list" style="list-style:none; margin:0; padding:0; font-size:14px; line-height:1.4; color:#475569;"></ol>`
+        + `<p class="cc-toc-empty" hidden style="margin:0; font-size:13px; color:#94a3b8;">The headings of this page appear here.</p>`
+        + `</div>\n</nav>\n`;
+    }
+
+    case 'SHARE_BAR': {
+      const c = content;
+      const title = ccEsc(c.title);
+      const chosen = Array.isArray(c.networks) ? c.networks.filter((n) => typeof n === 'string') : [];
+      const icons = c.style === 'icons';
+      const radius = c.shape === 'square' ? '0' : (c.shape === 'rounded' ? '8px' : '999px');
+      const colors = ['mono', 'dark'].includes(c.colors) ? c.colors : 'brand';
+      const size = ccInt(c.size, 40, 28, 64);
+      const align = c.align === 'center' ? 'center' : (c.align === 'right' ? 'flex-end' : 'flex-start');
+      const textAlign = c.align === 'center' ? 'center' : (c.align === 'right' ? 'right' : 'left');
+      let btns = '';
+      for (const [net, label, glyph, brand] of SHARE_NETS) {
+        if (!chosen.includes(net)) continue;
+        const link = ['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email'].includes(net);
+        const paint = colors === 'brand' ? `background:${brand}; color:#ffffff; border:1px solid ${brand};` : (colors === 'dark' ? 'background:#0f172a; color:#ffffff; border:1px solid #0f172a;' : 'background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;');
+        const inner = (glyph.startsWith('<svg') ? glyph : `<span class="cc-share-badge" aria-hidden="true" style="font-weight:800; font-size:14px; line-height:1;">${glyph}</span>`)
+          + (icons ? '' : `<span class="cc-share-label">${label}</span>`);
+        const aria = link && net !== 'email' ? `Share on ${label}` : (net === 'email' ? 'Share by email' : label);
+        const st = `display:inline-flex; align-items:center; justify-content:center; gap:8px; height:${size}px; min-width:${size}px; padding:0 ${icons ? 0 : 16}px; box-sizing:border-box; border-radius:${radius}; font:600 14px/1 inherit; text-decoration:none; cursor:pointer; ${paint}`;
+        btns += link
+          ? `<a class="cc-share-btn cc-share-${net}" data-net="${net}" href="#" target="_blank" rel="noopener noreferrer" aria-label="${aria}" style="${st}">${inner}</a>`
+          : `<button type="button" class="cc-share-btn cc-share-${net}" data-act="${net}" aria-label="${aria}" style="${st}">${inner}</button>`;
+      }
+      return customCss + `<style>#${innerId} .cc-share-btn:hover{filter:brightness(.92)}#${innerId} .cc-share-btn:focus-visible{outline:2px solid var(--brand-color, #3b82f6);outline-offset:2px}</style>`
+        + `<div id="${innerId}" class="cc-share${animClass}${innerClass}" hidden data-msg="${ccEsc(c.message)}" style="${styleAttr}">\n`
+        + (title !== '' ? `<div class="cc-share-title" style="font-weight:700; font-size:15px; color:#0f172a; margin-bottom:10px; text-align:${textAlign};">${title}</div>` : '')
+        + `<div class="cc-share-list" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:${align};">${btns}</div>\n</div>\n`;
+    }
+
+    case 'CODE_SNIPPET': {
+      const c = content;
+      const langRow = CODE_LANGS.find((l) => l[0] === c.language) || CODE_LANGS[CODE_LANGS.length - 1];
+      const lang = langRow[0];
+      const code = [...ccStr(c.code).replace(/\r\n?/g, '\n').replace(/\n+$/, '')].slice(0, 50000).join('');
+      const filename = ccEsc(c.filename);
+      const dark = c.theme !== 'light';
+      const fs = ccInt(c.fontSize, 14, 11, 20);
+      const maxH = ccInt(c.maxHeight, 0, 0, 1200);
+      const copy = c.copyButton !== false;
+      const lineNums = c.lineNumbers === true;
+      const pal = dark ? ['#0f172a', '#e2e8f0', '#1e293b', '#111c33', '#94a3b8'] : ['#f8fafc', '#0f172a', '#e2e8f0', '#f1f5f9', '#64748b'];
+      const tk = dark
+        ? { c: '#7c8aa5', s: '#86efac', k: '#c4b5fd', n: '#fdba74', f: '#7dd3fc', v: '#fca5a5', t: '#f472b6', a: '#fcd34d' }
+        : { c: '#64748b', s: '#15803d', k: '#7c3aed', n: '#c2410c', f: '#0369a1', v: '#b91c1c', t: '#be185d', a: '#b45309' };
+      let tokCss = '';
+      for (const k of Object.keys(tk)) tokCss += `#${innerId} .cc-tk-${k}{color:${tk[k]}${k === 'c' ? ';font-style:italic' : ''}}`;
+      const showBar = filename !== '' || langRow[1] !== '' || copy;
+      const lines = code.split('\n').length;
+      let gutter = '';
+      if (lineNums) { const nums = []; for (let i = 1; i <= lines; i++) nums.push(i); gutter = nums.join('\n'); }
+      return customCss + `<style>${tokCss}#${innerId} .cc-code-copy:hover{filter:brightness(1.2)}</style>`
+        + `<figure id="${innerId}" class="cc-code cc-code-${dark ? 'dark' : 'light'}${animClass}${innerClass}" data-lang="${lang}" style="${styleAttr} margin:0; border-radius:12px; overflow:hidden; background:${pal[0]}; color:${pal[1]}; border:1px solid ${pal[2]};">\n`
+        + (showBar ? `<div class="cc-code-bar" style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:${pal[3]}; border-bottom:1px solid ${pal[2]}; font:600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:${pal[4]};">`
+          + `<span class="cc-code-file" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${filename !== '' ? filename : langRow[1]}</span>`
+          + (filename !== '' && langRow[1] !== '' ? `<span class="cc-code-lang">${langRow[1]}</span>` : '')
+          + (copy ? `<button type="button" class="cc-code-copy" hidden aria-label="Copy the code" style="padding:5px 10px; border-radius:6px; border:1px solid ${pal[2]}; background:transparent; color:inherit; font:600 12px/1 inherit; cursor:pointer;">Copy</button>` : '')
+          + `</div>` : '')
+        + `<div class="cc-code-scroll" style="overflow:auto;${maxH > 0 ? ` max-height:${maxH}px;` : ''}">`
+        + `<div class="cc-code-wrap" style="display:flex; min-width:max-content; font:${fs}px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">`
+        + (lineNums ? `<span class="cc-code-gutter" aria-hidden="true" style="flex:0 0 auto; padding:16px 12px 16px 16px; text-align:right; white-space:pre; user-select:none; color:${pal[4]};">${gutter}</span>` : '')
+        + `<pre class="cc-code-pre" style="flex:1; margin:0; padding:16px; white-space:pre; tab-size:2; font:inherit;"><code class="cc-code-code" style="font:inherit;">${escapeHtml(code)}</code></pre>`
+        + `</div></div>\n</figure>\n`;
     }
 
     default:

@@ -38,6 +38,11 @@ import AuthorBioPanel from './AuthorBioPanel';
 import ReviewSummaryPanel from './ReviewSummaryPanel';
 import TestimonialWallPanel from './TestimonialWallPanel';
 import HoverGridPanel from './HoverGridPanel';
+import ScrollytellingPanel from './ScrollytellingPanel';
+import HotspotsPanel from './HotspotsPanel';
+import TableOfContentsPanel from './TableOfContentsPanel';
+import ShareBarPanel from './ShareBarPanel';
+import CodeSnippetPanel from './CodeSnippetPanel';
 
 export const CONTENT_PANELS = {
   ACCORDION: AccordionTabsPanel,
@@ -82,4 +87,9 @@ export const CONTENT_PANELS = {
   REVIEW_SUMMARY: ReviewSummaryPanel,
   TESTIMONIAL_WALL: TestimonialWallPanel,
   HOVER_GRID: HoverGridPanel,
+  SCROLLYTELLING: ScrollytellingPanel,
+  HOTSPOTS: HotspotsPanel,
+  TABLE_OF_CONTENTS: TableOfContentsPanel,
+  SHARE_BAR: ShareBarPanel,
+  CODE_SNIPPET: CodeSnippetPanel,
 };
