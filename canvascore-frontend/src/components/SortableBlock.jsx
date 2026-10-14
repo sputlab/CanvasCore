@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore';
 import { InlineRegions } from '../editor/RichText';
 import { Crown } from 'lucide-react';
 import { renderBlock, blockRoot } from '../render/renderBlock.mjs';
+import { fillLogosMarquee } from '../render/logosMarquee.mjs';
 import { safeHtml } from '../utils/safeHtml';
 import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
 
@@ -78,15 +79,22 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
 
   // Before/After: in the editor the injected HTML's <script>s don't run, so the slider is wired up here
   // (same behavior as the published script: the slider sets --pos).
-  const baRef = useRef(null);
+  // htmlRef: the element holding the block's injected HTML
+  const htmlRef = useRef(null);
   useEffect(() => {
     if (block.type !== 'BEFORE_AFTER') return undefined;
-    const root = baRef.current && baRef.current.querySelector('.cc-ba');
+    const root = htmlRef.current && htmlRef.current.querySelector('.cc-ba');
     const range = root && root.querySelector('.cc-ba-range');
     if (!range) return undefined;
     const set = () => root.style.setProperty('--pos', range.value + '%');
     range.addEventListener('input', set);
     return () => range.removeEventListener('input', set);
+  }, [block]);
+
+  // Logo Cloud scrolling strip: the logos repeat to cover the strip, as on the published page (CC_LOGOS_SCRIPT)
+  useEffect(() => {
+    if (block.type !== 'LOGOS' || block.content?.layout !== 'marquee') return undefined;
+    return fillLogosMarquee(htmlRef.current && htmlRef.current.querySelector('.cc-logos'), block.content?.speed);
   }, [block]);
 
   // Where the click that selected a text block landed: the caret is placed there once it becomes editable
@@ -225,7 +233,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
 
     // Everything else (and unselected editables): canonical HTML = identical to the site
     return (
-      <div ref={block.type === 'BEFORE_AFTER' ? baRef : undefined} style={{ pointerEvents: (isMasterPreview || INTERACTIVE.includes(block.type)) ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock)) }} />
+      <div ref={htmlRef} style={{ pointerEvents: (isMasterPreview || INTERACTIVE.includes(block.type)) ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock)) }} />
     );
   };
 

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import { JSDOM } from 'jsdom';
 import { renderBlock } from '../src/render/renderBlock.mjs';
+import { fillLogosMarquee, marqueeSpeed } from '../src/render/logosMarquee.mjs';
 
 const phpScript = fileURLToPath(new URL('./render_php.php', import.meta.url));
 const php = (type, content, styles = {}) => execFileSync('php', [phpScript], { input: JSON.stringify({ id: 'tb', type, styles, content }) }).toString();
@@ -270,7 +271,7 @@ section('LOGOS');
   check('CSS animation with a unique name per block and the chosen speed', /@keyframes ccMq_tb/.test(m) && /ccMq_tb 20s linear infinite/.test(m));
   check('pause on hover and prefers-reduced-motion (no motion, no duplicates)', /animation-play-state:paused/.test(m) && /prefers-reduced-motion:reduce/.test(m) && /\.cc-logos-set\[aria-hidden="true"\]\{display:none\}/.test(m));
   check('speed clamped to 10..120 s', /ccMq_tb 120s/.test(php('LOGOS', { layout: 'marquee', speed: 9999, logos })) && /ccMq_tb 10s/.test(php('LOGOS', { layout: 'marquee', speed: 1, logos })));
-  check('no JavaScript needed', !/<script/.test(m) && !/<script/.test(g));
+  check('the strip moves with CSS alone (its script only repeats logos to fill the line); the grid has no script', /@keyframes ccMq_/.test(m.replace(/<script>[\s\S]*?<\/script>/g, '')) && [...m.matchAll(/<script>/g)].length === 1 && !/<script/.test(g));
   check('a "javascript:" URL in the logo link does not become an executable link', !/href="javascript:/i.test(php('LOGOS', { logos: [{ src: 'a.png', alt: 'x', href: 'javascript:alert(1)' }] })));
 }
 
@@ -426,6 +427,79 @@ section('LOGOS strip options');
   check('fade: the edges are masked, and the mask is removed when motion is reduced', /\.cc-logos-marquee\{-webkit-mask-image:linear-gradient\(90deg/.test(r) && /prefers-reduced-motion:reduce\)\{[^@]*-webkit-mask-image:none;mask-image:none/.test(r));
   check('only the exact values switch the options on (direction "up", fade "yes" → off)', (() => { const h = php('LOGOS', { layout: 'marquee', direction: 'up', fade: 'yes', logos }); return !/reverse/.test(h) && !/mask-image/.test(h); })());
   check('the grid layout ignores both options', !/reverse|mask-image/.test(php('LOGOS', { layout: 'grid', direction: 'right', fade: true, logos })));
+}
+
+// =============================================================== LOGOS strip: logos repeat to cover the strip
+section('LOGOS strip fill (published script and editor canvas)');
+{
+  // jsdom has no layout: every logo is 60px wide (+ the 40px gap = 100px), the strip is `box` px wide
+  const stripPage = (html, { box = 1000, reduced = false, loaded = true, io = false } = {}) => {
+    const ros = []; const ios = [];
+    const dom = new JSDOM(`<!doctype html><html><body>${html}</body></html>`, {
+      runScripts: 'dangerously',
+      beforeParse(win) {
+        win.matchMedia = () => ({ matches: reduced });
+        win.ResizeObserver = class { constructor(cb) { this.cb = cb; ros.push(this); } observe() {} disconnect() {} };
+        if (io) win.IntersectionObserver = class { constructor(cb, o) { this.cb = cb; this.o = o; ios.push(this); } observe() {} disconnect() { this.off = true; } };
+        const rect = win.HTMLElement.prototype.getBoundingClientRect;
+        win.HTMLElement.prototype.getBoundingClientRect = function () { return this.classList.contains('cc-logo-item') ? { width: win.__w, height: 48, left: 0, right: win.__w, top: 0, bottom: 48 } : rect.call(this); };
+        win.__w = 60;
+        Object.defineProperty(win.HTMLElement.prototype, 'clientWidth', { get() { return this.classList.contains('cc-logos-marquee') ? win.__box : 0; } });
+        Object.defineProperty(win.HTMLImageElement.prototype, 'complete', { get() { return win.__loaded; } });   // jsdom never loads images
+        win.__box = box; win.__loaded = loaded;
+      },
+    });
+    return { win: dom.window, doc: dom.window.document, ros, ios };
+  };
+  const logos = [{ src: 'data:image/png;base64,iVBORw0KGgo=', alt: 'A', href: 'https://a.example' }, { src: 'data:image/png;base64,iVBORw0KGgo=', alt: 'B' }];
+  const content = { layout: 'marquee', speed: 30, logos };
+  const sets = (doc) => [...doc.querySelectorAll('.cc-logos-set')];
+
+  const p = stripPage(php('LOGOS', content));
+  const [s1, s2] = sets(p.doc);
+  check('published: 2 logos in a 1000px strip are repeated until a set covers it (10 per set)', s1.children.length === 10 && s2.children.length === 10, `${s1.children.length}/${s2.children.length}`);
+  check('…the loop time grows with the copies, so the speed stays the same (30s × 5 = 150s)', p.doc.querySelector('.cc-logos-track').style.animationDuration === '150s', p.doc.querySelector('.cc-logos-track').style.animationDuration);
+  const copies = [...s1.querySelectorAll('.cc-logo-fill')];
+  check('…the copies are hidden from screen readers and the keyboard, with empty alt text', copies.length === 8 && copies.every((c) => c.getAttribute('aria-hidden') === 'true' && c.querySelector('img').getAttribute('alt') === '') && copies.filter((c) => c.tagName === 'A').every((c) => c.getAttribute('tabindex') === '-1'));
+  check('…copies load their image at once (not lazily), so they never pop in while moving', copies.every((c) => !c.querySelector('img').hasAttribute('loading')));
+  const near = stripPage(php('LOGOS', content), { io: true });
+  const lazyCount = (d) => d.querySelectorAll('.cc-logos-track img[loading="lazy"]').length;
+  const lazyBefore = lazyCount(near.doc);
+  near.ios[0].cb([{ isIntersecting: true }]);
+  check('…the strip\'s logos stay lazy until it comes within 200px of the view, then all load at once (both sets)', lazyBefore === 4 && lazyCount(near.doc) === 0 && near.ios[0].o.rootMargin === '200px' && near.ios[0].off === true, `${lazyBefore} → ${lazyCount(near.doc)}`);
+  check('…the original logos keep their alt text and order', s1.children[0].querySelector('img').getAttribute('alt') === 'A' && s1.children[1].querySelector('img').getAttribute('alt') === 'B');
+  p.win.__box = 1500; p.ros[0].cb();
+  check('…when the strip gets wider, more copies are added', sets(p.doc)[0].children.length === 16 && p.doc.querySelector('.cc-logos-track').style.animationDuration === '240s');
+  p.win.__box = 300; p.ros[0].cb();
+  check('…and when it gets narrower the extra copies are removed from both sets, with the speed adjusted', sets(p.doc)[0].children.length === 4 && sets(p.doc)[1].children.length === 4 && p.doc.querySelector('.cc-logos-track').style.animationDuration === '60s' && sets(p.doc)[0].children[0].querySelector('img').getAttribute('alt') === 'A');
+
+  const slow = stripPage(php('LOGOS', content), { loaded: false });
+  check('published: while the logos are still loading nothing is added (their width is unknown)', sets(slow.doc)[0].children.length === 2);
+  slow.win.__loaded = true; slow.doc.querySelector('.cc-logos-set img').dispatchEvent(new slow.win.Event('load'));
+  check('…and the strip is filled as soon as they have loaded', sets(slow.doc)[0].children.length === 10);
+  // measured too early (logos without their size yet: groups look 80px wide → 13 copies), corrected when they load
+  const early = stripPage(php('LOGOS', content), { loaded: true }, 0);
+  early.win.__w = 0; early.ros[0].cb();
+  const tooMany = sets(early.doc)[0].children.length;
+  early.win.__w = 60; early.doc.querySelector('.cc-logos-set img').dispatchEvent(new early.win.Event('load'));
+  check('published: copies added before the logos had their size are removed once they load (no slow crawl)', tooMany === 26 && sets(early.doc)[0].children.length === 10 && sets(early.doc)[1].children.length === 10 && early.doc.querySelector('.cc-logos-track').style.animationDuration === '150s', `${tooMany} → ${sets(early.doc)[0].children.length}`);
+
+  const wide = stripPage(php('LOGOS', content), { box: 150 });
+  check('published: logos that already cover the strip are not repeated', sets(wide.doc)[0].children.length === 2 && wide.doc.querySelector('.cc-logos-track').style.animationDuration === '30s');
+  const still = stripPage(php('LOGOS', content), { reduced: true });
+  check('published: nothing is added for visitors who prefer reduced motion', sets(still.doc)[0].children.length === 2);
+  check('published: the grid layout has no script', !/<script/.test(php('LOGOS', { ...content, layout: 'grid' })));
+  check('published: a strip without logos has no script', !/<script/.test(php('LOGOS', { ...content, logos: [] })));
+  check('published: the speed in the script is the clamped number from the block', /var dur=120,/.test(php('LOGOS', { ...content, speed: '9999' })) && /var dur=30,/.test(php('LOGOS', { ...content, speed: 'x;alert(1)' })));
+
+  // the editor canvas: renderBlock (no script) + fillLogosMarquee()
+  const c = stripPage(js('LOGOS', content));
+  const stop = fillLogosMarquee(c.doc.querySelector('.cc-logos'), 30);
+  check('canvas: same result as the published page (10 per set, 150s)', sets(c.doc)[0].children.length === 10 && sets(c.doc)[1].children.length === 10 && c.doc.querySelector('.cc-logos-track').style.animationDuration === '150s');
+  stop();
+  fillLogosMarquee(c.doc.querySelector('.cc-logos'), 30);
+  check('canvas: running again over a filled strip keeps the speed (copies are not counted as originals)', sets(c.doc)[0].children.length === 10 && c.doc.querySelector('.cc-logos-track').style.animationDuration === '150s', c.doc.querySelector('.cc-logos-track').style.animationDuration);
+  check('canvas: speed values are read like the compiler does', marqueeSpeed('45') === 45 && marqueeSpeed(5) === 10 && marqueeSpeed(500) === 120 && marqueeSpeed('abc') === 30 && marqueeSpeed('') === 30 && marqueeSpeed(null) === 30);
 }
 
 // =============================================================== REVIEW_SUMMARY

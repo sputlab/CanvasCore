@@ -218,6 +218,31 @@ function cc_int($v, $def, $min, $max) {
     if (!is_scalar($v) || is_bool($v) || !preg_match('/^\s*([+-]?\d+)/', (string)$v, $m)) return $def;
     return min($max, max($min, (int)$m[1]));
 }
+// Logo Cloud scrolling strip (LOGOS, layout "marquee"); %ID% = the block's id, %SPEED% = seconds per loop.
+// Repeats the logos inside both sets until one set covers the strip (after the images load and on resize), so no
+// gap opens before the second set comes in, and stretches the loop by the same factor to keep the visual speed.
+// One group's width is measured on the original logos and measured again whenever one of them loads (extra
+// copies are removed then); copies load their image at once (no lazy pop-in), and so does the whole strip once it
+// comes near the viewport (lazy loading never loads the half of a moving strip that is out of view sideways).
+// Twin of fillLogosMarquee() in src/render/logosMarquee.mjs (the editor canvas).
+const CC_LOGOS_SCRIPT = <<<'CCJS'
+(function(){var r=document.getElementById('%ID%');if(!r)return;var box=r.querySelector('.cc-logos-marquee'),track=r.querySelector('.cc-logos-track');if(!box||!track)return;
+if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+var sets=track.querySelectorAll('.cc-logos-set');if(sets.length<2)return;var base=[].slice.call(sets[0].children).filter(function(e){return !e.classList.contains('cc-logo-fill');}),n=base.length;if(!n)return;
+var dur=%SPEED%,imgs=base.map(function(e){return e.querySelector('img');}).filter(Boolean);
+function fill(){for(var i=0;i<imgs.length;i++){if(!imgs[i].complete)return;}
+var cs=getComputedStyle(sets[0]),gap=parseFloat(cs.columnGap)||parseFloat(cs.gap)||0,unit=0;for(var u=0;u<n;u++)unit+=base[u].getBoundingClientRect().width+gap;if(!(unit>0))return;
+var want=Math.min(20,Math.max(1,Math.ceil(box.clientWidth/unit)));
+var have=Math.round(sets[0].children.length/n);
+for(;have>want;have--){for(var s=0;s<sets.length;s++){for(var d=0;d<n&&sets[s].lastElementChild&&sets[s].lastElementChild.classList.contains('cc-logo-fill');d++)sets[s].removeChild(sets[s].lastElementChild);}}
+for(;have<want;have++){for(var j=0;j<n;j++){var c=base[j].cloneNode(true);c.classList.add('cc-logo-fill');c.setAttribute('aria-hidden','true');if(c.tagName==='A')c.setAttribute('tabindex','-1');var im=c.querySelector('img');if(im){im.setAttribute('alt','');im.removeAttribute('loading');}sets[0].appendChild(c);sets[1].appendChild(c.cloneNode(true));}}
+track.style.animationDuration=(dur*Math.round(sets[0].children.length/n))+'s';}
+imgs.forEach(function(im){im.addEventListener('load',fill);im.addEventListener('error',fill);});
+function eager(){[].forEach.call(track.querySelectorAll('img'),function(im){im.removeAttribute('loading');});}
+if(window.IntersectionObserver){var io=new IntersectionObserver(function(es){if(es.some(function(e){return e.isIntersecting;})){eager();io.disconnect();}},{rootMargin:'200px'});io.observe(box);}else eager();
+if(window.ResizeObserver)new ResizeObserver(fill).observe(box);else window.addEventListener('resize',fill);fill();})();
+CCJS;
+
 // Site search script (SEARCH block); %ID% = the block's id
 const CC_SEARCH_SCRIPT = <<<'CCJS'
 (function(){var r=document.getElementById('%ID%');if(!r)return;var f=r.querySelector('form'),i=r.querySelector('input'),o=r.querySelector('.cc-search-results'),idx=null,lim=+r.getAttribute('data-limit')||10;
@@ -1331,7 +1356,9 @@ function render_block($block) {
             }
             return $customCss . '<style>' . $css . '</style><div id="' . $innerId . '" class="cc-logos' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
                 . ($title !== '' ? '<div class="cc-logos-title" style="text-align:center; font-size:14px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:24px;">' . $title . '</div>' : '')
-                . $body . "\n</div>\n";
+                . $body . "\n"
+                . ($marquee && $logos ? '<script>' . str_replace(['%ID%', '%SPEED%'], [$innerId, (string)$speed], CC_LOGOS_SCRIPT) . "</script>\n" : '')
+                . "</div>\n";
         }
 
         case 'TEAM': {
