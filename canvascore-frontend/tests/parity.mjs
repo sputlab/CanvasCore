@@ -112,12 +112,32 @@ const fixtures = [
   { id: 'ba2', type: 'BEFORE_AFTER', styles: {}, content: { startPosition: 999, showLabels: false, before: { src: 'b.jpg' }, after: { src: 'a.jpg' } } },
   { id: 'bz1', type: 'BUSINESS', styles: { width: '100%' }, content: { name: 'Bar Roma', businessType: 'CafeOrCoffeeShop', address: 'Via Roma 1\n00100 Roma', phone: '+39 06 123 4567', email: 'info@bar.example', website: 'bar.example/it', mapsLink: true, directionsLabel: 'Indicazioni', hoursTitle: 'Orari', closedLabel: 'Chiuso', note: 'Chiuso nei festivi', hours: [{ day: 'Lunedi', open: '08:00', close: '19:00', closed: false }, { day: 'Martedi', open: '', close: '', closed: true }, { day: 'Mercoledi', open: 'x', close: 'y', closed: false }] } },
   { id: 'bz2', type: 'BUSINESS', styles: {}, content: { name: '', address: '', phone: '', email: 'sbagliata', hours: [] } },
+  { id: 'bn1', type: 'BENTO', styles: { width: '100%' }, content: { columns: 4, rowHeight: 200, gap: 12, hover: 'zoom', tiles: [
+      { size: 'large', icon: '*', title: 'Big', text: 'Text', image: 'big.jpg', alt: 'Alt', bg: '#000', color: '', href: 'chi-siamo/index.html' },
+      { size: 'wide', title: 'Wide', bg: '#eff6ff', href: 'https://example.com' },
+      { size: 'tall', title: '', text: '', icon: '' },
+      { size: 'evil', title: 'Unknown size' }, 'not a tile', null, { size: ['wide'], title: 'Array size' } ] } },
+  { id: 'bn2', type: 'BENTO', styles: {}, content: { columns: 'x', rowHeight: 9999, gap: -5, hover: 'evil', tiles: [
+      { size: 'wide', title: '<b>x</b>', bg: 'red;}', color: 'url(x)', image: 'javascript:alert(1)', href: 'javascript:alert(2)' },
+      { title: ['array'], text: { o: 1 }, icon: true, image: 7 } ] } },
+  { id: 'bn3', type: 'BENTO', styles: {}, content: {} },
+  { id: 'sc1', type: 'SPLIT_CTA', styles: { width: '100%' }, content: { gap: 24, radius: 0,
+      left: { icon: '!', title: 'Left', text: 'L', buttonText: 'Go', buttonUrl: 'contatti/index.html', bg: '#111', color: '#fff', buttonBg: '#f00', buttonColor: '#fff' },
+      right: { title: 'Right', text: '', buttonText: '', bg: 'expression(x)' } } },
+  { id: 'sc2', type: 'SPLIT_CTA', styles: {}, content: { gap: 999, radius: 'r', left: 'nope', right: null } },
+  { id: 'cs1', type: 'CASE_STUDY', styles: { width: '100%' }, content: { layout: 'horizontal', image: 'case.jpg', alt: 'Team', logo: 'logo.svg', client: 'ACME', metric: '+240%', metricLabel: 'traffic', title: 'T', text: 'S', quote: 'Q', quoteAuthor: 'A', linkText: 'Read', linkUrl: 'https://example.com', accent: '#10b981' } },
+  { id: 'cs2', type: 'CASE_STUDY', styles: {}, content: { layout: 'vertical', image: 'case.jpg', title: 'Only a title', quote: 'Q', quoteAuthor: '' } },
+  { id: 'cs3', type: 'CASE_STUDY', styles: {}, content: { image: 'javascript:alert(1)', logo: 'data:text/html,x', accent: 'red;}', client: '', metric: '', linkText: 'L', linkUrl: 'javascript:alert(2)' } },
+  { id: 'ab1', type: 'AUTHOR_BIO', styles: { width: '100%' }, content: { layout: 'horizontal', boxed: true, label: 'About', name: 'Alex Morgan', role: 'Editor', bio: 'Line one\nLine two', photo: 'alex.jpg', links: [{ label: 'Site', url: 'example.com' }, { label: 'Mail', url: 'alex@example.com' }] } },
+  { id: 'ab2', type: 'AUTHOR_BIO', styles: {}, content: { layout: 'centered', boxed: false, label: '', name: 'solo', role: '', bio: '', photo: '',
+      links: ['x', null, { label: '', url: 'a.example' }, { label: 'Bad', url: 'javascript:alert(1)' }, { label: 'Empty', url: '' }] } },
+  { id: 'ab3', type: 'AUTHOR_BIO', styles: {}, content: { name: ['x'], bio: { a: 1 }, photo: 'vbscript:x', links: 'nope' } },
 ];
 
 // Fixtures from the REAL DEFAULTS (blocks.json): exactly what the editor creates with addBlock.
 {
   const defs = JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks.json', import.meta.url)), 'utf-8'));
-  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS']) {
+  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO']) {
     const def = defs.types[type];
     if (!def) { console.error(`blocks.json: type ${type} is missing`); process.exit(1); }
     fixtures.push({ id: 'def_' + type.toLowerCase(), type, styles: { ...(defs._baseStyles || {}), ...(def.styles || {}) }, content: JSON.parse(JSON.stringify(def.content || {})) });
@@ -181,7 +201,7 @@ function diff(a, b, path = '') {
 
 // For these blocks the generated CSS carries LOGIC (radio tabs, open state, responsive):
 // besides the structure we also compare the text of the <style> tags.
-const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS']);
+const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO']);
 function styleTexts(html) {
   const $ = load(`<div id="__root__">${html}</div>`, null, false);
   return $('style').map((_, e) => $(e).text().replace(/\s+/g, ' ').replace(/:\s+/g, ':').replace(/,\s+/g, ',').trim()).get();

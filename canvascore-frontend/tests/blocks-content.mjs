@@ -353,5 +353,67 @@ section('BUSINESS');
   check('collapses to one column on mobile', /grid-template-columns:1fr !important/.test(h));
 }
 
+// =============================================================== BENTO
+section('BENTO');
+{
+  const h = php('BENTO', { columns: 3, tiles: [
+    { size: 'large', title: 'Big', image: 'big.jpg', alt: 'A photo', href: 'chi-siamo/index.html' },
+    { size: 'wide', title: 'Wide' }, { size: 'tall', title: 'Tall' }, { size: 'evil', title: 'Normal' } ] });
+  const d = $(h);
+  const tiles = d('.cc-bento-tile');
+  check('one tile per item, in order', tiles.length === 4 && tiles.map((_, e) => d(e).find('.cc-bento-title').text()).get().join() === 'Big,Wide,Tall,Normal');
+  check('sizes become grid spans (large 2×2, wide 2×1, tall 1×2, unknown → 1×1)', ['span 2; grid-row:span 2', 'span 2; grid-row:span 1', 'span 1; grid-row:span 2', 'span 1; grid-row:span 1'].every((x, i) => (tiles.eq(i).attr('style') || '').includes('grid-column:' + x)));
+  check('a tile with a link is an <a> to the internal page, the others are <div>', tiles.eq(0).is('a') && tiles.eq(0).attr('href') === '{{BASE_URL}}chi-siamo/' && tiles.eq(1).is('div'));
+  check('an image tile has the photo with its alt text and white text over a shade', d('.cc-bento-img').attr('alt') === 'A photo' && d('.cc-bento-shade').length === 1 && /color:#ffffff/.test(tiles.eq(0).attr('style')));
+  check('without an image the text is dark', /color:#0f172a/.test(tiles.eq(1).attr('style')));
+  const bad = php('BENTO', { columns: 9, rowHeight: 20, gap: 500, hover: 'evil', tiles: [{ title: '<img src=x onerror=a>', image: 'javascript:alert(1)', href: 'javascript:alert(2)', bg: 'red;}x{', color: 'url(x)' }, 'junk', null] });
+  check('out-of-range layout values are clamped (4 columns, 100px rows, 48px gap), unknown hover → lift', /repeat\(4, 1fr\)/.test(bad) && /minmax\(100px, auto\)/.test(bad) && /gap:48px/.test(bad) && /cc-bento-hover-lift/.test(bad));
+  check('hostile tile: text escaped, no javascript: image or link, unsafe colors replaced', !/<img src=x/.test(bad) && !/src="javascript:/i.test(bad) && !/href="javascript:/i.test(bad) && !/red;\}/.test(bad) && !/url\(x\)/.test(bad));
+  check('non-object tiles are skipped', $(bad)('.cc-bento-tile').length === 1);
+  check('stacks to 2 columns on tablets and 1 on phones, without spans', /max-width:768px\)\{#tb \.cc-bento-grid\{grid-template-columns:repeat\(2, 1fr\)/.test(h) && /grid-column:auto !important;grid-row:auto !important/.test(h));
+  check('hover motion is switched off for visitors who prefer reduced motion', /prefers-reduced-motion:reduce/.test(h));
+}
+
+// =============================================================== SPLIT_CTA
+section('SPLIT_CTA');
+{
+  const d = $(php('SPLIT_CTA', { left: { title: 'L', text: 'Left text', buttonText: 'Go', buttonUrl: 'contatti/index.html' }, right: { title: 'R', buttonText: '' } }));
+  check('two sides, left then right', d('.cc-split-cta-side').length === 2 && d('.cc-split-cta-side').eq(0).hasClass('cc-split-cta-left') && d('.cc-split-cta-side').eq(1).hasClass('cc-split-cta-right'));
+  check('a button only where it has text, linking to the internal page', d('.cc-split-cta-btn').length === 1 && d('.cc-split-cta-btn').attr('href') === '{{BASE_URL}}contatti/');
+  const bad = php('SPLIT_CTA', { gap: 999, left: { title: '<script>x</script>', bg: 'expression(alert(1))', buttonText: 'B', buttonUrl: 'javascript:alert(1)' }, right: 'junk' });
+  check('hostile values: title escaped, unsafe color replaced by the default, no javascript: link, gap clamped', !/<script>x/.test(bad) && !/expression/.test(bad) && !/href="javascript:/i.test(bad) && /gap:48px/.test(bad) && /background:#0f172a/.test(bad));
+  check('a side that is not an object still renders (empty, with its default colors)', $(bad)('.cc-split-cta-right').length === 1 && /background:#eff6ff/.test(bad));
+  check('stacks vertically on mobile', /flex-direction:column !important/.test(bad));
+}
+
+// =============================================================== CASE_STUDY
+section('CASE_STUDY');
+{
+  const full = { image: 'case.jpg', alt: 'The team', logo: 'logo.svg', client: 'ACME', metric: '+240%', metricLabel: 'traffic', title: 'T', text: 'S', quote: 'Great', quoteAuthor: 'Jane', linkText: 'Read', linkUrl: 'https://example.com/case', accent: '#10b981' };
+  const d = $(php('CASE_STUDY', full));
+  check('image with alt text, client logo and name, metric with label', d('.cc-case-media img').attr('alt') === 'The team' && d('.cc-case-client img').attr('src') === 'logo.svg' && d('.cc-case-client').text() === 'ACME' && d('.cc-case-metric-value').text() === '+240%' && d('.cc-case-metric-label').text() === 'traffic');
+  check('quote with its author in a <cite>, and the link', d('blockquote.cc-case-quote cite').text() === '— Jane' && d('a.cc-case-link').attr('href') === 'https://example.com/case' && d('a.cc-case-link').text() === 'Read →');
+  check('the accent color is used for the metric, the quote border and the link', (php('CASE_STUDY', full).match(/#10b981/g) || []).length === 3);
+  const min = $(php('CASE_STUDY', { title: 'Only' }));
+  check('only what is filled in is shown (no image, logo, metric, quote or link)', min('.cc-case-media, .cc-case-client, .cc-case-metric, .cc-case-quote, .cc-case-link').length === 0 && min('.cc-case-title').text() === 'Only');
+  const bad = php('CASE_STUDY', { image: 'javascript:alert(1)', logo: 'data:text/html,x', accent: 'red;}', title: '<img src=x onerror=a>', linkText: 'L', linkUrl: 'javascript:alert(2)' });
+  check('hostile values: no javascript:/data:text images, no javascript: link, text escaped, accent falls back to the brand color', !/javascript:/i.test(bad.replace(/\{\{BASE_URL\}\}javascript:alert\(2\)/, '')) && !/data:text/.test(bad) && !/<img src=x/.test(bad) && /var\(--brand-color, #3b82f6\)/.test(bad));
+  check('image above the text with layout=vertical, and on mobile', /flex-direction:column; background:#fff/.test(php('CASE_STUDY', { ...full, layout: 'vertical' })) && /\.cc-case-card\{flex-direction:column !important\}/.test(php('CASE_STUDY', full)));
+}
+
+// =============================================================== AUTHOR_BIO
+section('AUTHOR_BIO');
+{
+  const d = $(php('AUTHOR_BIO', { label: 'About', name: 'Alex Morgan', role: 'Editor', bio: 'Line one\nLine two', photo: 'alex.jpg', links: [{ label: 'Site', url: 'example.com' }, { label: 'Mail', url: 'alex@example.com' }, { label: '', url: 'nolabel.example' }, { label: 'Nothing', url: '' }] }));
+  check('photo with the name as alt text, label, name and role', d('img.cc-author-photo').attr('alt') === 'Alex Morgan' && d('.cc-author-label').text() === 'About' && d('.cc-author-name').text() === 'Alex Morgan' && d('.cc-author-role').text() === 'Editor');
+  check('bio keeps its line breaks', d('.cc-author-bio').html() === 'Line one<br>Line two');
+  check('links: website → https://, email → mailto:, links without label or address are skipped', d('a.cc-author-link').map((_, e) => d(e).attr('href')).get().join() === 'https://example.com,mailto:alex@example.com');
+  const init = $(php('AUTHOR_BIO', { name: 'Alex Morgan', photo: '' }));
+  check('without a photo: initials', init('.cc-author-initials').text() === 'AM' && init('img').length === 0);
+  const bad = php('AUTHOR_BIO', { name: '<b>x</b>', bio: '<script>a</script>', photo: 'vbscript:x', links: [{ label: 'Bad', url: 'javascript:alert(1)' }, 'junk'] });
+  check('hostile values: escaped, no vbscript: photo, no javascript: link', !/<b>x/.test(bad) && !/<script>a/.test(bad) && !/vbscript/.test(bad) && !/href="javascript:/i.test(bad));
+  check('centered layout without the card', (() => { const h = php('AUTHOR_BIO', { name: 'x', layout: 'centered', boxed: false }); return /flex-direction:column; align-items:center/.test(h) && !/background:#f8fafc/.test(h); })());
+}
+
 console.log(`\n${fails === 0 ? 'BLOCK CONTENT OK' : fails + ' checks failed'} (${total} checks)`);
 process.exit(fails === 0 ? 0 : 1);

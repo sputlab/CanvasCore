@@ -4,7 +4,7 @@ import {
   LayoutTemplate, LayoutGrid, Grid, Columns3, Type, Image as ImageIcon, SquareChartGantt, SeparatorHorizontal,
   MonitorPlay, Code, PanelLeft, Star, MessageSquareQuote, Info, Mail, Rows3, PanelTop, HelpCircle, Images,
   GalleryHorizontal, GitCompare, Timer, ListOrdered, Hash, BarChart3, Table2, History, CreditCard, Users,
-  Building2, Store, MapPin, Library, Crown, Square, Search,
+  Building2, Store, MapPin, Library, Crown, Square, Search, LayoutDashboard, Columns2, TrendingUp, CircleUserRound,
 } from 'lucide-react';
 
 export const CATEGORIES = [
@@ -37,6 +37,10 @@ export const BLOCKS = [
   { type: 'TESTIMONIAL', label: 'Testimonial', icon: MessageSquareQuote, category: 'sections', color: '#3b82f6', keywords: 'quote review' },
   { type: 'CALLOUT', label: 'Callout', icon: Info, category: 'sections', color: '#f59e0b', keywords: 'alert notice info warning' },
   { type: 'FORM', label: 'Form', icon: Mail, category: 'sections', color: '#a855f7', keywords: 'contact email newsletter' },
+  { type: 'BENTO', label: 'Bento Grid', icon: LayoutDashboard, category: 'sections', color: '#86efac', keywords: 'features tiles mosaic grid' },
+  { type: 'SPLIT_CTA', label: 'Split CTA', icon: Columns2, category: 'sections', color: '#fcd34d', keywords: 'call to action two buttons banner' },
+  { type: 'CASE_STUDY', label: 'Case Study', icon: TrendingUp, category: 'sections', color: '#3b82f6', keywords: 'success story result client metric' },
+  { type: 'AUTHOR_BIO', label: 'Author Bio', icon: CircleUserRound, category: 'sections', color: '#a78bfa', keywords: 'writer profile about person' },
 
   { type: 'ACCORDION', label: 'Accordion', icon: Rows3, category: 'interactive', color: '#10b981', keywords: 'collapse expand faq' },
   { type: 'TABS', label: 'Tabs', icon: PanelTop, category: 'interactive', color: '#10b981', keywords: 'tabbed panels' },

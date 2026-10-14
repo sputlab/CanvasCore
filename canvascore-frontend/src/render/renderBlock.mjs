@@ -129,6 +129,9 @@ function ccBr(s) { return ccLines(s).map(escapeHtml).join('<br>'); }
 function ccInitials(name) {
   return String(name ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => [...p][0]).join('');
 }
+// A content value as text, cast the way PHP does (objects/arrays/null -> '', booleans -> '1' / ''). Twin of cc_str() / cc_esc().
+function ccStr(v) { if (v === null || v === undefined || typeof v === 'object') return ''; if (typeof v === 'boolean') return v ? '1' : ''; return String(v); }
+function ccEsc(v) { return escapeHtml(ccStr(v)); }
 function ccEnc(s) { return encodeURIComponent(String(s ?? '')).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase()); }
 
 // opts.fields (editor canvas only): marks the rich text fields as editable in place
@@ -881,6 +884,139 @@ export function renderBlock(block, opts = {}) {
       html += `<button type="submit" style="padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;">${btn}</button>\n`;
       html += `</form>\n<div class="cc-search-results" aria-live="polite" style="margin-top:16px;"></div>\n</div>\n`;
       return customCss + html;
+    }
+
+    case 'BENTO': {
+      const c = content;
+      const tiles = Array.isArray(c.tiles) ? c.tiles : [];
+      const cols = ccInt(c.columns, 3, 2, 4);
+      const rowH = ccInt(c.rowHeight, 180, 100, 400);
+      const gap = ccInt(c.gap, 16, 0, 48);
+      const hover = ['lift', 'zoom', 'none'].includes(c.hover) ? c.hover : 'lift';
+      const spans = { normal: [1, 1], wide: [2, 1], tall: [1, 2], large: [2, 2] };
+      let cells = '';
+      for (const tile of tiles) {
+        if (!tile || typeof tile !== 'object') continue;
+        const size = typeof tile.size === 'string' && Object.prototype.hasOwnProperty.call(spans, tile.size) ? tile.size : 'normal';
+        const img = ccImgUrl(ccStr(tile.image));
+        const bg = ccColor(tile.bg, '#f1f5f9');
+        const fg = ccColor(tile.color, img !== '' ? '#ffffff' : '#0f172a');
+        const href = ccStr(tile.href).trim();
+        const tag = href !== '' ? 'a' : 'div';
+        const title = ccEsc(tile.title);
+        const text = ccEsc(tile.text);
+        const icon = ccEsc(tile.icon);
+        cells += `<${tag} class="cc-bento-tile cc-bento-${size}"${href !== '' ? ` href="${escapeHtml(resolveBlockUrl(href))}"` : ''} style="grid-column:span ${spans[size][0]}; grid-row:span ${spans[size][1]}; position:relative; overflow:hidden; border-radius:16px; background:${bg}; color:${fg}; padding:24px; display:flex; flex-direction:column; justify-content:flex-end; text-decoration:none; min-width:0;">`
+          + (img !== '' ? `<img class="cc-bento-img" src="${escapeHtml(img)}" alt="${ccEsc(tile.alt)}" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"><div class="cc-bento-shade" aria-hidden="true" style="position:absolute; inset:0; background:linear-gradient(to top, rgba(15,23,42,0.78), rgba(15,23,42,0) 65%);"></div>` : '')
+          + `<div class="cc-bento-body" style="position:relative;">`
+          + (icon !== '' ? `<div class="cc-bento-icon" aria-hidden="true" style="font-size:28px; line-height:1; margin-bottom:10px;">${icon}</div>` : '')
+          + (title !== '' ? `<h3 class="cc-bento-title" style="margin:0; font-size:20px; line-height:1.25; color:inherit;">${title}</h3>` : '')
+          + (text !== '' ? `<p class="cc-bento-text" style="margin:6px 0 0 0; font-size:14px; line-height:1.5; opacity:0.85;">${text}</p>` : '')
+          + `</div></${tag}>`;
+      }
+      return customCss + `<style>#${innerId} .cc-bento-tile{transition:transform .25s ease, box-shadow .25s ease}#${innerId} .cc-bento-img{transition:transform .5s ease}`
+        + `#${innerId}.cc-bento-hover-lift .cc-bento-tile:hover{transform:translateY(-4px);box-shadow:0 14px 30px rgba(15,23,42,0.16)}#${innerId}.cc-bento-hover-zoom .cc-bento-tile:hover .cc-bento-img{transform:scale(1.06)}`
+        + `@media(max-width:768px){#${innerId} .cc-bento-grid{grid-template-columns:repeat(2, 1fr) !important}}@media(max-width:480px){#${innerId} .cc-bento-grid{grid-template-columns:1fr !important}#${innerId} .cc-bento-tile{grid-column:auto !important;grid-row:auto !important}}`
+        + `@media(prefers-reduced-motion:reduce){#${innerId} .cc-bento-tile,#${innerId} .cc-bento-img{transition:none !important;transform:none !important}}</style>`
+        + `<div id="${innerId}" class="cc-bento cc-bento-hover-${hover}${animClass}${innerClass}" style="${styleAttr}">\n`
+        + `<div class="cc-bento-grid" style="display:grid; grid-template-columns:repeat(${cols}, 1fr); grid-auto-rows:minmax(${rowH}px, auto); gap:${gap}px;">${cells}</div>\n</div>\n`;
+    }
+
+    case 'SPLIT_CTA': {
+      const c = content;
+      const gap = ccInt(c.gap, 16, 0, 48);
+      const radius = ccInt(c.radius, 16, 0, 40);
+      const side = (s, which, d) => {
+        s = s && typeof s === 'object' ? s : {};
+        const icon = ccEsc(s.icon);
+        const title = ccEsc(s.title);
+        const text = ccEsc(s.text);
+        const btn = ccEsc(s.buttonText);
+        return `<div class="cc-split-cta-side cc-split-cta-${which}" style="flex:1; min-width:0; background:${ccColor(s.bg, d[0])}; color:${ccColor(s.color, d[1])}; padding:40px 32px; border-radius:${radius}px; display:flex; flex-direction:column; align-items:flex-start; gap:12px;">`
+          + (icon !== '' ? `<div class="cc-split-cta-icon" aria-hidden="true" style="font-size:32px; line-height:1;">${icon}</div>` : '')
+          + (title !== '' ? `<h3 class="cc-split-cta-title" style="margin:0; font-size:24px; line-height:1.25; color:inherit;">${title}</h3>` : '')
+          + (text !== '' ? `<p class="cc-split-cta-text" style="margin:0; font-size:15px; line-height:1.6; opacity:0.9;">${text}</p>` : '')
+          + (btn !== '' ? `<a class="cc-split-cta-btn" href="${escapeHtml(resolveBlockUrl(s.buttonUrl))}" style="display:inline-block; margin-top:8px; padding:12px 22px; border-radius:8px; background:${ccColor(s.buttonBg, d[2])}; color:${ccColor(s.buttonColor, d[3])}; font-weight:700; text-decoration:none;">${btn}</a>` : '')
+          + `</div>`;
+      };
+      return customCss + `<style>@media(max-width:768px){#${innerId} .cc-split-cta-row{flex-direction:column !important}}</style>`
+        + `<div id="${innerId}" class="cc-split-cta${animClass}${innerClass}" style="${styleAttr}">\n`
+        + `<div class="cc-split-cta-row" style="display:flex; gap:${gap}px;">`
+        + side(c.left, 'left', ['#0f172a', '#ffffff', '#3b82f6', '#ffffff'])
+        + side(c.right, 'right', ['#eff6ff', '#0f172a', '#0f172a', '#ffffff'])
+        + `</div>\n</div>\n`;
+    }
+
+    case 'CASE_STUDY': {
+      const c = content;
+      const accent = ccColor(c.accent, 'var(--brand-color, #3b82f6)');
+      const vertical = c.layout === 'vertical';
+      const img = ccImgUrl(ccStr(c.image));
+      const logo = ccImgUrl(ccStr(c.logo));
+      const client = ccEsc(c.client);
+      const metric = ccEsc(c.metric);
+      const metricLabel = ccEsc(c.metricLabel);
+      const title = ccEsc(c.title);
+      const text = ccEsc(c.text);
+      const quote = ccEsc(c.quote);
+      const quoteAuthor = ccEsc(c.quoteAuthor);
+      const linkText = ccEsc(c.linkText);
+      let body = '';
+      if (logo !== '' || client !== '') {
+        body += `<div class="cc-case-client" style="display:flex; align-items:center; gap:10px; font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#64748b;">`
+          + (logo !== '' ? `<img src="${escapeHtml(logo)}" alt="" loading="lazy" style="height:28px; width:auto; display:block;">` : '') + client + `</div>`;
+      }
+      if (metric !== '') {
+        body += `<div class="cc-case-metric"><div class="cc-case-metric-value" style="font-size:44px; font-weight:800; line-height:1; color:${accent};">${metric}</div>`
+          + (metricLabel !== '' ? `<div class="cc-case-metric-label" style="margin-top:4px; font-size:14px; color:#475569;">${metricLabel}</div>` : '') + `</div>`;
+      }
+      if (title !== '') body += `<h3 class="cc-case-title" style="margin:0; font-size:22px; line-height:1.3; color:#0f172a;">${title}</h3>`;
+      if (text !== '') body += `<p class="cc-case-text" style="margin:0; font-size:15px; line-height:1.6; color:#475569;">${text}</p>`;
+      if (quote !== '') {
+        body += `<blockquote class="cc-case-quote" style="margin:0; padding-left:14px; border-left:3px solid ${accent}; font-style:italic; color:#334155; font-size:15px; line-height:1.55;">${quote}`
+          + (quoteAuthor !== '' ? `<cite class="cc-case-quote-author" style="display:block; margin-top:6px; font-style:normal; font-weight:600; font-size:13px; color:#64748b;">&mdash; ${quoteAuthor}</cite>` : '') + `</blockquote>`;
+      }
+      if (linkText !== '') body += `<a class="cc-case-link" href="${escapeHtml(resolveBlockUrl(c.linkUrl))}" style="margin-top:auto; color:${accent}; font-weight:700; text-decoration:none;">${linkText} &rarr;</a>`;
+      return customCss + `<style>@media(max-width:768px){#${innerId} .cc-case-card{flex-direction:column !important}#${innerId} .cc-case-media{flex:0 0 220px !important}}</style>`
+        + `<article id="${innerId}" class="cc-case${animClass}${innerClass}" style="${styleAttr}">\n`
+        + `<div class="cc-case-card" style="display:flex; flex-direction:${vertical ? 'column' : 'row'}; background:#fff; border:1px solid #e2e8f0; border-radius:16px; overflow:hidden; box-shadow:0 4px 18px rgba(15,23,42,0.06);">`
+        + (img !== '' ? `<div class="cc-case-media" style="flex:${vertical ? '0 0 240px' : '0 0 42%'}; position:relative; min-height:220px; background:#e2e8f0;"><img src="${escapeHtml(img)}" alt="${ccEsc(c.alt)}" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"></div>` : '')
+        + `<div class="cc-case-body" style="flex:1; min-width:0; padding:32px; display:flex; flex-direction:column; gap:14px;">${body}</div>`
+        + `</div>\n</article>\n`;
+    }
+
+    case 'AUTHOR_BIO': {
+      const c = content;
+      const centered = c.layout === 'centered';
+      const boxed = c.boxed !== false;
+      const name = ccEsc(c.name);
+      const role = ccEsc(c.role);
+      const label = ccEsc(c.label);
+      const bio = ccBr(ccStr(c.bio));
+      const photo = ccImgUrl(ccStr(c.photo));
+      const pstyle = 'width:88px; height:88px; border-radius:50%; flex-shrink:0; ';
+      const media = photo !== ''
+        ? `<img class="cc-author-photo" src="${escapeHtml(photo)}" alt="${name}" loading="lazy" style="${pstyle}object-fit:cover; display:block;">`
+        : `<div class="cc-author-initials" aria-hidden="true" style="${pstyle}background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:700; text-transform:uppercase;">${escapeHtml(ccInitials(ccStr(c.name)))}</div>`;
+      let links = '';
+      for (const l of (Array.isArray(c.links) ? c.links : [])) {
+        if (!l || typeof l !== 'object') continue;
+        const raw = ccStr(l.url).trim();
+        const text = ccEsc(l.label);
+        if (raw === '' || text === '') continue;
+        const href = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? 'mailto:' + raw : ccExtUrl(raw);
+        links += `<a href="${escapeHtml(href)}" class="cc-author-link" rel="noopener" style="color:var(--brand-color, #3b82f6); font-weight:600; text-decoration:none;">${text}</a>`;
+      }
+      return customCss + `<style>@media(max-width:600px){#${innerId} .cc-author-card{flex-direction:column !important;align-items:center !important;text-align:center}#${innerId} .cc-author-links{justify-content:center !important}}</style>`
+        + `<aside id="${innerId}" class="cc-author${animClass}${innerClass}" style="${styleAttr}">\n`
+        + `<div class="cc-author-card" style="display:flex; flex-direction:${centered ? 'column' : 'row'}; align-items:${centered ? 'center' : 'flex-start'}; gap:20px; ${centered ? 'text-align:center; ' : ''}${boxed ? 'background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:24px; ' : ''}">`
+        + media + `<div class="cc-author-body" style="min-width:0;">`
+        + (label !== '' ? `<div class="cc-author-label" style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--brand-color, #3b82f6);">${label}</div>` : '')
+        + `<div class="cc-author-name" style="font-size:20px; font-weight:700; color:#0f172a; margin-top:4px;">${name}</div>`
+        + (role !== '' ? `<div class="cc-author-role" style="font-size:14px; color:#64748b;">${role}</div>` : '')
+        + (bio !== '' ? `<p class="cc-author-bio" style="margin:10px 0 0 0; font-size:15px; line-height:1.6; color:#334155;">${bio}</p>` : '')
+        + (links !== '' ? `<div class="cc-author-links" style="display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:14px; justify-content:${centered ? 'center' : 'flex-start'};">${links}</div>` : '')
+        + `</div></div>\n</aside>\n`;
     }
 
     default:

@@ -31,6 +31,10 @@ import TestimonialPanel from './TestimonialPanel';
 import TextPanel from './TextPanel';
 import TimelinePanel from './TimelinePanel';
 import VideoPanel from './VideoPanel';
+import BentoPanel from './BentoPanel';
+import SplitCtaPanel from './SplitCtaPanel';
+import CaseStudyPanel from './CaseStudyPanel';
+import AuthorBioPanel from './AuthorBioPanel';
 
 export const CONTENT_PANELS = {
   ACCORDION: AccordionTabsPanel,
@@ -68,4 +72,8 @@ export const CONTENT_PANELS = {
   TEXT: TextPanel,
   TIMELINE: TimelinePanel,
   VIDEO: VideoPanel,
+  BENTO: BentoPanel,
+  SPLIT_CTA: SplitCtaPanel,
+  CASE_STUDY: CaseStudyPanel,
+  AUTHOR_BIO: AuthorBioPanel,
 };

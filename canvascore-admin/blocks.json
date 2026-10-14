@@ -776,6 +776,154 @@
         "margin": "0 auto",
         "padding": "20px 0"
       }
+    },
+    "BENTO": {
+      "content": {
+        "columns": 3,
+        "rowHeight": 180,
+        "gap": 16,
+        "hover": "lift",
+        "tiles": [
+          {
+            "size": "large",
+            "icon": "\u2728",
+            "title": "Everything in one place",
+            "text": "Pages, collections and media, managed from a single editor.",
+            "image": "",
+            "alt": "",
+            "bg": "#0f172a",
+            "color": "#ffffff",
+            "href": ""
+          },
+          {
+            "size": "normal",
+            "icon": "\u26a1",
+            "title": "Fast by default",
+            "text": "Static pages, no database on every visit.",
+            "image": "",
+            "alt": "",
+            "bg": "#eff6ff",
+            "color": "",
+            "href": ""
+          },
+          {
+            "size": "normal",
+            "icon": "\ud83d\udd12",
+            "title": "Secure",
+            "text": "Strict policies and sanitised content.",
+            "image": "",
+            "alt": "",
+            "bg": "#f0fdf4",
+            "color": "",
+            "href": ""
+          },
+          {
+            "size": "wide",
+            "icon": "\ud83c\udfa8",
+            "title": "Make it yours",
+            "text": "Colours, fonts and effects that match your brand.",
+            "image": "",
+            "alt": "",
+            "bg": "#fdf4ff",
+            "color": "",
+            "href": ""
+          },
+          {
+            "size": "normal",
+            "icon": "\ud83d\udcf1",
+            "title": "Mobile ready",
+            "text": "Every block adapts to small screens.",
+            "image": "",
+            "alt": "",
+            "bg": "#fff7ed",
+            "color": "",
+            "href": ""
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "SPLIT_CTA": {
+      "content": {
+        "gap": 16,
+        "radius": 16,
+        "left": {
+          "icon": "\ud83d\ude80",
+          "title": "Start your project",
+          "text": "Tell us what you need and get a proposal within two days.",
+          "buttonText": "Get a quote",
+          "buttonUrl": "",
+          "bg": "#0f172a",
+          "color": "#ffffff",
+          "buttonBg": "#3b82f6",
+          "buttonColor": "#ffffff"
+        },
+        "right": {
+          "icon": "\ud83d\udcac",
+          "title": "Just have a question?",
+          "text": "Our team answers every message, usually the same day.",
+          "buttonText": "Contact us",
+          "buttonUrl": "",
+          "bg": "#eff6ff",
+          "color": "#0f172a",
+          "buttonBg": "#0f172a",
+          "buttonColor": "#ffffff"
+        }
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "CASE_STUDY": {
+      "content": {
+        "layout": "horizontal",
+        "image": "",
+        "alt": "",
+        "logo": "",
+        "client": "Example Company",
+        "metric": "+240%",
+        "metricLabel": "organic traffic in six months",
+        "title": "How a small team tripled its reach",
+        "text": "A new site structure, faster pages and a content plan turned a quiet website into the main source of leads.",
+        "quote": "The new site paid for itself in the first quarter.",
+        "quoteAuthor": "Jane Doe, Marketing Lead",
+        "linkText": "Read the case study",
+        "linkUrl": "",
+        "accent": ""
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "AUTHOR_BIO": {
+      "content": {
+        "layout": "horizontal",
+        "boxed": true,
+        "label": "About the author",
+        "name": "Alex Morgan",
+        "role": "Editor",
+        "bio": "Writes about design, the web and small businesses.",
+        "photo": "",
+        "links": [
+          {
+            "label": "Website",
+            "url": "example.com"
+          },
+          {
+            "label": "LinkedIn",
+            "url": "linkedin.com/in/example"
+          }
+        ]
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
     }
   }
 }

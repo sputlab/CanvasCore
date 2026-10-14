@@ -86,8 +86,8 @@ function addAndSelect(type) {
   return b;
 }
 
-const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS'];
-const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details' };
+const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO'];
+const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author' };
 let failedRun = false;
 try {
   console.log('\nADD BLOCK — the blocks.json defaults reach the editor');
@@ -170,6 +170,26 @@ try {
   click(buttonByText('+ Add member')); await sleep(40);
   check('TEAM: adding a member with all expected fields', content().members.length === 4 && ['name', 'role', 'bio', 'photo', 'email', 'linkedin', 'twitter', 'website'].every((k) => k in content().members[3]));
 
+  addAndSelect('BENTO'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add tile'));
+  click(buttonByText('+ Add tile')); await sleep(40);
+  check('BENTO: "+ Add tile" adds a tile with all expected fields', content().tiles.length === 6 && ['size', 'icon', 'title', 'text', 'image', 'alt', 'bg', 'color', 'href'].every((k) => k in content().tiles[5]));
+  setValue($$('select').find((s) => [...s.options].some((o) => o.value === 'large')), 'tall'); await sleep(40);
+  check('BENTO: the size of the first tile updates the store', content().tiles[0].size === 'tall');
+
+  addAndSelect('SPLIT_CTA'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Title'));
+  setValue(field('Title'), 'New left title'); await sleep(40);
+  check('SPLIT_CTA: editing the left title keeps the rest of the left side', content().left.title === 'New left title' && content().left.buttonText === 'Get a quote' && content().right.title === 'Just have a question?');
+
+  addAndSelect('CASE_STUDY'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Headline metric'));
+  setValue(field('Headline metric'), '3x'); await sleep(40);
+  check('CASE_STUDY: the metric updates the store', content().metric === '3x');
+
+  addAndSelect('AUTHOR_BIO'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Name'));
+  setValue(field('Name'), 'Sam Lee'); await sleep(40);
+  click(buttonByText('Author Links')); await sleep(40);
+  click(buttonByText('+ Add link')); await sleep(40);
+  check('AUTHOR_BIO: name and a new link update the store', content().name === 'Sam Lee' && content().links.length === 3 && content().links[2].label === 'New link');
+
   addAndSelect('BEFORE_AFTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('button').some((b) => b.textContent.includes('Before / After')));
   const imgs = $$('input[placeholder="Image URL"]');
   setValue(imgs[0], 'https://x.example/prima.jpg'); setValue(imgs[1], 'https://x.example/dopo.jpg'); await sleep(40);
@@ -193,7 +213,7 @@ try {
   check('BUSINESS: "+ Add weekly hours" restores the 7 days', content().hours.length === 7 && content().hours[0].day === 'Monday');
 
   console.log('\nCANVAS — every block is drawn in the editor (canonical renderer)');
-  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business' };
+  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author' };
   for (const t of TYPES) {
     const b = addAndSelect(t);
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));

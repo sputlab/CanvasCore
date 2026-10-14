@@ -67,6 +67,9 @@ function cc_lines($s) {
     foreach (preg_split('/\r\n|\r|\n/', (string)$s) as $l) { $l = trim($l); if ($l !== '') $out[] = $l; }
     return $out;
 }
+// A content value as text: scalars cast as PHP does, arrays/objects/null -> ''. Twin: ccStr()/ccEsc() in renderBlock.mjs.
+function cc_str($v) { return is_scalar($v) ? (string)$v : ''; }
+function cc_esc($v) { return htmlspecialchars(cc_str($v)); }
 // Text with line breaks -> lines separated by <br>, everything escaped.
 function cc_br($s) {
     return implode('<br>', array_map('htmlspecialchars', cc_lines($s)));
@@ -1627,6 +1630,139 @@ function render_block($block) {
             $html .= "</form>\n<div class=\"cc-search-results\" aria-live=\"polite\" style=\"margin-top:16px;\"></div>\n";
             $html .= "<script>" . str_replace('%ID%', $innerId, CC_SEARCH_SCRIPT) . "</script>\n</div>\n";
             return $customCss . $html;
+
+        case 'BENTO': {
+            $c = $block['content'] ?? [];
+            $tiles = array_values((isset($c['tiles']) && is_array($c['tiles'])) ? $c['tiles'] : []);
+            $cols = cc_int($c['columns'] ?? null, 3, 2, 4);
+            $rowH = cc_int($c['rowHeight'] ?? null, 180, 100, 400);
+            $gap = cc_int($c['gap'] ?? null, 16, 0, 48);
+            $hover = in_array($c['hover'] ?? '', ['lift', 'zoom', 'none'], true) ? $c['hover'] : 'lift';
+            $spans = ['normal' => [1, 1], 'wide' => [2, 1], 'tall' => [1, 2], 'large' => [2, 2]];
+            $cells = '';
+            foreach ($tiles as $tile) {
+                if (!is_array($tile)) continue;
+                $size = (is_string($tile['size'] ?? null) && isset($spans[$tile['size']])) ? $tile['size'] : 'normal';
+                $img = cc_img_url(cc_str($tile['image'] ?? ''));
+                $bg = cc_color($tile['bg'] ?? '', '#f1f5f9');
+                $fg = cc_color($tile['color'] ?? '', $img !== '' ? '#ffffff' : '#0f172a');
+                $href = trim(cc_str($tile['href'] ?? ''));
+                $tag = $href !== '' ? 'a' : 'div';
+                $title = cc_esc($tile['title'] ?? '');
+                $text = cc_esc($tile['text'] ?? '');
+                $icon = cc_esc($tile['icon'] ?? '');
+                $cells .= '<' . $tag . ' class="cc-bento-tile cc-bento-' . $size . '"' . ($href !== '' ? ' href="' . htmlspecialchars(cc_block_url($href)) . '"' : '') . ' style="grid-column:span ' . $spans[$size][0] . '; grid-row:span ' . $spans[$size][1] . '; position:relative; overflow:hidden; border-radius:16px; background:' . $bg . '; color:' . $fg . '; padding:24px; display:flex; flex-direction:column; justify-content:flex-end; text-decoration:none; min-width:0;">'
+                    . ($img !== '' ? '<img class="cc-bento-img" src="' . htmlspecialchars($img) . '" alt="' . cc_esc($tile['alt'] ?? '') . '" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"><div class="cc-bento-shade" aria-hidden="true" style="position:absolute; inset:0; background:linear-gradient(to top, rgba(15,23,42,0.78), rgba(15,23,42,0) 65%);"></div>' : '')
+                    . '<div class="cc-bento-body" style="position:relative;">'
+                    . ($icon !== '' ? '<div class="cc-bento-icon" aria-hidden="true" style="font-size:28px; line-height:1; margin-bottom:10px;">' . $icon . '</div>' : '')
+                    . ($title !== '' ? '<h3 class="cc-bento-title" style="margin:0; font-size:20px; line-height:1.25; color:inherit;">' . $title . '</h3>' : '')
+                    . ($text !== '' ? '<p class="cc-bento-text" style="margin:6px 0 0 0; font-size:14px; line-height:1.5; opacity:0.85;">' . $text . '</p>' : '')
+                    . '</div></' . $tag . '>';
+            }
+            return $customCss . '<style>#' . $innerId . ' .cc-bento-tile{transition:transform .25s ease, box-shadow .25s ease}#' . $innerId . ' .cc-bento-img{transition:transform .5s ease}'
+                . '#' . $innerId . '.cc-bento-hover-lift .cc-bento-tile:hover{transform:translateY(-4px);box-shadow:0 14px 30px rgba(15,23,42,0.16)}#' . $innerId . '.cc-bento-hover-zoom .cc-bento-tile:hover .cc-bento-img{transform:scale(1.06)}'
+                . '@media(max-width:768px){#' . $innerId . ' .cc-bento-grid{grid-template-columns:repeat(2, 1fr) !important}}@media(max-width:480px){#' . $innerId . ' .cc-bento-grid{grid-template-columns:1fr !important}#' . $innerId . ' .cc-bento-tile{grid-column:auto !important;grid-row:auto !important}}'
+                . '@media(prefers-reduced-motion:reduce){#' . $innerId . ' .cc-bento-tile,#' . $innerId . ' .cc-bento-img{transition:none !important;transform:none !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-bento cc-bento-hover-' . $hover . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-bento-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); grid-auto-rows:minmax(' . $rowH . 'px, auto); gap:' . $gap . 'px;">' . $cells . '</div>' . "\n</div>\n";
+        }
+
+        case 'SPLIT_CTA': {
+            $c = $block['content'] ?? [];
+            $gap = cc_int($c['gap'] ?? null, 16, 0, 48);
+            $radius = cc_int($c['radius'] ?? null, 16, 0, 40);
+            $side = function ($s, $which, $d) use ($radius) {
+                $s = is_array($s) ? $s : [];
+                $icon = cc_esc($s['icon'] ?? '');
+                $title = cc_esc($s['title'] ?? '');
+                $text = cc_esc($s['text'] ?? '');
+                $btn = cc_esc($s['buttonText'] ?? '');
+                return '<div class="cc-split-cta-side cc-split-cta-' . $which . '" style="flex:1; min-width:0; background:' . cc_color($s['bg'] ?? '', $d[0]) . '; color:' . cc_color($s['color'] ?? '', $d[1]) . '; padding:40px 32px; border-radius:' . $radius . 'px; display:flex; flex-direction:column; align-items:flex-start; gap:12px;">'
+                    . ($icon !== '' ? '<div class="cc-split-cta-icon" aria-hidden="true" style="font-size:32px; line-height:1;">' . $icon . '</div>' : '')
+                    . ($title !== '' ? '<h3 class="cc-split-cta-title" style="margin:0; font-size:24px; line-height:1.25; color:inherit;">' . $title . '</h3>' : '')
+                    . ($text !== '' ? '<p class="cc-split-cta-text" style="margin:0; font-size:15px; line-height:1.6; opacity:0.9;">' . $text . '</p>' : '')
+                    . ($btn !== '' ? '<a class="cc-split-cta-btn" href="' . htmlspecialchars(cc_block_url($s['buttonUrl'] ?? '')) . '" style="display:inline-block; margin-top:8px; padding:12px 22px; border-radius:8px; background:' . cc_color($s['buttonBg'] ?? '', $d[2]) . '; color:' . cc_color($s['buttonColor'] ?? '', $d[3]) . '; font-weight:700; text-decoration:none;">' . $btn . '</a>' : '')
+                    . '</div>';
+            };
+            return $customCss . '<style>@media(max-width:768px){#' . $innerId . ' .cc-split-cta-row{flex-direction:column !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-split-cta' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-split-cta-row" style="display:flex; gap:' . $gap . 'px;">'
+                . $side($c['left'] ?? null, 'left', ['#0f172a', '#ffffff', '#3b82f6', '#ffffff'])
+                . $side($c['right'] ?? null, 'right', ['#eff6ff', '#0f172a', '#0f172a', '#ffffff'])
+                . '</div>' . "\n</div>\n";
+        }
+
+        case 'CASE_STUDY': {
+            $c = $block['content'] ?? [];
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $vertical = ($c['layout'] ?? '') === 'vertical';
+            $img = cc_img_url(cc_str($c['image'] ?? ''));
+            $logo = cc_img_url(cc_str($c['logo'] ?? ''));
+            $client = cc_esc($c['client'] ?? '');
+            $metric = cc_esc($c['metric'] ?? '');
+            $metricLabel = cc_esc($c['metricLabel'] ?? '');
+            $title = cc_esc($c['title'] ?? '');
+            $text = cc_esc($c['text'] ?? '');
+            $quote = cc_esc($c['quote'] ?? '');
+            $quoteAuthor = cc_esc($c['quoteAuthor'] ?? '');
+            $linkText = cc_esc($c['linkText'] ?? '');
+            $body = '';
+            if ($logo !== '' || $client !== '') {
+                $body .= '<div class="cc-case-client" style="display:flex; align-items:center; gap:10px; font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#64748b;">'
+                    . ($logo !== '' ? '<img src="' . htmlspecialchars($logo) . '" alt="" loading="lazy" style="height:28px; width:auto; display:block;">' : '') . $client . '</div>';
+            }
+            if ($metric !== '') {
+                $body .= '<div class="cc-case-metric"><div class="cc-case-metric-value" style="font-size:44px; font-weight:800; line-height:1; color:' . $accent . ';">' . $metric . '</div>'
+                    . ($metricLabel !== '' ? '<div class="cc-case-metric-label" style="margin-top:4px; font-size:14px; color:#475569;">' . $metricLabel . '</div>' : '') . '</div>';
+            }
+            if ($title !== '') $body .= '<h3 class="cc-case-title" style="margin:0; font-size:22px; line-height:1.3; color:#0f172a;">' . $title . '</h3>';
+            if ($text !== '') $body .= '<p class="cc-case-text" style="margin:0; font-size:15px; line-height:1.6; color:#475569;">' . $text . '</p>';
+            if ($quote !== '') {
+                $body .= '<blockquote class="cc-case-quote" style="margin:0; padding-left:14px; border-left:3px solid ' . $accent . '; font-style:italic; color:#334155; font-size:15px; line-height:1.55;">' . $quote
+                    . ($quoteAuthor !== '' ? '<cite class="cc-case-quote-author" style="display:block; margin-top:6px; font-style:normal; font-weight:600; font-size:13px; color:#64748b;">&mdash; ' . $quoteAuthor . '</cite>' : '') . '</blockquote>';
+            }
+            if ($linkText !== '') $body .= '<a class="cc-case-link" href="' . htmlspecialchars(cc_block_url($c['linkUrl'] ?? '')) . '" style="margin-top:auto; color:' . $accent . '; font-weight:700; text-decoration:none;">' . $linkText . ' &rarr;</a>';
+            return $customCss . '<style>@media(max-width:768px){#' . $innerId . ' .cc-case-card{flex-direction:column !important}#' . $innerId . ' .cc-case-media{flex:0 0 220px !important}}</style>'
+                . '<article id="' . $innerId . '" class="cc-case' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-case-card" style="display:flex; flex-direction:' . ($vertical ? 'column' : 'row') . '; background:#fff; border:1px solid #e2e8f0; border-radius:16px; overflow:hidden; box-shadow:0 4px 18px rgba(15,23,42,0.06);">'
+                . ($img !== '' ? '<div class="cc-case-media" style="flex:' . ($vertical ? '0 0 240px' : '0 0 42%') . '; position:relative; min-height:220px; background:#e2e8f0;"><img src="' . htmlspecialchars($img) . '" alt="' . cc_esc($c['alt'] ?? '') . '" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"></div>' : '')
+                . '<div class="cc-case-body" style="flex:1; min-width:0; padding:32px; display:flex; flex-direction:column; gap:14px;">' . $body . '</div>'
+                . '</div>' . "\n</article>\n";
+        }
+
+        case 'AUTHOR_BIO': {
+            $c = $block['content'] ?? [];
+            $centered = ($c['layout'] ?? '') === 'centered';
+            $boxed = ($c['boxed'] ?? true) !== false;
+            $name = cc_esc($c['name'] ?? '');
+            $role = cc_esc($c['role'] ?? '');
+            $label = cc_esc($c['label'] ?? '');
+            $bio = cc_br(cc_str($c['bio'] ?? ''));
+            $photo = cc_img_url(cc_str($c['photo'] ?? ''));
+            $pstyle = 'width:88px; height:88px; border-radius:50%; flex-shrink:0; ';
+            $media = $photo !== ''
+                ? '<img class="cc-author-photo" src="' . htmlspecialchars($photo) . '" alt="' . $name . '" loading="lazy" style="' . $pstyle . 'object-fit:cover; display:block;">'
+                : '<div class="cc-author-initials" aria-hidden="true" style="' . $pstyle . 'background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:700; text-transform:uppercase;">' . htmlspecialchars(cc_initials(cc_str($c['name'] ?? ''))) . '</div>';
+            $links = '';
+            foreach ((isset($c['links']) && is_array($c['links'])) ? $c['links'] : [] as $l) {
+                if (!is_array($l)) continue;
+                $raw = trim(cc_str($l['url'] ?? ''));
+                $text = cc_esc($l['label'] ?? '');
+                if ($raw === '' || $text === '') continue;
+                $href = preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $raw) ? 'mailto:' . $raw : cc_ext_url($raw);
+                $links .= '<a href="' . htmlspecialchars($href) . '" class="cc-author-link" rel="noopener" style="color:var(--brand-color, #3b82f6); font-weight:600; text-decoration:none;">' . $text . '</a>';
+            }
+            return $customCss . '<style>@media(max-width:600px){#' . $innerId . ' .cc-author-card{flex-direction:column !important;align-items:center !important;text-align:center}#' . $innerId . ' .cc-author-links{justify-content:center !important}}</style>'
+                . '<aside id="' . $innerId . '" class="cc-author' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-author-card" style="display:flex; flex-direction:' . ($centered ? 'column' : 'row') . '; align-items:' . ($centered ? 'center' : 'flex-start') . '; gap:20px; ' . ($centered ? 'text-align:center; ' : '') . ($boxed ? 'background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:24px; ' : '') . '">'
+                . $media . '<div class="cc-author-body" style="min-width:0;">'
+                . ($label !== '' ? '<div class="cc-author-label" style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--brand-color, #3b82f6);">' . $label . '</div>' : '')
+                . '<div class="cc-author-name" style="font-size:20px; font-weight:700; color:#0f172a; margin-top:4px;">' . $name . '</div>'
+                . ($role !== '' ? '<div class="cc-author-role" style="font-size:14px; color:#64748b;">' . $role . '</div>' : '')
+                . ($bio !== '' ? '<p class="cc-author-bio" style="margin:10px 0 0 0; font-size:15px; line-height:1.6; color:#334155;">' . $bio . '</p>' : '')
+                . ($links !== '' ? '<div class="cc-author-links" style="display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:14px; justify-content:' . ($centered ? 'center' : 'flex-start') . ';">' . $links . '</div>' : '')
+                . '</div></div>' . "\n</aside>\n";
+        }
 
         default: return "<!-- Unknown element: " . preg_replace('/[^A-Za-z0-9_]/', '', (string)$block['type']) . " -->\n";
     }

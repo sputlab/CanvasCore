@@ -103,6 +103,9 @@ export default function PropertyPanel() {
         lstPatch('logos', t.index, { src: url, ...withAlt(lstOf('logos')[t.index]) });
       } else if (t.type === 'logo_add') {
         lstAdd('logos', { src: url, alt, href: '' });
+      } else if (t.type === 'into') {
+        if (t.list) lstPatch(t.list, t.index, { [t.key]: url, ...(t.alt ? withAlt(lstOf(t.list)[t.index], t.alt) : {}) });
+        else patchContent({ [t.key]: url, ...(t.alt ? withAlt(liveContent(), t.alt) : {}) });
       } else if (t.type === 'team_photo') {
         lstPatch('members', t.index, { photo: url });
       } else if (t.type === 'ba_before' || t.type === 'ba_after') {
@@ -166,6 +169,9 @@ export default function PropertyPanel() {
   const ctx = {
     selectedBlock, c, set: handleContentChange, handleContentChange, patchContent, handleStyleChange, patchStyles, updateBlock, setMediaPickerTarget,
     pick: (type, index) => () => setMediaPickerTarget(index === undefined ? { type } : { type, index }),
+    // Generic picker target for new blocks: the image goes into content[key], or into item `index` of the list
+    // content[list]; `alt` names the alt-text field that the library's alt text fills while it is empty.
+    pickTo: (target) => () => setMediaPickerTarget({ type: 'into', ...target }),
     ARS: [['16 / 9', '16:9'], ['4 / 3', '4:3'], ['3 / 2', '3:2'], ['1 / 1', '1:1'], ['21 / 9', '21:9']],
     pages, collections, lstOf, lstPatch, lstRemove, lstAdd, lstMove, userRole,
   };
