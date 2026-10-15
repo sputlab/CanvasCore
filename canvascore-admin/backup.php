@@ -14,6 +14,7 @@
 if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
+require_once __DIR__ . '/media.php';   // cc_media_kind(), cc_media_sniff()
 
 const CC_BACKUP_FORMAT = 1;
 // Always replaced on restore (the site's content)
@@ -21,7 +22,8 @@ const CC_BACKUP_TABLES = ['pages', 'templates', 'master_components', 'site_parts
 // Optional: replaced only when the backup contains them
 const CC_BACKUP_OPTIONAL_TABLES = ['page_revisions' => 'history', 'form_submissions' => 'submissions'];
 const CC_BACKUP_DATA_FILES = ['settings.json', 'menu.json', 'media.json', 'media-folders.json'];
-const CC_BACKUP_UPLOAD_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp'];
+// the library's file types: images, audio and video (the same as CC_MEDIA_AUDIO / CC_MEDIA_VIDEO in media.php)
+const CC_BACKUP_UPLOAD_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp', 'mp3', 'm4a', 'ogg', 'wav', 'mp4', 'webm'];
 const CC_BACKUP_KEEP_SAFETY = 5;   // safety copies made before a restore that are kept
 
 function cc_backup_data_dir() { return $GLOBALS['CC_BACKUP_DATA_DIR'] ?? cc_data_dir(); }                         // overridable for tests
@@ -120,7 +122,7 @@ function cc_backup_create($pdo, $dest, array $opts = []) {
     return $manifest;
 }
 
-// A path inside uploads/ that a backup may contain: plain names, no "..", image extensions only
+// A path inside uploads/ that a backup may contain: plain names, no "..", library file types only (never a script)
 function cc_backup_upload_path_ok($rel) {
     if ($rel === '' || strlen($rel) > 400) return false;
     $parts = explode('/', $rel);
@@ -205,11 +207,11 @@ function cc_backup_restore($pdo, $path) {
     if ($names && !$zip->extractTo($stage, $names)) { $zip->close(); cc_backup_rrmdir($stage); return ['success' => false, 'message' => 'The images could not be unpacked (disk full or folder not writable). Nothing was changed.']; }
     $zip->close();
     if (!is_dir($stage . '/uploads')) @mkdir($stage . '/uploads', 0755, true);
-    // the same checks as an upload: no active SVG, raster files must really be images
+    // the same checks as an upload: no active SVG, raster files must really be images, audio and video must start like their type
     $skipped = [];
     foreach ($names as $n) {
         $f = $stage . '/' . $n; $ext = strtolower(pathinfo($n, PATHINFO_EXTENSION));
-        $bad = $ext === 'svg' ? !cc_svg_is_safe($f) : (!in_array($ext, ['ico'], true) && @getimagesize($f) === false);
+        $bad = $ext === 'svg' ? !cc_svg_is_safe($f) : (cc_media_kind($ext) !== 'image' ? !cc_media_sniff($f, $ext) : (!in_array($ext, ['ico'], true) && @getimagesize($f) === false));
         if ($bad) { @unlink($f); $skipped[] = substr($n, 8); }
     }
 

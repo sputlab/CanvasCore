@@ -92,6 +92,15 @@ export const ColorInput = ({ value, onChange, placeholder, allowTransparent = tr
 export const ColorF = ({ label, value, onChange, placeholder, allowTransparent = true }) => (
   <Fld label={label}><ColorInput label={label} value={value} onChange={onChange} placeholder={placeholder || '#cbd5e1'} allowTransparent={allowTransparent} /></Fld>
 );
+// An audio or video file: its address (a library file or any https:// address) and a button for the library
+export const FileF = ({ label, value, onChange, onPick, kind = 'video' }) => (
+  <Fld label={label}>
+    <div style={{ display: 'flex', gap: '6px' }}>
+      <input type="text" style={{ ...fldInput, flex: 1 }} value={value ?? ''} onChange={e => onChange(e.target.value)} placeholder={kind === 'audio' ? 'Audio file address' : 'Video file address'} />
+      <button onClick={onPick} title="Choose from the media library" aria-label="Choose from the media library" style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 9px', cursor: 'pointer' }}><ImageIcon size={13} /></button>
+    </div>
+  </Fld>
+);
 export const ImgF = ({ label, value, onChange, onPick }) => (
   <Fld label={label}>
     <div style={{ display: 'flex', gap: '6px' }}>

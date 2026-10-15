@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useDraftSync } from '../session/hooks';
 import { useStore } from '../store/useStore';
-import { PanelTop, PanelBottom, Edit3, Trash2, Save, Palette, Mail, Search, ShieldCheck, Settings2, Cookie } from 'lucide-react';
+import { PanelTop, PanelBottom, Edit3, Trash2, Save, Palette, Mail, Search, ShieldCheck, Settings2, Cookie, Megaphone } from 'lucide-react';
 import RedirectsCard from './RedirectsCard';
 import ImageUrlField from './ImageUrlField';
 import { Button, Card, Field, Input, Select, Checkbox, PageHeader } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
+import { renderBlock } from '../render/renderBlock.mjs';
+import { safeHtml } from '../utils/safeHtml';
 
 const DEFAULT_SETTINGS = { brandColor: '#3b82f6', fontFamily: 'Inter', adminEmail: '', emailFrom: '', emailSubject: '', siteSuffix: ' | My Site' };
 
@@ -78,6 +80,8 @@ export default function GlobalSettings() {
   const set = (patch) => setSettings({ ...settings, ...patch });
   const cookie = settings.cookieBanner && typeof settings.cookieBanner === 'object' ? settings.cookieBanner : {};
   const setCookie = (patch) => set({ cookieBanner: { ...cookie, ...patch } });
+  const ann = settings.announcement && typeof settings.announcement === 'object' ? settings.announcement : {};
+  const setAnn = (patch) => set({ announcement: { ...ann, ...patch } });
   const FONTS = [['Inter', 'Inter (Clean, Modern)'], ['Roboto', 'Roboto (Google Standard)'], ['Poppins', 'Poppins (Soft, Web)'], ['Open Sans', 'Open Sans (Readable)'],
     ['Montserrat', 'Montserrat (Geometric)'], ['Lato', 'Lato (Elegant)'], ['Oswald', 'Oswald (High Impact)'], ['Playfair Display', 'Playfair Display (Elegant Serif)'],
     ['Raleway', 'Raleway (Thin, Chic)'], ['Ubuntu', 'Ubuntu (Tech)'], ['Lora', 'Lora (Editorial Serif)']];
@@ -159,6 +163,31 @@ export default function GlobalSettings() {
               options={[['bottom', 'Bottom, centered'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]} /></Field>
           </div>
           <p className="ui-hint">To load a tracking or marketing script only after the visitor accepts, an admin can add it in a Custom HTML block as <code>&lt;script type="text/plain" data-cc-consent&gt;…&lt;/script&gt;</code> (embeds: <code>&lt;iframe data-cc-consent-src="…"&gt;</code>). Any link with <code>data-cc-consent-open</code> shows the banner again.</p>
+        </>}
+      </Card>
+
+      <Card title="Announcement bar" icon={Megaphone} description="A message at the top of every page, such as an offer or a notice. Visitors can dismiss it; it comes back when you change the message.">
+        <Checkbox label="Show the announcement bar on every page" checked={!!ann.enabled} onChange={e => setAnn({ enabled: e.target.checked })} />
+        {ann.enabled && <>
+          <Field label="Message"><Input value={ann.text || ''} onChange={e => setAnn({ text: e.target.value })} placeholder="Free shipping on orders over €50" /></Field>
+          <div className="ui-grid">
+            <Field label="Icon (one emoji, optional)"><Input value={ann.icon || ''} onChange={e => setAnn({ icon: e.target.value })} /></Field>
+            <Field label="Link text (empty = no link)"><Input value={ann.linkText || ''} onChange={e => setAnn({ linkText: e.target.value })} placeholder="Shop now" /></Field>
+            <Field label="Link to a page"><Select value={pages.some(p => !Number(p.is_draft_copy) && (p.clean_slug ? p.clean_slug + '/index.html' : 'index.html') === ann.linkUrl) ? ann.linkUrl : ''} onChange={e => setAnn({ linkUrl: e.target.value })}
+              options={[['', '— or type an address —'], ...pages.filter(p => !Number(p.is_draft_copy)).map(p => [p.clean_slug ? p.clean_slug + '/index.html' : 'index.html', p.title])]} /></Field>
+            <Field label="Link address"><Input value={ann.linkUrl || ''} onChange={e => setAnn({ linkUrl: e.target.value })} placeholder="/offers or https://…" /></Field>
+            <Field label="Colors"><Select value={ann.preset || 'info'} onChange={e => setAnn({ preset: e.target.value })}
+              options={[['info', 'Dark'], ['promo', 'Brand color'], ['warning', 'Warning (yellow)'], ['success', 'Success (green)']]} /></Field>
+            <Field label="Alignment"><Select value={ann.align === 'left' ? 'left' : 'center'} onChange={e => setAnn({ align: e.target.value })} options={[['center', 'Centered'], ['left', 'Left']]} /></Field>
+          </div>
+          <Checkbox label="Stay at the top while scrolling" checked={ann.sticky === true} onChange={e => setAnn({ sticky: e.target.checked })} />
+          <Checkbox label="Visitors can dismiss it" checked={ann.dismissible !== false} onChange={e => setAnn({ dismissible: e.target.checked })} />
+          {String(ann.text || '').trim() !== '' && (
+            <div style={{ marginTop: 12 }}>
+              <div className="ui-hint" style={{ marginBottom: 6 }}>Preview</div>
+              <div className="cc-ann-preview" style={{ borderRadius: 8, overflow: 'hidden' }} dangerouslySetInnerHTML={{ __html: safeHtml(renderBlock({ id: 'ann_preview', type: 'ANNOUNCEMENT_BAR', styles: {}, content: { ...ann, sticky: false } })) }} />
+            </div>
+          )}
         </>}
       </Card>
 

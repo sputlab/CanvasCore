@@ -31,6 +31,24 @@ import TestimonialPanel from './TestimonialPanel';
 import TextPanel from './TextPanel';
 import TimelinePanel from './TimelinePanel';
 import VideoPanel from './VideoPanel';
+import BentoPanel from './BentoPanel';
+import SplitCtaPanel from './SplitCtaPanel';
+import CaseStudyPanel from './CaseStudyPanel';
+import AuthorBioPanel from './AuthorBioPanel';
+import ReviewSummaryPanel from './ReviewSummaryPanel';
+import TestimonialWallPanel from './TestimonialWallPanel';
+import HoverGridPanel from './HoverGridPanel';
+import ScrollytellingPanel from './ScrollytellingPanel';
+import HotspotsPanel from './HotspotsPanel';
+import TableOfContentsPanel from './TableOfContentsPanel';
+import ShareBarPanel from './ShareBarPanel';
+import CodeSnippetPanel from './CodeSnippetPanel';
+import PriceCalculatorPanel from './PriceCalculatorPanel';
+import WizardPanel from './WizardPanel';
+import VideoHeroPanel from './VideoHeroPanel';
+import AudioPlayerPanel from './AudioPlayerPanel';
+import AnnouncementBarPanel from './AnnouncementBarPanel';
+import NewsletterPanel from './NewsletterPanel';
 
 export const CONTENT_PANELS = {
   ACCORDION: AccordionTabsPanel,
@@ -68,4 +86,22 @@ export const CONTENT_PANELS = {
   TEXT: TextPanel,
   TIMELINE: TimelinePanel,
   VIDEO: VideoPanel,
+  BENTO: BentoPanel,
+  SPLIT_CTA: SplitCtaPanel,
+  CASE_STUDY: CaseStudyPanel,
+  AUTHOR_BIO: AuthorBioPanel,
+  REVIEW_SUMMARY: ReviewSummaryPanel,
+  TESTIMONIAL_WALL: TestimonialWallPanel,
+  HOVER_GRID: HoverGridPanel,
+  SCROLLYTELLING: ScrollytellingPanel,
+  HOTSPOTS: HotspotsPanel,
+  TABLE_OF_CONTENTS: TableOfContentsPanel,
+  SHARE_BAR: ShareBarPanel,
+  CODE_SNIPPET: CodeSnippetPanel,
+  PRICE_CALCULATOR: PriceCalculatorPanel,
+  WIZARD: WizardPanel,
+  VIDEO_HERO: VideoHeroPanel,
+  AUDIO_PLAYER: AudioPlayerPanel,
+  ANNOUNCEMENT_BAR: AnnouncementBarPanel,
+  NEWSLETTER: NewsletterPanel,
 };

@@ -67,6 +67,9 @@ function cc_lines($s) {
     foreach (preg_split('/\r\n|\r|\n/', (string)$s) as $l) { $l = trim($l); if ($l !== '') $out[] = $l; }
     return $out;
 }
+// A content value as text: scalars cast as PHP does, arrays/objects/null -> ''. Twin: ccStr()/ccEsc() in renderBlock.mjs.
+function cc_str($v) { return is_scalar($v) ? (string)$v : ''; }
+function cc_esc($v) { return htmlspecialchars(cc_str($v)); }
 // Text with line breaks -> lines separated by <br>, everything escaped.
 function cc_br($s) {
     return implode('<br>', array_map('htmlspecialchars', cc_lines($s)));
@@ -215,6 +218,561 @@ function cc_int($v, $def, $min, $max) {
     if (!is_scalar($v) || is_bool($v) || !preg_match('/^\s*([+-]?\d+)/', (string)$v, $m)) return $def;
     return min($max, max($min, (int)$m[1]));
 }
+// Logo Cloud scrolling strip (LOGOS, layout "marquee"); %ID% = the block's id, %SPEED% = seconds per loop.
+// Repeats the logos inside both sets until one set covers the strip (after the images load and on resize), so no
+// gap opens before the second set comes in, and stretches the loop by the same factor to keep the visual speed.
+// One group's width is measured on the original logos and measured again whenever one of them loads (extra
+// copies are removed then); copies load their image at once (no lazy pop-in), and so does the whole strip once it
+// comes near the viewport (lazy loading never loads the half of a moving strip that is out of view sideways).
+// Twin of fillLogosMarquee() in src/render/logosMarquee.mjs (the editor canvas).
+const CC_LOGOS_SCRIPT = <<<'CCJS'
+(function(){var r=document.getElementById('%ID%');if(!r)return;var box=r.querySelector('.cc-logos-marquee'),track=r.querySelector('.cc-logos-track');if(!box||!track)return;
+if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+var sets=track.querySelectorAll('.cc-logos-set');if(sets.length<2)return;var base=[].slice.call(sets[0].children).filter(function(e){return !e.classList.contains('cc-logo-fill');}),n=base.length;if(!n)return;
+var dur=%SPEED%,imgs=base.map(function(e){return e.querySelector('img');}).filter(Boolean);
+function fill(){for(var i=0;i<imgs.length;i++){if(!imgs[i].complete)return;}
+var cs=getComputedStyle(sets[0]),gap=parseFloat(cs.columnGap)||parseFloat(cs.gap)||0,unit=0;for(var u=0;u<n;u++)unit+=base[u].getBoundingClientRect().width+gap;if(!(unit>0))return;
+var want=Math.min(20,Math.max(1,Math.ceil(box.clientWidth/unit)));
+var have=Math.round(sets[0].children.length/n);
+for(;have>want;have--){for(var s=0;s<sets.length;s++){for(var d=0;d<n&&sets[s].lastElementChild&&sets[s].lastElementChild.classList.contains('cc-logo-fill');d++)sets[s].removeChild(sets[s].lastElementChild);}}
+for(;have<want;have++){for(var j=0;j<n;j++){var c=base[j].cloneNode(true);c.classList.add('cc-logo-fill');c.setAttribute('aria-hidden','true');if(c.tagName==='A')c.setAttribute('tabindex','-1');var im=c.querySelector('img');if(im){im.setAttribute('alt','');im.removeAttribute('loading');}sets[0].appendChild(c);sets[1].appendChild(c.cloneNode(true));}}
+track.style.animationDuration=(dur*Math.round(sets[0].children.length/n))+'s';}
+imgs.forEach(function(im){im.addEventListener('load',fill);im.addEventListener('error',fill);});
+function eager(){[].forEach.call(track.querySelectorAll('img'),function(im){im.removeAttribute('loading');});}
+if(window.IntersectionObserver){var io=new IntersectionObserver(function(es){if(es.some(function(e){return e.isIntersecting;})){eager();io.disconnect();}},{rootMargin:'200px'});io.observe(box);}else eager();
+if(window.ResizeObserver)new ResizeObserver(fill).observe(box);else window.addEventListener('resize',fill);fill();})();
+CCJS;
+
+// Share Bar networks, in the order they are shown: [id, label, glyph, brand color]. The glyph is a short badge text
+// (social networks) or an inline icon. Twin of SHARE_NETS in src/render/renderBlock.mjs.
+function cc_share_icon($paths) {
+    return '<svg class="cc-share-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' . $paths . '</svg>';
+}
+function cc_share_nets() {
+    return [
+        ['facebook', 'Facebook', 'f', '#1877f2'], ['x', 'X', 'X', '#000000'], ['linkedin', 'LinkedIn', 'in', '#0a66c2'],
+        ['whatsapp', 'WhatsApp', 'W', '#25d366'], ['telegram', 'Telegram', 'T', '#229ed9'],
+        ['email', 'Email', cc_share_icon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>'), '#475569'],
+        ['copy', 'Copy link', cc_share_icon('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'), '#475569'],
+        ['print', 'Print', cc_share_icon('<path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>'), '#475569'],
+        ['share', 'Share', cc_share_icon('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>'), '#475569'],
+    ];
+}
+// Multi-step Form field types: the Form block's, plus choices. Twin of WIZARD_TYPES in src/render/renderBlock.mjs.
+const CC_WIZARD_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date', 'select', 'radio', 'checkboxes', 'consent'];
+const CC_WZ_INPUT = 'width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box;';
+const CC_WZ_BTN = 'padding:12px 24px; border-radius:8px; font:700 15px/1 inherit; cursor:pointer;';
+// A number as plain text: at most 4 decimals, no trailing zeros ("25", "0.5"). Twin of ccPlain() in blockRuntime.mjs.
+function cc_plain($v) {
+    $s = number_format((float)$v, 4, '.', '');
+    if (strpos($s, '.') !== false) $s = rtrim(rtrim($s, '0'), '.');
+    return $s === '-0' ? '0' : $s;
+}
+// An amount: rounded half up at $dec decimals, thousands separators, "1,234.56" or "1.234,56" (eu), the currency before
+// or after (with a no-break space). Twin of ccMoney() in src/render/renderBlock.mjs and of money() in blockRuntime.mjs.
+function cc_money($v, $dec, $eu, $cur, $after) {
+    $s = cc_fmt_num($v, $dec);
+    if ($eu) $s = strtr($s, [',' => '.', '.' => ',']);
+    return $after ? $s . "\xC2\xA0" . $cur : $cur . $s;
+}
+// Code Snippet languages: [id, label]. Twin of CODE_LANGS in src/render/renderBlock.mjs.
+const CC_CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['json', 'JSON'], ['php', 'PHP'], ['shell', 'Shell'], ['text', '']];
+
+// A media file address (audio, video): http(s) or a path on this site; any other scheme (javascript:, data:…) -> ''.
+// Twin of ccMediaSrc() in src/render/renderBlock.mjs.
+function cc_media_src($u) {
+    $t = trim((string)$u);
+    $probe = strtolower(preg_replace('/[\x00-\x20\x7f]+/', '', $t));
+    if (preg_match('/^[a-z][a-z0-9+.-]*:/', $probe) && !preg_match('/^https?:/', $probe)) return '';
+    return $t;
+}
+// The MIME type a file's extension says ('' when unknown). Twin of ccMediaMime().
+function cc_media_mime($src) {
+    static $map = ['mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'webm' => 'video/webm', 'ogv' => 'video/ogg', 'mp3' => 'audio/mpeg', 'm4a' => 'audio/mp4', 'ogg' => 'audio/ogg', 'oga' => 'audio/ogg', 'wav' => 'audio/wav'];
+    $path = preg_split('/[?#]/', (string)$src)[0];
+    return preg_match('/\.([a-z0-9]+)$/i', $path, $m) && isset($map[strtolower($m[1])]) ? $map[strtolower($m[1])] : '';
+}
+// The Announcement Bar: the block, and the site-wide bar of Global Options (rebuild_all.php). $c: text, linkText, linkUrl,
+// preset, bg, color, icon, sticky, dismissible, align. $requireText: nothing at all when the text is empty (site-wide).
+// Twin of announcementHtml() in src/render/renderBlock.mjs.
+const CC_ANN_PRESETS = ['info' => ['#0f172a', '#ffffff'], 'promo' => ['var(--brand-color, #3b82f6)', '#ffffff'], 'warning' => ['#fef3c7', '#78350f'], 'success' => ['#dcfce7', '#14532d']];
+function cc_announcement_html($c, $id, $extra, $styleAttr, $requireText) {
+    $c = is_array($c) ? $c : [];
+    $text = mb_substr(trim(cc_str($c['text'] ?? '')), 0, 300);
+    if ($requireText && $text === '') return '';
+    $preset = (is_string($c['preset'] ?? null) && isset(CC_ANN_PRESETS[$c['preset']])) ? $c['preset'] : 'info';
+    $bg = cc_color($c['bg'] ?? '', CC_ANN_PRESETS[$preset][0]);
+    $fg = cc_color($c['color'] ?? '', CC_ANN_PRESETS[$preset][1]);
+    $linkText = mb_substr(trim(cc_str($c['linkText'] ?? '')), 0, 60);
+    $linkUrl = trim(cc_str($c['linkUrl'] ?? ''));
+    $icon = mb_substr(trim(cc_str($c['icon'] ?? '')), 0, 4);
+    $sticky = ($c['sticky'] ?? false) === true;
+    $dismissible = ($c['dismissible'] ?? true) !== false;
+    $left = ($c['align'] ?? '') === 'left';
+    $key = sprintf('%08x', crc32($text . '|' . $linkText . '|' . $linkUrl) & 0xFFFFFFFF);
+    return '<div id="' . $id . '" class="cc-announce cc-ann-' . $preset . $extra . '" role="region" aria-label="Announcement" data-key="' . $key . '" style="' . $styleAttr . ($sticky ? ' position:sticky; top:0; z-index:9000;' : '') . ' background:' . $bg . '; color:' . $fg . '; padding:10px 16px; font-size:14px; line-height:1.4;">'
+        . '<div class="cc-ann-inner" style="display:flex; align-items:center; justify-content:' . ($left ? 'flex-start' : 'center') . '; flex-wrap:wrap; gap:4px 12px; max-width:1200px; margin:0 auto; position:relative; padding-right:' . ($dismissible ? '36px' : '0') . '; box-sizing:border-box;">'
+        . ($icon !== '' ? '<span class="cc-ann-icon" aria-hidden="true">' . htmlspecialchars($icon) . '</span>' : '')
+        . '<span class="cc-ann-text">' . htmlspecialchars($text) . '</span>'
+        . ($linkText !== '' ? '<a class="cc-ann-link" href="' . htmlspecialchars(cc_block_url($linkUrl)) . '" style="color:inherit; font-weight:700; text-decoration:underline; white-space:nowrap;">' . htmlspecialchars($linkText) . ' &rarr;</a>' : '')
+        . ($dismissible ? '<button type="button" class="cc-ann-close" hidden aria-label="Dismiss the announcement" style="position:absolute; right:0; top:50%; transform:translateY(-50%); width:28px; height:28px; padding:0; border:none; border-radius:50%; background:transparent; color:inherit; font-size:20px; line-height:1; cursor:pointer;">&times;</button>' : '')
+        . '</div></div>' . "\n"
+        . '<script>' . str_replace('%ID%', $id, CC_ANNOUNCE_SCRIPT) . "</script>\n";
+}
+
+// Scripts of the Code Snippet, Table of Contents and Share Bar blocks. The regions between the "cc-xxx:begin" and
+// "cc-xxx:end" lines are VERBATIM copies from src/render/blockRuntime.mjs (the editor canvas runs the same text):
+// edit both, tests/blocks-content.mjs compares them. %ID% = the block's id.
+const CC_CODE_SCRIPT = <<<'CCJS'
+// cc-hl:begin
+function ccTokens(code, lang) {
+  var STR = /"(?:\\[\s\S]|[^"\\\n])*(?:"|$)|'(?:\\[\s\S]|[^'\\\n])*(?:'|$)/y;
+  var NUM = /\b(?:0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/y;
+  var CSSNUM = /#[0-9a-fA-F]{3,8}\b|-?\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg|fr)?|\.\d+(?:px|em|rem|%|vh|vw|s|ms|deg|fr)?/y;
+  var BLOCK = /\/\*[\s\S]*?(?:\*\/|$)/y;
+  var RULES = {
+    js: [['c', /\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/y], ['s', /`(?:\\[\s\S]|[^`\\])*(?:`|$)/y], ['s', STR], ['n', NUM],
+      ['k', /\b(?:async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|from|function|if|import|in|instanceof|let|new|of|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield|null|true|false|undefined)\b/y],
+      ['f', /[A-Za-z_$][\w$]*(?=\()/y]],
+    json: [['a', /"(?:\\[\s\S]|[^"\\\n])*"(?=\s*:)/y], ['s', STR], ['n', /-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/y], ['k', /\b(?:true|false|null)\b/y]],
+    css: [['c', BLOCK], ['s', STR], ['k', /@[\w-]+/y], ['n', CSSNUM], ['a', /[\w-]+(?=\s*:)/y]],
+    html: [['c', /<[!]--[\s\S]*?(?:--[>]|$)/y], ['t', /<\/?[A-Za-z][\w:-]*/y], ['t', /\/?>/y], ['s', STR], ['a', /[\w:-]+(?==)/y]],
+    php: [['c', /\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/y], ['k', /<\?php|<\?=|\?>/y], ['s', STR], ['v', /\$[A-Za-z_]\w*/y], ['n', NUM],
+      ['k', /\b(?:abstract|and|array|as|break|case|catch|class|clone|const|continue|declare|default|do|echo|else|elseif|empty|extends|final|finally|fn|for|foreach|function|global|if|implements|include|include_once|instanceof|interface|isset|list|match|namespace|new|null|or|print|private|protected|public|require|require_once|return|static|switch|this|throw|trait|true|false|try|unset|use|var|while|yield)\b/y],
+      ['f', /[A-Za-z_]\w*(?=\()/y]],
+    shell: [['c', /#[^\n]*/y], ['s', STR], ['v', /\$\{[^}\n]*\}|\$[A-Za-z_]\w*/y], ['n', NUM],
+      ['k', /\b(?:if|then|else|elif|fi|for|while|do|done|case|esac|function|in|return|exit|export|local|echo|cd|sudo)\b/y]]
+  };
+  var rules = RULES[lang], s = String(code), out = [], plain = '', pos = 0, n = s.length;
+  if (!rules) return [[null, s]];
+  while (pos < n) {
+    var hit = null;
+    for (var i = 0; i < rules.length; i++) {
+      var re = rules[i][1];
+      re.lastIndex = pos;
+      var m = re.exec(s);
+      if (m && m.index === pos && m[0].length > 0) { hit = [rules[i][0], m[0]]; break; }
+    }
+    if (hit) {
+      if (plain) { out.push([null, plain]); plain = ''; }
+      out.push(hit);
+      pos += hit[1].length;
+    } else { plain += s.charAt(pos); pos++; }
+  }
+  if (plain) out.push([null, plain]);
+  return out;
+}
+// cc-hl:end
+// cc-code:begin
+function ccCodeInit(root) {
+  var doc = root.ownerDocument, win = doc.defaultView, code = root.querySelector('.cc-code-code');
+  if (!code) return;
+  var text = code.textContent, toks = ccTokens(text, root.getAttribute('data-lang') || 'text'), frag = doc.createDocumentFragment();
+  for (var i = 0; i < toks.length; i++) {
+    if (toks[i][0]) { var sp = doc.createElement('span'); sp.className = 'cc-tk-' + toks[i][0]; sp.textContent = toks[i][1]; frag.appendChild(sp); }
+    else frag.appendChild(doc.createTextNode(toks[i][1]));
+  }
+  code.textContent = '';
+  code.appendChild(frag);
+  var btn = root.querySelector('.cc-code-copy');
+  if (!btn || btn.getAttribute('data-ready')) return;
+  var label = btn.textContent;
+  btn.setAttribute('data-ready', '1');
+  btn.hidden = false;
+  btn.addEventListener('click', function () {
+    var done = function () { btn.textContent = 'Copied'; win.setTimeout(function () { btn.textContent = label; }, 1600); };
+    if (win.navigator.clipboard && win.navigator.clipboard.writeText) { win.navigator.clipboard.writeText(code.textContent).then(done, function () {}); return; }
+    var ta = doc.createElement('textarea');
+    ta.value = code.textContent; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    doc.body.appendChild(ta); ta.select();
+    try { if (doc.execCommand('copy')) done(); } catch { /* no clipboard access */ }
+    doc.body.removeChild(ta);
+  });
+}
+// cc-code:end
+(function(){var r=document.getElementById('%ID%');if(r)ccCodeInit(r);})();
+CCJS;
+const CC_TOC_SCRIPT = <<<'CCJS'
+// cc-toc:begin
+function ccTocInit(root, editor) {
+  var doc = root.ownerDocument, win = doc.defaultView, scope = root.closest('main') || root.closest('.cc-canvas') || doc.body;
+  var list = root.querySelector('.cc-toc-list'), empty = root.querySelector('.cc-toc-empty');
+  var all = scope.querySelectorAll(root.getAttribute('data-levels') === 'h2h3' ? 'h2, h3' : 'h2'), heads = [], i;
+  // the author's own headings only: in rich text (Text, Image + Text, Hero, Custom HTML) and without a design class
+  // of their own (that leaves out the titles inside Scrollytelling, Cards, Team, Collection List...)
+  for (i = 0; i < all.length; i++) {
+    if (!all[i].closest('.cc-toc') && all[i].closest('.cc-text, .cc-hero, .cc-img-text, .cc-html-block') && !/(^|\s)cc-/.test(all[i].className) && all[i].textContent.trim()) heads.push(all[i]);
+  }
+  var numbered = root.getAttribute('data-numbered') === '1', offset = parseInt(root.getAttribute('data-offset'), 10) || 0;
+  var used = {}, n2 = 0, n3 = 0, links = [];
+  list.textContent = '';
+  for (i = 0; i < heads.length; i++) {
+    var h = heads[i], text = h.textContent.trim().replace(/\s+/g, ' '), l3 = h.tagName === 'H3', id = h.id;
+    if (!id && !editor) {
+      var base = (text.normalize ? text.normalize('NFD').replace(/[̀-ͯ]/g, '') : text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section', k = 2;
+      id = base;
+      while (doc.getElementById(id) || used[id]) { id = base + '-' + k; k++; }
+      h.id = id;
+    }
+    used[id] = 1;
+    if (!editor) h.style.scrollMarginTop = offset + 'px';
+    if (l3) { n3++; } else { n2++; n3 = 0; }
+    var li = doc.createElement('li'), a = doc.createElement('a');
+    li.className = 'cc-toc-item ' + (l3 ? 'cc-toc-l3' : 'cc-toc-l2');
+    a.href = '#' + (editor ? '' : id);
+    if (numbered) { var num = doc.createElement('span'); num.className = 'cc-toc-num'; num.textContent = (l3 ? n2 + '.' + n3 : n2) + '. '; a.appendChild(num); }
+    a.appendChild(doc.createTextNode(text));
+    li.appendChild(a); list.appendChild(li); links.push(a);
+  }
+  root.hidden = !heads.length && !editor;
+  if (empty) empty.hidden = heads.length > 0;
+  if (editor || !heads.length || root.getAttribute('data-highlight') !== '1' || root.getAttribute('data-ready')) return;
+  root.setAttribute('data-ready', '1');
+  var busy = false, mark = function () {
+    busy = false;
+    var cur = -1;
+    for (var j = 0; j < heads.length; j++) { if (heads[j].getBoundingClientRect().top <= offset + 24) cur = j; }
+    // at the very end of the page the last heading may never reach the top: it counts as the one being read
+    if (win.pageYOffset > 0 && win.pageYOffset + win.innerHeight >= doc.documentElement.scrollHeight - 2) cur = heads.length - 1;
+    for (j = 0; j < links.length; j++) {
+      links[j].parentNode.className = links[j].parentNode.className.replace(' is-active', '') + (j === cur ? ' is-active' : '');
+      if (j === cur) links[j].setAttribute('aria-current', 'true'); else links[j].removeAttribute('aria-current');
+    }
+  };
+  win.addEventListener('scroll', function () { if (!busy) { busy = true; win.requestAnimationFrame(mark); } }, { passive: true });
+  mark();
+}
+// cc-toc:end
+(function(){var r=document.getElementById('%ID%');if(!r)return;var go=function(){ccTocInit(r,false);};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();})();
+CCJS;
+const CC_SHARE_SCRIPT = <<<'CCJS'
+// cc-share:begin
+function ccShareInit(root, editor) {
+  var doc = root.ownerDocument, win = doc.defaultView;
+  root.hidden = false;
+  if (editor) return;
+  var url = win.location.href.split('#')[0], msg = root.getAttribute('data-msg') || doc.title, e = win.encodeURIComponent;
+  var hrefs = {
+    facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + e(url),
+    x: 'https://twitter.com/intent/tweet?url=' + e(url) + '&text=' + e(msg),
+    linkedin: 'https://www.linkedin.com/sharing/share-offsite/?url=' + e(url),
+    whatsapp: 'https://wa.me/?text=' + e(msg + ' ' + url),
+    telegram: 'https://t.me/share/url?url=' + e(url) + '&text=' + e(msg),
+    email: 'mailto:?subject=' + e(msg) + '&body=' + e(url)
+  };
+  var nets = root.querySelectorAll('a[data-net]'), acts = root.querySelectorAll('[data-act]'), i;
+  for (i = 0; i < nets.length; i++) { var net = nets[i].getAttribute('data-net'); if (hrefs[net]) nets[i].href = hrefs[net]; }
+  var flash = function (btn, text) {
+    var lab = btn.querySelector('.cc-share-label') || btn, old = lab.textContent;
+    lab.textContent = text;
+    win.setTimeout(function () { lab.textContent = old; }, 1600);
+  };
+  var copy = function (btn) {
+    var done = function () { flash(btn, 'Copied'); };
+    if (win.navigator.clipboard && win.navigator.clipboard.writeText) { win.navigator.clipboard.writeText(url).then(done, function () {}); return; }
+    var ta = doc.createElement('textarea');
+    ta.value = url; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    doc.body.appendChild(ta); ta.select();
+    try { if (doc.execCommand('copy')) done(); } catch { /* no clipboard access */ }
+    doc.body.removeChild(ta);
+  };
+  var wire = function (btn) {
+    var act = btn.getAttribute('data-act');
+    if (act === 'share' && !win.navigator.share) { btn.hidden = true; return; }
+    btn.addEventListener('click', function () {
+      if (act === 'copy') copy(btn);
+      else if (act === 'print') win.print();
+      else if (act === 'share') win.navigator.share({ title: msg, url: url }).catch(function () {});
+    });
+  };
+  for (i = 0; i < acts.length; i++) wire(acts[i]);
+}
+// cc-share:end
+(function(){var r=document.getElementById('%ID%');if(r)ccShareInit(r,false);})();
+CCJS;
+const CC_CALC_SCRIPT = <<<'CCJS'
+// cc-calc:begin
+function ccPlain(v) {
+  var s = v.toFixed(4);
+  if (s.indexOf('.') > -1) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  return s;
+}
+function ccCalcInit(root) {
+  var dec = parseInt(root.getAttribute('data-dec'), 10) || 0, eu = root.getAttribute('data-fmt') === 'eu';
+  var cur = root.getAttribute('data-cur') || '', after = root.getAttribute('data-pos') === 'after';
+  var base = parseFloat(root.getAttribute('data-base')) || 0, disc = parseFloat(root.getAttribute('data-disc')) || 0;
+  var perM = root.getAttribute('data-per-m') || '', perY = root.getAttribute('data-per-y') || '', saveTpl = root.getAttribute('data-save') || '';
+  var ranges = root.querySelectorAll('.cc-calc-range'), addons = root.querySelectorAll('.cc-calc-addon'), radios = root.querySelectorAll('.cc-calc-billing input');
+  var amount = root.querySelector('.cc-calc-amount'), per = root.querySelector('.cc-calc-per'), save = root.querySelector('.cc-calc-save'), i;
+  var money = function (v) {
+    var m = Math.pow(10, dec), r = Math.floor(Math.abs(v) * m + 0.5 + 1e-9) / m;
+    if (v < 0) r = -r;
+    if (r === 0) r = 0;
+    var parts = r.toFixed(dec).split('.'), s;
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    s = parts.join('.');
+    if (eu) s = s.replace(/[,.]/g, function (ch) { return ch === ',' ? '.' : ','; });
+    return after ? s + ' ' + cur : cur + s;
+  };
+  var line = function (key, cost, f, show) {
+    var li = root.querySelector('.cc-calc-line[data-line="' + key + '"]');
+    if (!li) return;
+    li.hidden = !show;
+    li.querySelector('.cc-calc-line-amt').textContent = money(cost * f);
+  };
+  var update = function () {
+    var yearly = false, total = base, f, k;
+    for (k = 0; k < radios.length; k++) { if (radios[k].checked && radios[k].value === 'yearly') yearly = true; }
+    f = yearly ? 12 * (1 - disc / 100) : 1;
+    line('base', base, f, true);
+    for (k = 0; k < ranges.length; k++) {
+      var inp = ranges[k], val = parseFloat(inp.value) || 0, unit = inp.getAttribute('data-unit') || '';
+      var cost = Math.max(0, val - (parseFloat(inp.getAttribute('data-incl')) || 0)) * (parseFloat(inp.getAttribute('data-price')) || 0);
+      total += cost;
+      var out = root.querySelector('.cc-calc-val[data-for="' + inp.id + '"]');
+      if (out) out.textContent = ccPlain(val) + (unit ? ' ' + unit : '');
+      line(inp.getAttribute('data-line'), cost, f, cost !== 0);
+    }
+    for (k = 0; k < addons.length; k++) {
+      var price = parseFloat(addons[k].getAttribute('data-price')) || 0;
+      if (addons[k].checked) total += price;
+      line(addons[k].getAttribute('data-line'), price, f, addons[k].checked);
+    }
+    if (amount) amount.textContent = money(total * f);
+    if (per) per.textContent = yearly ? perY : perM;
+    if (save) {
+      var saved = total * 12 - total * f;
+      save.hidden = !(yearly && saved > 0);
+      save.textContent = saveTpl.split('{amount}').join(money(saved));
+    }
+  };
+  for (i = 0; i < ranges.length; i++) ranges[i].addEventListener('input', update);
+  for (i = 0; i < addons.length; i++) addons[i].addEventListener('change', update);
+  for (i = 0; i < radios.length; i++) radios[i].addEventListener('change', update);
+  update();
+}
+// cc-calc:end
+(function(){var r=document.getElementById('%ID%');if(r)ccCalcInit(r);})();
+CCJS;
+const CC_WIZARD_SCRIPT = <<<'CCJS'
+// cc-wizard:begin
+function ccWizardInit(root, editor) {
+  var form = root.querySelector('.cc-wz-form');
+  if (!form || root.getAttribute('data-ready')) return;
+  var steps = root.querySelectorAll('.cc-wz-step'), n = steps.length, cur = 0, i;
+  var back = root.querySelector('.cc-wz-back'), next = root.querySelector('.cc-wz-next'), submit = root.querySelector('.cc-wz-submit');
+  var prog = root.querySelector('.cc-wz-progress'), fill = root.querySelector('.cc-wz-fill'), count = root.querySelector('.cc-wz-count');
+  var dots = root.querySelectorAll('.cc-wz-dot'), tpl = root.getAttribute('data-step-label') || 'Step {n} of {total}';
+  root.setAttribute('data-ready', '1');
+  form.setAttribute('novalidate', '');
+  var groups = root.querySelectorAll('.cc-wz-group[data-req="1"]');
+  var clear = function (boxes) { return function () { boxes[0].setCustomValidity(''); }; };
+  for (i = 0; i < groups.length; i++) {
+    var boxes = groups[i].querySelectorAll('input[type="checkbox"]');
+    for (var b = 0; b < boxes.length; b++) boxes[b].addEventListener('change', clear(boxes));
+  }
+  if (n < 2) return;
+  var show = function (k, focus) {
+    cur = k;
+    for (i = 0; i < n; i++) steps[i].hidden = i !== k;
+    back.hidden = k === 0;
+    next.hidden = k === n - 1;
+    submit.hidden = k !== n - 1;
+    if (prog) prog.hidden = false;
+    if (fill) fill.style.width = (((k + 1) / n) * 100).toFixed(1) + '%';
+    if (count) count.textContent = tpl.split('{n}').join(String(k + 1)).split('{total}').join(String(n));
+    for (i = 0; i < dots.length; i++) {
+      dots[i].className = 'cc-wz-dot' + (i < k ? ' is-done' : '') + (i === k ? ' is-current' : '');
+      if (i === k) dots[i].setAttribute('aria-current', 'step'); else dots[i].removeAttribute('aria-current');
+    }
+    // the step itself takes the focus (it is announced with its title): Firefox ignores focus() on a <legend> that has just become visible
+    if (focus && !editor) steps[k].focus();
+  };
+  var firstInvalid = function (k) {
+    var gs = steps[k].querySelectorAll('.cc-wz-group[data-req="1"]'), g, bx, any, j;
+    for (g = 0; g < gs.length; g++) {
+      bx = gs[g].querySelectorAll('input[type="checkbox"]');
+      any = false;
+      for (j = 0; j < bx.length; j++) { if (bx[j].checked) any = true; }
+      if (bx.length) bx[0].setCustomValidity(any ? '' : 'Please choose at least one option.');
+    }
+    var els = steps[k].querySelectorAll('input, select, textarea');
+    for (j = 0; j < els.length; j++) { if (!els[j].checkValidity()) return els[j]; }
+    return null;
+  };
+  back.addEventListener('click', function () { show(cur - 1, true); });
+  next.addEventListener('click', function () {
+    var bad = editor ? null : firstInvalid(cur);
+    if (bad) { bad.reportValidity(); return; }
+    show(cur + 1, true);
+  });
+  form.addEventListener('submit', function (e) {
+    if (editor) { e.preventDefault(); return; }
+    var bad, k;
+    if (cur < n - 1) {
+      e.preventDefault();
+      bad = firstInvalid(cur);
+      if (bad) bad.reportValidity(); else show(cur + 1, true);
+      return;
+    }
+    for (k = 0; k < n; k++) {
+      bad = firstInvalid(k);
+      if (bad) { e.preventDefault(); show(k, false); bad.reportValidity(); return; }
+    }
+  });
+  show(0, false);
+}
+// cc-wizard:end
+(function(){var r=document.getElementById('%ID%');if(r)ccWizardInit(r,false);})();
+CCJS;
+const CC_VIDEO_SCRIPT = <<<'CCJS'
+// cc-video:begin
+function ccVideoInit(root, editor) {
+  var v = root.querySelector('.cc-vh-video'), btn = root.querySelector('.cc-vh-toggle');
+  if (!v || root.getAttribute('data-ready')) return;
+  var win = root.ownerDocument.defaultView, mq = function (q) { return !!(win.matchMedia && win.matchMedia(q).matches); };
+  root.setAttribute('data-ready', '1');
+  // the poster stays on the screen in the editor, and on phones unless the author chose video there
+  if (editor || (root.getAttribute('data-mobile') !== '1' && mq('(max-width: 768px)'))) return;
+  var pause = btn ? btn.querySelector('.cc-vh-i-pause') : null, play = btn ? btn.querySelector('.cc-vh-i-play') : null;
+  var show = function (playing) {
+    if (!btn) return;
+    // (an SVG element ignores the hidden attribute, so the icons are shown and hidden with display)
+    pause.style.display = playing ? '' : 'none';
+    play.style.display = playing ? 'none' : '';
+    btn.setAttribute('aria-label', playing ? 'Pause the background video' : 'Play the background video');
+  };
+  if (btn) {
+    btn.hidden = false;
+    btn.addEventListener('click', function () {
+      if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); } else v.pause();
+    });
+  }
+  v.addEventListener('play', function () { show(true); });
+  v.addEventListener('pause', function () { show(false); });
+  show(false);
+  // visitors who prefer reduced motion get the poster, and can start the video with the button
+  if (mq('(prefers-reduced-motion: reduce)')) return;
+  v.preload = 'auto';
+  var started = v.play();
+  if (started && started.catch) started.catch(function () {});
+}
+// cc-video:end
+(function(){var r=document.getElementById('%ID%');if(r)ccVideoInit(r,false);})();
+CCJS;
+const CC_AUDIO_SCRIPT = <<<'CCJS'
+// cc-audio:begin
+function ccAudioInit(root) {
+  var a = root.querySelector('.cc-au-el'), ui = root.querySelector('.cc-au-ui');
+  if (!a || !ui || root.getAttribute('data-ready')) return;
+  var doc = root.ownerDocument, playBtn = root.querySelector('.cc-au-play'), seek = root.querySelector('.cc-au-seek');
+  var cur = root.querySelector('.cc-au-cur'), dur = root.querySelector('.cc-au-dur'), speedBtn = root.querySelector('.cc-au-speed');
+  var back = root.querySelector('.cc-au-back'), fwd = root.querySelector('.cc-au-fwd'), step = parseInt(root.getAttribute('data-skip'), 10) || 15;
+  var rates = [1, 1.25, 1.5, 2, 0.75], ri = 0, drag = false;
+  root.setAttribute('data-ready', '1');
+  a.removeAttribute('controls');
+  ui.hidden = false;
+  var fmt = function (t) {
+    t = isFinite(t) && t > 0 ? Math.floor(t) : 0;
+    var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') + m : String(m)) + ':' + (s < 10 ? '0' : '') + s;
+  };
+  var paint = function () {
+    var t = a.currentTime || 0, d = isFinite(a.duration) ? a.duration : 0;
+    if (!drag) seek.value = String(t);
+    cur.textContent = fmt(t);
+    dur.textContent = fmt(d);
+    seek.max = String(d || 0);
+    seek.setAttribute('aria-valuetext', fmt(t) + ' of ' + fmt(d));
+  };
+  var state = function () {
+    var playing = !a.paused && !a.ended;
+    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    playBtn.querySelector('.cc-au-i-play').style.display = playing ? 'none' : '';   // (display: an SVG ignores hidden)
+    playBtn.querySelector('.cc-au-i-pause').style.display = playing ? '' : 'none';
+  };
+  playBtn.addEventListener('click', function () {
+    if (a.paused) { var p = a.play(); if (p && p.catch) p.catch(function () {}); } else a.pause();
+  });
+  if (back) back.addEventListener('click', function () { a.currentTime = Math.max(0, (a.currentTime || 0) - step); });
+  if (fwd) fwd.addEventListener('click', function () { a.currentTime = Math.min(isFinite(a.duration) ? a.duration : 1e9, (a.currentTime || 0) + step); });
+  if (speedBtn) speedBtn.addEventListener('click', function () {
+    ri = (ri + 1) % rates.length;
+    a.playbackRate = rates[ri];
+    speedBtn.textContent = rates[ri] + '×';
+  });
+  seek.addEventListener('input', function () { drag = true; a.currentTime = parseFloat(seek.value) || 0; cur.textContent = fmt(a.currentTime); });
+  seek.addEventListener('change', function () { drag = false; });
+  a.addEventListener('timeupdate', paint);
+  a.addEventListener('loadedmetadata', paint);
+  a.addEventListener('durationchange', paint);
+  a.addEventListener('play', function () {
+    state();
+    var all = doc.querySelectorAll('.cc-au-el');
+    for (var i = 0; i < all.length; i++) { if (all[i] !== a && !all[i].paused) all[i].pause(); }
+  });
+  a.addEventListener('pause', state);
+  a.addEventListener('ended', state);
+  state();
+  paint();
+}
+// cc-audio:end
+(function(){var r=document.getElementById('%ID%');if(r)ccAudioInit(r);})();
+CCJS;
+const CC_ANNOUNCE_SCRIPT = <<<'CCJS'
+// cc-announce:begin
+function ccAnnounceInit(root, editor) {
+  var btn = root.querySelector('.cc-ann-close'), win = root.ownerDocument.defaultView, key = 'cc_ann_' + (root.getAttribute('data-key') || '');
+  if (root.getAttribute('data-ready')) return;
+  root.setAttribute('data-ready', '1');
+  if (!editor) {
+    var seen = false;
+    try { seen = win.localStorage.getItem(key) === '1'; } catch { seen = false; }
+    if (seen) { root.hidden = true; return; }
+  }
+  if (!editor) ccAnnounceBelowMenu(root);
+  if (!btn) return;
+  btn.hidden = false;
+  btn.addEventListener('click', function () {
+    if (editor) return;
+    root.hidden = true;
+    try { win.localStorage.setItem(key, '1'); } catch { /* it is not remembered */ }
+  });
+}
+// A sticky bar stays UNDER a menu that is pinned to the top of the screen (position: fixed): it sticks at the menu's
+// bottom edge and follows it when the menu shrinks or slides away. Without such a menu it sticks to the top.
+function ccAnnounceBelowMenu(root) {
+  var doc = root.ownerDocument, win = doc.defaultView;
+  var setup = function () {
+    var nav = doc.querySelector('.cc-navigation');
+    if (!nav || win.getComputedStyle(root).position !== 'sticky') return;
+    var follow = function () {
+      var pinned = win.getComputedStyle(nav).position === 'fixed';
+      root.style.top = (pinned ? Math.max(0, Math.round(nav.getBoundingClientRect().bottom)) : 0) + 'px';
+    };
+    follow();
+    win.addEventListener('scroll', follow, { passive: true });
+    win.addEventListener('resize', follow);
+  };
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', setup); else setup();
+}
+// cc-announce:end
+(function(){var r=document.getElementById('%ID%');if(r)ccAnnounceInit(r,false);})();
+CCJS;
+// Scrollytelling: the step in the middle of the screen decides which image shows ([data-active]); %ID% = the block's id
+const CC_STORY_SCRIPT = <<<'CCJS'
+(function(){var r=document.getElementById('%ID%');if(!r||!window.IntersectionObserver)return;var st=r.querySelectorAll('.cc-story-step');if(st.length<2)return;r.classList.add('cc-story-on');
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)r.setAttribute('data-active',e.target.getAttribute('data-i'));});},{rootMargin:'-45% 0px -45% 0px',threshold:0});
+[].forEach.call(st,function(s){io.observe(s);});})();
+CCJS;
+// Product hotspots: a click or tap opens or closes a pin's text (hover and keyboard focus work without the script); %ID% = the block's id
+const CC_HOTSPOTS_SCRIPT = <<<'CCJS'
+(function(){var r=document.getElementById('%ID%');if(!r)return;var pins=[].slice.call(r.querySelectorAll('.cc-hs-pin'));
+function close(keep){pins.forEach(function(p){if(p!==keep){p.classList.remove('is-open');p.querySelector('.cc-hs-btn').setAttribute('aria-expanded','false');}});}
+pins.forEach(function(p){var b=p.querySelector('.cc-hs-btn');b.setAttribute('aria-expanded','false');b.addEventListener('click',function(e){e.stopPropagation();var open=p.classList.toggle('is-open');b.setAttribute('aria-expanded',open?'true':'false');close(p);});});
+document.addEventListener('click',function(){close(null);});document.addEventListener('keydown',function(e){if(e.key==='Escape')close(null);});})();
+CCJS;
+
 // Site search script (SEARCH block); %ID% = the block's id
 const CC_SEARCH_SCRIPT = <<<'CCJS'
 (function(){var r=document.getElementById('%ID%');if(!r)return;var f=r.querySelector('form'),i=r.querySelector('input'),o=r.querySelector('.cc-search-results'),idx=null,lim=+r.getAttribute('data-limit')||10;
@@ -1314,16 +1872,24 @@ function render_block($block) {
             foreach ($logos as $lg) { $set1 .= $mk($lg, false); $set2 .= $mk($lg, true); }
             $css = $gray ? '#' . $innerId . ' .cc-logo-item:hover img,#' . $innerId . ' .cc-logo-item:focus-visible img{filter:none !important; opacity:1 !important}' : '';
             if ($marquee) {
-                $css .= '@keyframes ccMq_' . $innerId . '{from{transform:translateX(0)}to{transform:translateX(-50%)}}#' . $innerId . ' .cc-logos-track{animation:ccMq_' . $innerId . ' ' . $speed . 's linear infinite}#' . $innerId . ' .cc-logos-marquee:hover .cc-logos-track{animation-play-state:paused}@media(prefers-reduced-motion:reduce){#' . $innerId . ' .cc-logos-track{animation:none; flex-wrap:wrap; width:auto !important}#' . $innerId . ' .cc-logos-set[aria-hidden="true"]{display:none}}';
+                // direction: right plays the same loop backwards; fade: edges fade out (both off when missing, as before)
+                $reverse = ($c['direction'] ?? '') === 'right' ? ' reverse' : '';
+                $fade = ($c['fade'] ?? false) === true;
+                $css .= '@keyframes ccMq_' . $innerId . '{from{transform:translateX(0)}to{transform:translateX(-50%)}}#' . $innerId . ' .cc-logos-track{animation:ccMq_' . $innerId . ' ' . $speed . 's linear infinite' . $reverse . '}#' . $innerId . ' .cc-logos-marquee:hover .cc-logos-track{animation-play-state:paused}'
+                    . ($fade ? '#' . $innerId . ' .cc-logos-marquee{-webkit-mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)}' : '')
+                    . '@media(prefers-reduced-motion:reduce){#' . $innerId . ' .cc-logos-track{animation:none; flex-wrap:wrap; width:auto !important}#' . $innerId . ' .cc-logos-set[aria-hidden="true"]{display:none}' . ($fade ? '#' . $innerId . ' .cc-logos-marquee{-webkit-mask-image:none;mask-image:none}' : '') . '}';
                 $setStyle = 'display:flex; align-items:center; gap:' . $gap . 'px; padding-right:' . $gap . 'px;';
-                $body = '<div class="cc-logos-marquee" style="overflow:hidden;"><div class="cc-logos-track" style="display:flex; width:max-content;"><div class="cc-logos-set" style="' . $setStyle . '">' . $set1 . '</div><div class="cc-logos-set" aria-hidden="true" style="' . $setStyle . '">' . $set2 . '</div></div></div>';
+                // contain:inline-size: the moving track (wider than the strip) never widens the page, a row or the editor
+                $body = '<div class="cc-logos-marquee" style="overflow:hidden; contain:inline-size;"><div class="cc-logos-track" style="display:flex; width:max-content;"><div class="cc-logos-set" style="' . $setStyle . '">' . $set1 . '</div><div class="cc-logos-set" aria-hidden="true" style="' . $setStyle . '">' . $set2 . '</div></div></div>';
             } else {
                 $css .= '@media(max-width:768px){#' . $innerId . ' .cc-logos-grid{grid-template-columns:repeat(' . min($cols, 3) . ', 1fr) !important}}';
                 $body = '<div class="cc-logos-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:' . $gap . 'px; align-items:center; justify-items:center;">' . $set1 . '</div>';
             }
             return $customCss . '<style>' . $css . '</style><div id="' . $innerId . '" class="cc-logos' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
                 . ($title !== '' ? '<div class="cc-logos-title" style="text-align:center; font-size:14px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:24px;">' . $title . '</div>' : '')
-                . $body . "\n</div>\n";
+                . $body . "\n"
+                . ($marquee && $logos ? '<script>' . str_replace(['%ID%', '%SPEED%'], [$innerId, (string)$speed], CC_LOGOS_SCRIPT) . "</script>\n" : '')
+                . "</div>\n";
         }
 
         case 'TEAM': {
@@ -1627,6 +2193,689 @@ function render_block($block) {
             $html .= "</form>\n<div class=\"cc-search-results\" aria-live=\"polite\" style=\"margin-top:16px;\"></div>\n";
             $html .= "<script>" . str_replace('%ID%', $innerId, CC_SEARCH_SCRIPT) . "</script>\n</div>\n";
             return $customCss . $html;
+
+        case 'BENTO': {
+            $c = $block['content'] ?? [];
+            $tiles = array_values((isset($c['tiles']) && is_array($c['tiles'])) ? $c['tiles'] : []);
+            $cols = cc_int($c['columns'] ?? null, 3, 2, 4);
+            $rowH = cc_int($c['rowHeight'] ?? null, 180, 100, 400);
+            $gap = cc_int($c['gap'] ?? null, 16, 0, 48);
+            $hover = in_array($c['hover'] ?? '', ['lift', 'zoom', 'none'], true) ? $c['hover'] : 'lift';
+            $spans = ['normal' => [1, 1], 'wide' => [2, 1], 'tall' => [1, 2], 'large' => [2, 2]];
+            $cells = '';
+            foreach ($tiles as $tile) {
+                if (!is_array($tile)) continue;
+                $size = (is_string($tile['size'] ?? null) && isset($spans[$tile['size']])) ? $tile['size'] : 'normal';
+                $img = cc_img_url(cc_str($tile['image'] ?? ''));
+                $bg = cc_color($tile['bg'] ?? '', '#f1f5f9');
+                $fg = cc_color($tile['color'] ?? '', $img !== '' ? '#ffffff' : '#0f172a');
+                $href = trim(cc_str($tile['href'] ?? ''));
+                $tag = $href !== '' ? 'a' : 'div';
+                $title = cc_esc($tile['title'] ?? '');
+                $text = cc_esc($tile['text'] ?? '');
+                $icon = cc_esc($tile['icon'] ?? '');
+                $cells .= '<' . $tag . ' class="cc-bento-tile cc-bento-' . $size . '"' . ($href !== '' ? ' href="' . htmlspecialchars(cc_block_url($href)) . '"' : '') . ' style="grid-column:span ' . $spans[$size][0] . '; grid-row:span ' . $spans[$size][1] . '; position:relative; overflow:hidden; border-radius:16px; background:' . $bg . '; color:' . $fg . '; padding:24px; display:flex; flex-direction:column; justify-content:flex-end; text-decoration:none; min-width:0;">'
+                    . ($img !== '' ? '<img class="cc-bento-img" src="' . htmlspecialchars($img) . '" alt="' . cc_esc($tile['alt'] ?? '') . '" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"><div class="cc-bento-shade" aria-hidden="true" style="position:absolute; inset:0; background:linear-gradient(to top, rgba(15,23,42,0.78), rgba(15,23,42,0) 65%);"></div>' : '')
+                    . '<div class="cc-bento-body" style="position:relative;">'
+                    . ($icon !== '' ? '<div class="cc-bento-icon" aria-hidden="true" style="font-size:28px; line-height:1; margin-bottom:10px;">' . $icon . '</div>' : '')
+                    . ($title !== '' ? '<h3 class="cc-bento-title" style="margin:0; font-size:20px; line-height:1.25; color:inherit;">' . $title . '</h3>' : '')
+                    . ($text !== '' ? '<p class="cc-bento-text" style="margin:6px 0 0 0; font-size:14px; line-height:1.5; opacity:0.85;">' . $text . '</p>' : '')
+                    . '</div></' . $tag . '>';
+            }
+            return $customCss . '<style>#' . $innerId . ' .cc-bento-tile{transition:transform .25s ease, box-shadow .25s ease}#' . $innerId . ' .cc-bento-img{transition:transform .5s ease}'
+                . '#' . $innerId . '.cc-bento-hover-lift .cc-bento-tile:hover{transform:translateY(-4px);box-shadow:0 14px 30px rgba(15,23,42,0.16)}#' . $innerId . '.cc-bento-hover-zoom .cc-bento-tile:hover .cc-bento-img{transform:scale(1.06)}'
+                . '@media(max-width:768px){#' . $innerId . ' .cc-bento-grid{grid-template-columns:repeat(2, 1fr) !important}}@media(max-width:480px){#' . $innerId . ' .cc-bento-grid{grid-template-columns:1fr !important}#' . $innerId . ' .cc-bento-tile{grid-column:auto !important;grid-row:auto !important}}'
+                . '@media(prefers-reduced-motion:reduce){#' . $innerId . ' .cc-bento-tile,#' . $innerId . ' .cc-bento-img{transition:none !important;transform:none !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-bento cc-bento-hover-' . $hover . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-bento-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); grid-auto-rows:minmax(' . $rowH . 'px, auto); gap:' . $gap . 'px;">' . $cells . '</div>' . "\n</div>\n";
+        }
+
+        case 'SPLIT_CTA': {
+            $c = $block['content'] ?? [];
+            $gap = cc_int($c['gap'] ?? null, 16, 0, 48);
+            $radius = cc_int($c['radius'] ?? null, 16, 0, 40);
+            $side = function ($s, $which, $d) use ($radius) {
+                $s = is_array($s) ? $s : [];
+                $icon = cc_esc($s['icon'] ?? '');
+                $title = cc_esc($s['title'] ?? '');
+                $text = cc_esc($s['text'] ?? '');
+                $btn = cc_esc($s['buttonText'] ?? '');
+                return '<div class="cc-split-cta-side cc-split-cta-' . $which . '" style="flex:1; min-width:0; background:' . cc_color($s['bg'] ?? '', $d[0]) . '; color:' . cc_color($s['color'] ?? '', $d[1]) . '; padding:40px 32px; border-radius:' . $radius . 'px; display:flex; flex-direction:column; align-items:flex-start; gap:12px;">'
+                    . ($icon !== '' ? '<div class="cc-split-cta-icon" aria-hidden="true" style="font-size:32px; line-height:1;">' . $icon . '</div>' : '')
+                    . ($title !== '' ? '<h3 class="cc-split-cta-title" style="margin:0; font-size:24px; line-height:1.25; color:inherit;">' . $title . '</h3>' : '')
+                    . ($text !== '' ? '<p class="cc-split-cta-text" style="margin:0; font-size:15px; line-height:1.6; opacity:0.9;">' . $text . '</p>' : '')
+                    . ($btn !== '' ? '<a class="cc-split-cta-btn" href="' . htmlspecialchars(cc_block_url($s['buttonUrl'] ?? '')) . '" style="display:inline-block; margin-top:8px; padding:12px 22px; border-radius:8px; background:' . cc_color($s['buttonBg'] ?? '', $d[2]) . '; color:' . cc_color($s['buttonColor'] ?? '', $d[3]) . '; font-weight:700; text-decoration:none;">' . $btn . '</a>' : '')
+                    . '</div>';
+            };
+            return $customCss . '<style>@media(max-width:768px){#' . $innerId . ' .cc-split-cta-row{flex-direction:column !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-split-cta' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-split-cta-row" style="display:flex; gap:' . $gap . 'px;">'
+                . $side($c['left'] ?? null, 'left', ['#0f172a', '#ffffff', '#3b82f6', '#ffffff'])
+                . $side($c['right'] ?? null, 'right', ['#eff6ff', '#0f172a', '#0f172a', '#ffffff'])
+                . '</div>' . "\n</div>\n";
+        }
+
+        case 'CASE_STUDY': {
+            $c = $block['content'] ?? [];
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $vertical = ($c['layout'] ?? '') === 'vertical';
+            $img = cc_img_url(cc_str($c['image'] ?? ''));
+            $logo = cc_img_url(cc_str($c['logo'] ?? ''));
+            $client = cc_esc($c['client'] ?? '');
+            $metric = cc_esc($c['metric'] ?? '');
+            $metricLabel = cc_esc($c['metricLabel'] ?? '');
+            $title = cc_esc($c['title'] ?? '');
+            $text = cc_esc($c['text'] ?? '');
+            $quote = cc_esc($c['quote'] ?? '');
+            $quoteAuthor = cc_esc($c['quoteAuthor'] ?? '');
+            $linkText = cc_esc($c['linkText'] ?? '');
+            $body = '';
+            if ($logo !== '' || $client !== '') {
+                $body .= '<div class="cc-case-client" style="display:flex; align-items:center; gap:10px; font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#64748b;">'
+                    . ($logo !== '' ? '<img src="' . htmlspecialchars($logo) . '" alt="" loading="lazy" style="height:28px; width:auto; display:block;">' : '') . $client . '</div>';
+            }
+            if ($metric !== '') {
+                $body .= '<div class="cc-case-metric"><div class="cc-case-metric-value" style="font-size:44px; font-weight:800; line-height:1; color:' . $accent . ';">' . $metric . '</div>'
+                    . ($metricLabel !== '' ? '<div class="cc-case-metric-label" style="margin-top:4px; font-size:14px; color:#475569;">' . $metricLabel . '</div>' : '') . '</div>';
+            }
+            if ($title !== '') $body .= '<h3 class="cc-case-title" style="margin:0; font-size:22px; line-height:1.3; color:#0f172a;">' . $title . '</h3>';
+            if ($text !== '') $body .= '<p class="cc-case-text" style="margin:0; font-size:15px; line-height:1.6; color:#475569;">' . $text . '</p>';
+            if ($quote !== '') {
+                $body .= '<blockquote class="cc-case-quote" style="margin:0; padding-left:14px; border-left:3px solid ' . $accent . '; font-style:italic; color:#334155; font-size:15px; line-height:1.55;">' . $quote
+                    . ($quoteAuthor !== '' ? '<cite class="cc-case-quote-author" style="display:block; margin-top:6px; font-style:normal; font-weight:600; font-size:13px; color:#64748b;">&mdash; ' . $quoteAuthor . '</cite>' : '') . '</blockquote>';
+            }
+            if ($linkText !== '') $body .= '<a class="cc-case-link" href="' . htmlspecialchars(cc_block_url($c['linkUrl'] ?? '')) . '" style="margin-top:auto; color:' . $accent . '; font-weight:700; text-decoration:none;">' . $linkText . ' &rarr;</a>';
+            return $customCss . '<style>@media(max-width:768px){#' . $innerId . ' .cc-case-card{flex-direction:column !important}#' . $innerId . ' .cc-case-media{flex:0 0 220px !important}}</style>'
+                . '<article id="' . $innerId . '" class="cc-case' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-case-card" style="display:flex; flex-direction:' . ($vertical ? 'column' : 'row') . '; background:#fff; border:1px solid #e2e8f0; border-radius:16px; overflow:hidden; box-shadow:0 4px 18px rgba(15,23,42,0.06);">'
+                . ($img !== '' ? '<div class="cc-case-media" style="flex:' . ($vertical ? '0 0 240px' : '0 0 42%') . '; position:relative; min-height:220px; background:#e2e8f0;"><img src="' . htmlspecialchars($img) . '" alt="' . cc_esc($c['alt'] ?? '') . '" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"></div>' : '')
+                . '<div class="cc-case-body" style="flex:1; min-width:0; padding:32px; display:flex; flex-direction:column; gap:14px;">' . $body . '</div>'
+                . '</div>' . "\n</article>\n";
+        }
+
+        case 'AUTHOR_BIO': {
+            $c = $block['content'] ?? [];
+            $centered = ($c['layout'] ?? '') === 'centered';
+            $boxed = ($c['boxed'] ?? true) !== false;
+            $name = cc_esc($c['name'] ?? '');
+            $role = cc_esc($c['role'] ?? '');
+            $label = cc_esc($c['label'] ?? '');
+            $bio = cc_br(cc_str($c['bio'] ?? ''));
+            $photo = cc_img_url(cc_str($c['photo'] ?? ''));
+            $pstyle = 'width:88px; height:88px; border-radius:50%; flex-shrink:0; ';
+            $media = $photo !== ''
+                ? '<img class="cc-author-photo" src="' . htmlspecialchars($photo) . '" alt="' . $name . '" loading="lazy" style="' . $pstyle . 'object-fit:cover; display:block;">'
+                : '<div class="cc-author-initials" aria-hidden="true" style="' . $pstyle . 'background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:700; text-transform:uppercase;">' . htmlspecialchars(cc_initials(cc_str($c['name'] ?? ''))) . '</div>';
+            $links = '';
+            foreach ((isset($c['links']) && is_array($c['links'])) ? $c['links'] : [] as $l) {
+                if (!is_array($l)) continue;
+                $raw = trim(cc_str($l['url'] ?? ''));
+                $text = cc_esc($l['label'] ?? '');
+                if ($raw === '' || $text === '') continue;
+                $href = preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $raw) ? 'mailto:' . $raw : cc_ext_url($raw);
+                $links .= '<a href="' . htmlspecialchars($href) . '" class="cc-author-link" rel="noopener" style="color:var(--brand-color, #3b82f6); font-weight:600; text-decoration:none;">' . $text . '</a>';
+            }
+            return $customCss . '<style>@media(max-width:600px){#' . $innerId . ' .cc-author-card{flex-direction:column !important;align-items:center !important;text-align:center}#' . $innerId . ' .cc-author-links{justify-content:center !important}}</style>'
+                . '<aside id="' . $innerId . '" class="cc-author' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-author-card" style="display:flex; flex-direction:' . ($centered ? 'column' : 'row') . '; align-items:' . ($centered ? 'center' : 'flex-start') . '; gap:20px; ' . ($centered ? 'text-align:center; ' : '') . ($boxed ? 'background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:24px; ' : '') . '">'
+                . $media . '<div class="cc-author-body" style="min-width:0;">'
+                . ($label !== '' ? '<div class="cc-author-label" style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--brand-color, #3b82f6);">' . $label . '</div>' : '')
+                . '<div class="cc-author-name" style="font-size:20px; font-weight:700; color:#0f172a; margin-top:4px;">' . $name . '</div>'
+                . ($role !== '' ? '<div class="cc-author-role" style="font-size:14px; color:#64748b;">' . $role . '</div>' : '')
+                . ($bio !== '' ? '<p class="cc-author-bio" style="margin:10px 0 0 0; font-size:15px; line-height:1.6; color:#334155;">' . $bio . '</p>' : '')
+                . ($links !== '' ? '<div class="cc-author-links" style="display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:14px; justify-content:' . ($centered ? 'center' : 'flex-start') . ';">' . $links . '</div>' : '')
+                . '</div></div>' . "\n</aside>\n";
+        }
+
+        case 'REVIEW_SUMMARY': {
+            $c = $block['content'] ?? [];
+            $color = cc_color($c['color'] ?? '', '#f59e0b');
+            $stacked = ($c['layout'] ?? '') === 'stacked';
+            $avg = cc_num($c['average'] ?? null, 0, 5, 0);
+            $avgTxt = cc_fmt_num($avg, 1);
+            $total = cc_num($c['total'] ?? null, 0, 1e9, 0);
+            $title = cc_esc($c['title'] ?? '');
+            $totalLabel = cc_esc($c['totalLabel'] ?? '');
+            $source = cc_esc($c['source'] ?? '');
+            $linkText = cc_esc($c['linkText'] ?? '');
+            $mode = in_array($c['rowValue'] ?? '', ['percent', 'count', 'none'], true) ? $c['rowValue'] : 'percent';
+            $rows = array_values(array_filter((isset($c['distribution']) && is_array($c['distribution'])) ? $c['distribution'] : [], 'is_array'));
+            $counts = array_map(function ($r) { return cc_num($r['count'] ?? null, 0, 1e9, 0); }, $rows);
+            $sum = array_sum($counts);
+            $dist = '';
+            foreach ($rows as $i => $r) {
+                $pct = $sum > 0 ? $counts[$i] / $sum * 100 : 0;
+                $value = $mode === 'percent' ? cc_fmt_num($pct, 0) . '%' : ($mode === 'count' ? cc_fmt_num($counts[$i], 0) : '');
+                $dist .= '<li class="cc-rs-row" style="display:flex; align-items:center; gap:10px; font-size:14px;">'
+                    . '<span class="cc-rs-row-label" style="width:34px; flex-shrink:0; color:#475569;">' . cc_int($r['stars'] ?? null, 5, 1, 5) . ' &#9733;</span>'
+                    . '<span class="cc-rs-bar" style="flex:1; height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden;"><span class="cc-rs-bar-fill" style="display:block; height:100%; width:' . cc_fmt_num($pct, 1) . '%; background:' . $color . '; border-radius:999px;"></span></span>'
+                    . ($value !== '' ? '<span class="cc-rs-row-value" style="width:48px; text-align:right; flex-shrink:0; color:#64748b;">' . $value . '</span>' : '')
+                    . '</li>';
+            }
+            $showDist = ($c['showDistribution'] ?? true) !== false && $dist !== '';
+            return $customCss . '<style>@media(max-width:640px){#' . $innerId . ' .cc-rs-card{flex-direction:column !important;align-items:stretch !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-review-summary' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-rs-card" style="display:flex; flex-direction:' . ($stacked ? 'column' : 'row') . '; gap:32px; align-items:' . ($stacked ? 'stretch' : 'center') . '; background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:28px;">'
+                . '<div class="cc-rs-score" style="flex:0 0 auto; text-align:center;">'
+                . ($title !== '' ? '<div class="cc-rs-title" style="font-size:14px; font-weight:700; color:#475569; margin-bottom:8px;">' . $title . '</div>' : '')
+                . '<div class="cc-rs-average" style="font-size:52px; font-weight:800; line-height:1; color:#0f172a;">' . $avgTxt . '</div>'
+                . '<div class="cc-rs-stars" role="img" aria-label="' . $avgTxt . ' out of 5 stars" style="position:relative; display:inline-block; margin-top:8px; font-size:26px; line-height:1; letter-spacing:2px; color:#e2e8f0;">&#9733;&#9733;&#9733;&#9733;&#9733;'
+                . '<span class="cc-rs-stars-fill" aria-hidden="true" style="position:absolute; top:0; left:0; bottom:0; width:' . cc_fmt_num($avg / 5 * 100, 1) . '%; overflow:hidden; white-space:nowrap; color:' . $color . ';">&#9733;&#9733;&#9733;&#9733;&#9733;</span></div>'
+                . '<div class="cc-rs-total" style="margin-top:8px; font-size:14px; color:#64748b;">' . cc_fmt_num($total, 0) . ($totalLabel !== '' ? ' ' . $totalLabel : '') . '</div>'
+                . ($source !== '' ? '<div class="cc-rs-source" style="margin-top:4px; font-size:12px; color:#94a3b8;">' . $source . '</div>' : '')
+                . ($linkText !== '' ? '<a class="cc-rs-link" href="' . htmlspecialchars(cc_block_url(cc_str($c['linkUrl'] ?? ''))) . '" style="display:inline-block; margin-top:12px; font-size:14px; font-weight:700; color:var(--brand-color, #3b82f6); text-decoration:none;">' . $linkText . ' &rarr;</a>' : '')
+                . '</div>'
+                . ($showDist ? '<ul class="cc-rs-dist" style="flex:1; min-width:0; list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;">' . $dist . '</ul>' : '')
+                . '</div>' . "\n</div>\n";
+        }
+
+        case 'TESTIMONIAL_WALL': {
+            $c = $block['content'] ?? [];
+            $items = array_values(array_filter((isset($c['items']) && is_array($c['items'])) ? $c['items'] : [], 'is_array'));
+            $cols = cc_int($c['columns'] ?? null, 3, 1, 4);
+            $gap = cc_int($c['gap'] ?? null, 20, 0, 48);
+            $card = ($c['cardStyle'] ?? '') !== 'minimal';
+            $showRatings = ($c['showRatings'] ?? true) !== false;
+            $starColor = cc_color($c['starColor'] ?? '', '#f59e0b');
+            $cards = '';
+            foreach ($items as $it) {
+                $name = cc_esc($it['name'] ?? '');
+                $role = cc_esc($it['role'] ?? '');
+                $quote = cc_br(cc_str($it['quote'] ?? ''));
+                $avatar = cc_img_url(cc_str($it['avatar'] ?? ''));
+                $rating = cc_int($it['rating'] ?? null, 0, 0, 5);
+                $astyle = 'width:40px; height:40px; border-radius:50%; flex-shrink:0; ';
+                $media = $avatar !== ''
+                    ? '<img class="cc-tw-avatar" src="' . htmlspecialchars($avatar) . '" alt="" loading="lazy" style="' . $astyle . 'object-fit:cover; display:block;">'
+                    : '<span class="cc-tw-initials" aria-hidden="true" style="' . $astyle . 'background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; text-transform:uppercase;">' . htmlspecialchars(cc_initials(cc_str($it['name'] ?? ''))) . '</span>';
+                $cards .= '<figure class="cc-tw-card" style="break-inside:avoid; display:inline-block; width:100%; box-sizing:border-box; margin:0 0 ' . $gap . 'px 0; ' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:22px; box-shadow:0 2px 8px rgba(15,23,42,0.04);' : 'padding:8px 0;') . '">'
+                    . ($showRatings && $rating > 0 ? '<div class="cc-tw-rating" role="img" aria-label="' . $rating . ' out of 5 stars" style="color:' . $starColor . '; font-size:16px; letter-spacing:2px; margin-bottom:10px;">' . str_repeat('&#9733;', $rating) . ($rating < 5 ? '<span style="color:#e2e8f0;">' . str_repeat('&#9733;', 5 - $rating) . '</span>' : '') . '</div>' : '')
+                    . '<blockquote class="cc-tw-quote" style="margin:0; font-size:15px; line-height:1.6; color:#334155;">' . $quote . '</blockquote>'
+                    . '<figcaption class="cc-tw-author" style="display:flex; align-items:center; gap:10px; margin-top:16px;">' . $media . '<span style="min-width:0;">'
+                    . '<span class="cc-tw-name" style="display:block; font-weight:700; font-size:14px; color:#0f172a;">' . $name . '</span>'
+                    . ($role !== '' ? '<span class="cc-tw-role" style="display:block; font-size:13px; color:#64748b;">' . $role . '</span>' : '')
+                    . '</span></figcaption></figure>';
+            }
+            return $customCss . '<style>@media(max-width:768px){#' . $innerId . ' .cc-tw-grid{column-count:' . min($cols, 2) . ' !important}}@media(max-width:480px){#' . $innerId . ' .cc-tw-grid{column-count:1 !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-testimonial-wall' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-tw-grid" style="column-count:' . $cols . '; column-gap:' . $gap . 'px;">' . $cards . '</div>' . "\n</div>\n";
+        }
+
+        case 'HOVER_GRID': {
+            $c = $block['content'] ?? [];
+            $items = array_values(array_filter((isset($c['items']) && is_array($c['items'])) ? $c['items'] : [], 'is_array'));
+            $cols = cc_int($c['columns'] ?? null, 3, 1, 4);
+            $gap = cc_int($c['gap'] ?? null, 16, 0, 48);
+            $radius = cc_int($c['radius'] ?? null, 12, 0, 40);
+            $ar = in_array($c['aspectRatio'] ?? '', ['1 / 1', '4 / 3', '3 / 2', '16 / 9', '3 / 4'], true) ? $c['aspectRatio'] : '4 / 3';
+            $effect = ($c['effect'] ?? '') === 'fade' ? 'fade' : 'slide';
+            $overlay = cc_color($c['overlay'] ?? '', 'rgba(15,23,42,0.72)');
+            $cells = '';
+            foreach ($items as $it) {
+                $img = cc_img_url(cc_str($it['image'] ?? ''));
+                $href = trim(cc_str($it['href'] ?? ''));
+                $tag = $href !== '' ? 'a' : 'div';
+                $title = cc_esc($it['title'] ?? '');
+                $text = cc_esc($it['text'] ?? '');
+                $cells .= '<' . $tag . ' class="cc-hg-item"' . ($href !== '' ? ' href="' . htmlspecialchars(cc_block_url($href)) . '"' : '') . ' style="position:relative; display:block; overflow:hidden; border-radius:' . $radius . 'px; aspect-ratio:' . $ar . '; background:#e2e8f0; color:#fff; text-decoration:none;">'
+                    . ($img !== '' ? '<img class="cc-hg-img" src="' . htmlspecialchars($img) . '" alt="' . cc_esc($it['alt'] ?? '') . '" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">' : '')
+                    . '<div class="cc-hg-reveal" style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-end; padding:20px; background:' . $overlay . ';">'
+                    . ($title !== '' ? '<h3 class="cc-hg-title" style="margin:0; font-size:18px; line-height:1.3; color:#fff;">' . $title . '</h3>' : '')
+                    . ($text !== '' ? '<p class="cc-hg-text" style="margin:6px 0 0 0; font-size:14px; line-height:1.5; color:rgba(255,255,255,0.88);">' . $text . '</p>' : '')
+                    . '</div></' . $tag . '>';
+            }
+            $id = '#' . $innerId;
+            return $customCss . '<style>' . $id . ' .cc-hg-reveal{transition:opacity .3s ease, transform .3s ease}' . $id . '.cc-hg-fade .cc-hg-reveal{opacity:0}' . $id . '.cc-hg-slide .cc-hg-reveal{opacity:0;transform:translateY(16px)}'
+                . $id . ' .cc-hg-item:hover .cc-hg-reveal,' . $id . ' .cc-hg-item:focus-within .cc-hg-reveal,' . $id . ' .cc-hg-item:focus .cc-hg-reveal{opacity:1;transform:none}'
+                . $id . ' .cc-hg-img{transition:transform .5s ease}' . $id . ' .cc-hg-item:hover .cc-hg-img{transform:scale(1.05)}'
+                . '@media(hover:none){' . $id . ' .cc-hg-reveal{opacity:1 !important;transform:none !important}}'
+                . '@media(prefers-reduced-motion:reduce){' . $id . ' .cc-hg-reveal,' . $id . ' .cc-hg-img{transition:none !important}' . $id . ' .cc-hg-item:hover .cc-hg-img{transform:none}}'
+                . '@media(max-width:768px){' . $id . ' .cc-hg-grid{grid-template-columns:repeat(' . min($cols, 2) . ', 1fr) !important}}@media(max-width:480px){' . $id . ' .cc-hg-grid{grid-template-columns:1fr !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-hover-grid cc-hg-' . $effect . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-hg-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:' . $gap . 'px;">' . $cells . '</div>' . "\n</div>\n";
+        }
+
+        case 'SCROLLYTELLING': {
+            $c = $block['content'] ?? [];
+            $steps = array_slice(array_values(array_filter((isset($c['steps']) && is_array($c['steps'])) ? $c['steps'] : [], 'is_array')), 0, 12);
+            $right = ($c['side'] ?? '') === 'right';
+            $ratio = in_array($c['ratio'] ?? '', ['4 / 3', '1 / 1', '3 / 4', '16 / 9', '3 / 2'], true) ? $c['ratio'] : '4 / 3';
+            $top = cc_int($c['stickyTop'] ?? null, 80, 0, 300);
+            $stepH = cc_int($c['stepHeight'] ?? null, 70, 40, 120);
+            $gap = cc_int($c['gap'] ?? null, 48, 0, 120);
+            $imgs = ''; $items = ''; $rules = '';
+            foreach ($steps as $i => $st) {
+                $img = cc_img_url(cc_str($st['image'] ?? ''));
+                $title = cc_esc($st['title'] ?? '');
+                $text = cc_br(cc_str($st['text'] ?? ''));
+                $imgs .= $img !== ''
+                    ? '<img class="cc-story-img" data-i="' . $i . '" src="' . htmlspecialchars($img) . '" alt="' . cc_esc($st['alt'] ?? '') . '" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">'
+                    : '<div class="cc-story-img cc-story-ph" data-i="' . $i . '" aria-hidden="true" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:56px; font-weight:800; color:#94a3b8;">' . ($i + 1) . '</div>';
+                $items .= '<li class="cc-story-step" data-i="' . $i . '" style="min-height:' . $stepH . 'vh; display:flex; flex-direction:column; justify-content:center; padding:24px 0;">'
+                    . ($title !== '' ? '<h3 class="cc-story-title" style="margin:0 0 10px 0; font-size:26px; line-height:1.25;">' . $title . '</h3>' : '')
+                    . ($text !== '' ? '<p class="cc-story-text" style="margin:0; font-size:16px; line-height:1.7; color:#475569;">' . $text . '</p>' : '')
+                    . '</li>';
+                $rules .= '#' . $innerId . '[data-active="' . $i . '"] .cc-story-img[data-i="' . $i . '"]{opacity:1}#' . $innerId . '.cc-story-on[data-active="' . $i . '"] .cc-story-step[data-i="' . $i . '"]{opacity:1}';
+            }
+            $id = '#' . $innerId;
+            return $customCss . '<style>' . $id . ' .cc-story-img{opacity:0;transition:opacity .5s ease}' . $id . '.cc-story-on .cc-story-step{opacity:.35;transition:opacity .4s ease}' . $rules
+                . '@media(max-width:768px){' . $id . ' .cc-story-grid{grid-template-columns:1fr !important;gap:16px !important}' . $id . ' .cc-story-media{order:0 !important;top:0 !important;z-index:2}' . $id . ' .cc-story-frame{aspect-ratio:16 / 9 !important;max-height:36vh}' . $id . ' .cc-story-step{min-height:55vh !important}}'
+                . '@media(prefers-reduced-motion:reduce){' . $id . ' .cc-story-img,' . $id . '.cc-story-on .cc-story-step{transition:none !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-story cc-story-' . ($right ? 'right' : 'left') . $animClass . $innerClass . '" data-active="0" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-story-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:' . $gap . 'px; align-items:start;">'
+                . '<div class="cc-story-media" style="position:sticky; top:' . $top . 'px; align-self:start;' . ($right ? ' order:2;' : '') . '"><div class="cc-story-frame" style="position:relative; aspect-ratio:' . $ratio . '; border-radius:16px; overflow:hidden; background:#e2e8f0;">' . $imgs . '</div></div>'
+                . '<ol class="cc-story-steps" style="list-style:none; margin:0; padding:0;">' . $items . '</ol>'
+                . '</div>' . "\n</div>\n"
+                . ($steps ? '<script>' . str_replace('%ID%', $innerId, CC_STORY_SCRIPT) . "</script>\n" : '');
+        }
+
+        case 'HOTSPOTS': {
+            $c = $block['content'] ?? [];
+            $pins = array_slice(array_values(array_filter((isset($c['pins']) && is_array($c['pins'])) ? $c['pins'] : [], 'is_array')), 0, 20);
+            $img = cc_img_url(cc_str($c['image'] ?? ''));
+            $ratio = in_array($c['ratio'] ?? '', ['16 / 9', '4 / 3', '3 / 2', '1 / 1', '21 / 9'], true) ? $c['ratio'] : '16 / 9';
+            $color = cc_color($c['pinColor'] ?? '', '#3b82f6');
+            $textColor = cc_color($c['pinTextColor'] ?? '', '#ffffff');
+            $radius = cc_int($c['radius'] ?? null, 12, 0, 40);
+            $pulse = ($c['pulse'] ?? true) !== false;
+            $cells = '';
+            foreach ($pins as $i => $p) {
+                $x = cc_num($p['x'] ?? null, 0, 100, 50);
+                $y = cc_num($p['y'] ?? null, 0, 100, 50);
+                $v = $y > 55 ? 'above' : 'below';
+                $h = $x < 25 ? 'left' : ($x > 75 ? 'right' : 'center');
+                $title = cc_esc($p['title'] ?? '');
+                $text = cc_br(cc_str($p['text'] ?? ''));
+                $linkText = cc_esc($p['linkText'] ?? '');
+                $cells .= '<div class="cc-hs-pin cc-hs-' . $v . ' cc-hs-' . $h . '" style="position:absolute; left:' . cc_fmt_num($x, 1) . '%; top:' . cc_fmt_num($y, 1) . '%; transform:translate(-50%, -50%);">'
+                    . '<button type="button" class="cc-hs-btn" aria-describedby="' . $innerId . '-p' . $i . '" aria-label="' . ($title !== '' ? $title : 'Hotspot ' . ($i + 1)) . '" style="position:relative; width:30px; height:30px; padding:0; border-radius:50%; border:2px solid #fff; background:' . $color . '; color:' . $textColor . '; font:700 13px/1 inherit; cursor:pointer; box-shadow:0 2px 8px rgba(15,23,42,0.35);">'
+                    . ($pulse ? '<span class="cc-hs-ring" aria-hidden="true" style="position:absolute; inset:-2px; border-radius:50%; background:' . $color . '; pointer-events:none;"></span>' : '')
+                    . '<span class="cc-hs-num" style="position:relative;">' . ($i + 1) . '</span></button>'
+                    . '<div class="cc-hs-pop" id="' . $innerId . '-p' . $i . '" role="tooltip" style="position:absolute; width:240px; max-width:70vw; padding:14px 16px; background:#fff; color:#0f172a; border-radius:10px; box-shadow:0 12px 32px rgba(15,23,42,0.22); font-size:14px; line-height:1.5; text-align:left;">'
+                    . ($title !== '' ? '<strong class="cc-hs-title" style="display:block; margin-bottom:4px;">' . $title . '</strong>' : '')
+                    . ($text !== '' ? '<span class="cc-hs-text" style="display:block; color:#475569;">' . $text . '</span>' : '')
+                    . ($linkText !== '' ? '<a class="cc-hs-link" href="' . htmlspecialchars(cc_block_url(cc_str($p['href'] ?? ''))) . '" style="display:inline-block; margin-top:8px; font-weight:700; color:var(--brand-color, #3b82f6); text-decoration:none;">' . $linkText . ' &rarr;</a>' : '')
+                    . '</div></div>';
+            }
+            $id = '#' . $innerId;
+            return $customCss . '<style>' . $id . ' .cc-hs-pop{opacity:0;visibility:hidden;transition:opacity .15s ease}' . $id . ' .cc-hs-pin:hover,' . $id . ' .cc-hs-pin:focus-within,' . $id . ' .cc-hs-pin.is-open{z-index:3}'
+                . $id . ' .cc-hs-pin:hover .cc-hs-pop,' . $id . ' .cc-hs-pin:focus-within .cc-hs-pop,' . $id . ' .cc-hs-pin.is-open .cc-hs-pop{opacity:1;visibility:visible}'
+                . $id . ' .cc-hs-below .cc-hs-pop{top:calc(100% + 10px)}' . $id . ' .cc-hs-above .cc-hs-pop{bottom:calc(100% + 10px)}'
+                . $id . ' .cc-hs-center .cc-hs-pop{left:50%;transform:translateX(-50%)}' . $id . ' .cc-hs-left .cc-hs-pop{left:0}' . $id . ' .cc-hs-right .cc-hs-pop{right:0}'
+                . '@keyframes ccHsRing_' . $innerId . '{0%{transform:scale(1);opacity:.5}100%{transform:scale(2.3);opacity:0}}' . $id . ' .cc-hs-ring{animation:ccHsRing_' . $innerId . ' 2s ease-out infinite}'
+                . '@media(prefers-reduced-motion:reduce){' . $id . ' .cc-hs-ring{animation:none;display:none}' . $id . ' .cc-hs-pop{transition:none}}</style>'
+                . '<div id="' . $innerId . '" class="cc-hotspots' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-hs-stage" style="position:relative;">'
+                . ($img !== ''
+                    ? '<img class="cc-hs-img" src="' . htmlspecialchars($img) . '" alt="' . cc_esc($c['alt'] ?? '') . '" loading="lazy" style="display:block; width:100%; height:auto; border-radius:' . $radius . 'px;">'
+                    : '<div class="cc-hs-img cc-hs-ph" aria-hidden="true" style="aspect-ratio:' . $ratio . '; background:#e2e8f0; border-radius:' . $radius . 'px;"></div>')
+                . $cells . '</div>' . "\n</div>\n"
+                . ($pins ? '<script>' . str_replace('%ID%', $innerId, CC_HOTSPOTS_SCRIPT) . "</script>\n" : '');
+        }
+
+        case 'TABLE_OF_CONTENTS': {
+            $c = $block['content'] ?? [];
+            $title = cc_esc($c['title'] ?? '');
+            $levels = ($c['levels'] ?? '') === 'h2h3' ? 'h2h3' : 'h2';
+            $sticky = ($c['sticky'] ?? false) === true;
+            $top = cc_int($c['stickyTop'] ?? null, 90, 0, 300);
+            $offset = cc_int($c['offset'] ?? null, 80, 0, 300);
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $id = '#' . $innerId;
+            return $customCss . '<style>' . $id . ' a{color:inherit;text-decoration:none}' . $id . ' a:hover{color:' . $accent . '}' . $id . ' .cc-toc-item{margin:0;padding:4px 0}' . $id . ' .cc-toc-l3{padding-left:16px;font-size:.93em;opacity:.9}' . $id . ' .is-active>a{color:' . $accent . ';font-weight:700}' . $id . ' .cc-toc-num{opacity:.7}</style>'
+                . '<nav id="' . $innerId . '" class="cc-toc cc-toc-' . ($card ? 'card' : 'plain') . $animClass . $innerClass . '" hidden data-levels="' . $levels . '" data-numbered="' . (($c['numbered'] ?? false) === true ? '1' : '0') . '" data-highlight="' . (($c['highlight'] ?? true) !== false ? '1' : '0') . '" data-offset="' . $offset . '" aria-label="' . ($title !== '' ? $title : 'Table of contents') . '" style="' . $styleAttr . ($sticky ? ' position:sticky; top:' . $top . 'px;' : '') . '">' . "\n"
+                . '<div class="cc-toc-box" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:20px 22px;' : 'padding:0;') . '">'
+                . ($title !== '' ? '<div class="cc-toc-title" style="font-weight:700; font-size:15px; margin-bottom:10px; color:#0f172a;">' . $title . '</div>' : '')
+                . '<ol class="cc-toc-list" style="list-style:none; margin:0; padding:0; font-size:14px; line-height:1.4; color:#475569;"></ol>'
+                . '<p class="cc-toc-empty" hidden style="margin:0; font-size:13px; color:#94a3b8;">The headings of this page appear here.</p>'
+                . '</div>' . "\n</nav>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_TOC_SCRIPT) . "</script>\n";
+        }
+
+        case 'SHARE_BAR': {
+            $c = $block['content'] ?? [];
+            $title = cc_esc($c['title'] ?? '');
+            $chosen = array_values(array_filter((isset($c['networks']) && is_array($c['networks'])) ? $c['networks'] : [], 'is_string'));
+            $icons = ($c['style'] ?? '') === 'icons';
+            $shape = $c['shape'] ?? '';
+            $radius = $shape === 'square' ? '0' : ($shape === 'rounded' ? '8px' : '999px');
+            $colors = in_array($c['colors'] ?? '', ['mono', 'dark'], true) ? $c['colors'] : 'brand';
+            $size = cc_int($c['size'] ?? null, 40, 28, 64);
+            $al = $c['align'] ?? '';
+            $align = $al === 'center' ? 'center' : ($al === 'right' ? 'flex-end' : 'flex-start');
+            $textAlign = $al === 'center' ? 'center' : ($al === 'right' ? 'right' : 'left');
+            $btns = '';
+            foreach (cc_share_nets() as $row) {
+                list($net, $label, $glyph, $brand) = $row;
+                if (!in_array($net, $chosen, true)) continue;
+                $link = in_array($net, ['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email'], true);
+                $paint = $colors === 'brand' ? 'background:' . $brand . '; color:#ffffff; border:1px solid ' . $brand . ';' : ($colors === 'dark' ? 'background:#0f172a; color:#ffffff; border:1px solid #0f172a;' : 'background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;');
+                $inner = (strpos($glyph, '<svg') === 0 ? $glyph : '<span class="cc-share-badge" aria-hidden="true" style="font-weight:800; font-size:14px; line-height:1;">' . $glyph . '</span>')
+                    . ($icons ? '' : '<span class="cc-share-label">' . $label . '</span>');
+                $aria = $link && $net !== 'email' ? 'Share on ' . $label : ($net === 'email' ? 'Share by email' : $label);
+                $st = 'display:inline-flex; align-items:center; justify-content:center; gap:8px; height:' . $size . 'px; min-width:' . $size . 'px; padding:0 ' . ($icons ? 0 : 16) . 'px; box-sizing:border-box; border-radius:' . $radius . '; font:600 14px/1 inherit; text-decoration:none; cursor:pointer; ' . $paint;
+                $btns .= $link
+                    ? '<a class="cc-share-btn cc-share-' . $net . '" data-net="' . $net . '" href="#" target="_blank" rel="noopener noreferrer" aria-label="' . $aria . '" style="' . $st . '">' . $inner . '</a>'
+                    : '<button type="button" class="cc-share-btn cc-share-' . $net . '" data-act="' . $net . '" aria-label="' . $aria . '" style="' . $st . '">' . $inner . '</button>';
+            }
+            return $customCss . '<style>#' . $innerId . '[hidden],#' . $innerId . ' [hidden]{display:none !important}#' . $innerId . ' .cc-share-btn:hover{filter:brightness(.92)}#' . $innerId . ' .cc-share-btn:focus-visible{outline:2px solid var(--brand-color, #3b82f6);outline-offset:2px}</style>'
+                . '<div id="' . $innerId . '" class="cc-share' . $animClass . $innerClass . '" hidden data-msg="' . cc_esc($c['message'] ?? '') . '" style="' . $styleAttr . '">' . "\n"
+                . ($title !== '' ? '<div class="cc-share-title" style="font-weight:700; font-size:15px; color:#0f172a; margin-bottom:10px; text-align:' . $textAlign . ';">' . $title . '</div>' : '')
+                . '<div class="cc-share-list" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:' . $align . ';">' . $btns . '</div>' . "\n</div>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_SHARE_SCRIPT) . "</script>\n";
+        }
+
+        case 'CODE_SNIPPET': {
+            $c = $block['content'] ?? [];
+            $langRow = null;
+            foreach (CC_CODE_LANGS as $l) { if ($l[0] === ($c['language'] ?? '')) { $langRow = $l; break; } }
+            if (!$langRow) $langRow = CC_CODE_LANGS[count(CC_CODE_LANGS) - 1];
+            $lang = $langRow[0];
+            $code = mb_substr(rtrim(preg_replace('/\r\n?/', "\n", cc_str($c['code'] ?? '')), "\n"), 0, 50000);
+            $filename = cc_esc($c['filename'] ?? '');
+            $dark = ($c['theme'] ?? '') !== 'light';
+            $fs = cc_int($c['fontSize'] ?? null, 14, 11, 20);
+            $maxH = cc_int($c['maxHeight'] ?? null, 0, 0, 1200);
+            $copy = ($c['copyButton'] ?? true) !== false;
+            $lineNums = ($c['lineNumbers'] ?? false) === true;
+            $pal = $dark ? ['#0f172a', '#e2e8f0', '#1e293b', '#111c33', '#94a3b8'] : ['#f8fafc', '#0f172a', '#e2e8f0', '#f1f5f9', '#64748b'];
+            $tk = $dark
+                ? ['c' => '#7c8aa5', 's' => '#86efac', 'k' => '#c4b5fd', 'n' => '#fdba74', 'f' => '#7dd3fc', 'v' => '#fca5a5', 't' => '#f472b6', 'a' => '#fcd34d']
+                : ['c' => '#64748b', 's' => '#15803d', 'k' => '#7c3aed', 'n' => '#c2410c', 'f' => '#0369a1', 'v' => '#b91c1c', 't' => '#be185d', 'a' => '#b45309'];
+            $tokCss = '';
+            foreach ($tk as $k => $col) $tokCss .= '#' . $innerId . ' .cc-tk-' . $k . '{color:' . $col . ($k === 'c' ? ';font-style:italic' : '') . '}';
+            $showBar = $filename !== '' || $langRow[1] !== '' || $copy;
+            $lines = substr_count($code, "\n") + 1;
+            $gutter = '';
+            if ($lineNums) { $nums = []; for ($i = 1; $i <= $lines; $i++) $nums[] = $i; $gutter = implode("\n", $nums); }
+            return $customCss . '<style>' . $tokCss . '#' . $innerId . ' .cc-code-copy:hover{filter:brightness(1.2)}</style>'
+                . '<figure id="' . $innerId . '" class="cc-code cc-code-' . ($dark ? 'dark' : 'light') . $animClass . $innerClass . '" data-lang="' . $lang . '" style="' . $styleAttr . ' margin:0; border-radius:12px; overflow:hidden; background:' . $pal[0] . '; color:' . $pal[1] . '; border:1px solid ' . $pal[2] . ';">' . "\n"
+                . ($showBar ? '<div class="cc-code-bar" style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:' . $pal[3] . '; border-bottom:1px solid ' . $pal[2] . '; font:600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:' . $pal[4] . ';">'
+                    . '<span class="cc-code-file" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' . ($filename !== '' ? $filename : $langRow[1]) . '</span>'
+                    . ($filename !== '' && $langRow[1] !== '' ? '<span class="cc-code-lang">' . $langRow[1] . '</span>' : '')
+                    . ($copy ? '<button type="button" class="cc-code-copy" hidden aria-label="Copy the code" style="padding:5px 10px; border-radius:6px; border:1px solid ' . $pal[2] . '; background:transparent; color:inherit; font:600 12px/1 inherit; cursor:pointer;">Copy</button>' : '')
+                    . '</div>' : '')
+                . '<div class="cc-code-scroll" style="overflow:auto;' . ($maxH > 0 ? ' max-height:' . $maxH . 'px;' : '') . '">'
+                . '<div class="cc-code-wrap" style="display:flex; min-width:max-content; font:' . $fs . 'px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">'
+                . ($lineNums ? '<span class="cc-code-gutter" aria-hidden="true" style="flex:0 0 auto; padding:16px 12px 16px 16px; text-align:right; white-space:pre; user-select:none; color:' . $pal[4] . ';">' . $gutter . '</span>' : '')
+                . '<pre class="cc-code-pre" style="flex:1; margin:0; padding:16px; white-space:pre; tab-size:2; font:inherit;"><code class="cc-code-code" style="font:inherit;">' . htmlspecialchars($code) . '</code></pre>'
+                . '</div></div>' . "\n</figure>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_CODE_SCRIPT) . "</script>\n";
+        }
+
+        case 'PRICE_CALCULATOR': {
+            $c = $block['content'] ?? [];
+            $objs = function ($v) { return array_values(array_filter(is_array($v) ? $v : [], 'is_array')); };
+            $sliders = array_slice($objs($c['sliders'] ?? []), 0, 6);
+            $addons = array_slice($objs($c['addons'] ?? []), 0, 8);
+            $cur = mb_substr(trim(cc_str($c['currency'] ?? '')), 0, 6);
+            $after = ($c['currencyPos'] ?? '') === 'after';
+            $eu = ($c['numberFormat'] ?? '') === 'eu';
+            $dec = cc_int($c['decimals'] ?? null, 0, 0, 2);
+            $base = cc_num($c['basePrice'] ?? null, 0, 1e7, 0);
+            $disc = cc_num($c['yearlyDiscount'] ?? null, 0, 90, 0);
+            $toggle = ($c['billingToggle'] ?? false) === true;
+            $yearly = $toggle && ($c['defaultBilling'] ?? '') === 'yearly';
+            $f = $yearly ? 12 * (1 - $disc / 100) : 1;
+            $word = function ($v, $d) { $t = trim(cc_str($v)); if ($t === '') $t = $d; return htmlspecialchars(mb_substr($t, 0, 30)); };
+            $perM = ' / ' . $word($c['periodMonth'] ?? '', 'month');
+            $perY = ' / ' . $word($c['periodYear'] ?? '', 'year');
+            $st = trim(cc_str($c['saveText'] ?? '')); if ($st === '') $st = 'You save {amount} a year';
+            $saveTpl = htmlspecialchars(mb_substr($st, 0, 80));
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $title = cc_esc($c['title'] ?? '');
+            $intro = cc_br(cc_str($c['intro'] ?? ''));
+            $curHtml = htmlspecialchars($cur);   // the symbol goes into the page as text: escaped
+            $money = function ($v) use ($dec, $eu, $curHtml, $after) { return cc_money($v, $dec, $eu, $curHtml, $after); };
+            $total = $base; $controls = ''; $lines = '';
+            $lineStyle = 'display:flex; justify-content:space-between; gap:12px; font-size:14px; color:#475569; padding:4px 0;';
+            if ($base > 0) $lines .= '<li class="cc-calc-line" data-line="base" style="' . $lineStyle . '"><span class="cc-calc-line-label">' . $word($c['baseLabel'] ?? '', 'Base price') . '</span><span class="cc-calc-line-amt">' . $money($base * $f) . '</span></li>';
+            foreach ($sliders as $i => $sl) {
+                $min = cc_num($sl['min'] ?? null, -1e9, 1e9, 0);
+                $max = cc_num($sl['max'] ?? null, -1e9, 1e9, 100);
+                if ($max <= $min) $max = $min + 1;
+                $step = cc_num($sl['step'] ?? null, 0.01, 1e6, 1);
+                $val = min($max, max($min, cc_num($sl['value'] ?? null, -1e9, 1e9, $min)));
+                $price = cc_num($sl['price'] ?? null, 0, 1e7, 0);
+                $incl = cc_num($sl['included'] ?? null, 0, 1e9, 0);
+                $unit = htmlspecialchars(mb_substr(trim(cc_str($sl['unit'] ?? '')), 0, 30));
+                $label = cc_esc($sl['label'] ?? '');
+                $cost = max(0, $val - $incl) * $price;
+                $total += $cost;
+                $sid = $innerId . '-s' . $i;
+                $controls .= '<div class="cc-calc-row" style="margin-bottom:22px;"><div class="cc-calc-head" style="display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; font-weight:600; font-size:15px; color:#0f172a;"><label for="' . $sid . '">' . $label . '</label><output class="cc-calc-val" for="' . $sid . '" data-for="' . $sid . '">' . cc_plain($val) . ($unit !== '' ? ' ' . $unit : '') . '</output></div>'
+                    . '<input type="range" class="cc-calc-range" id="' . $sid . '" min="' . cc_plain($min) . '" max="' . cc_plain($max) . '" step="' . cc_plain($step) . '" value="' . cc_plain($val) . '" data-price="' . cc_plain($price) . '" data-incl="' . cc_plain($incl) . '" data-unit="' . $unit . '" data-line="s' . $i . '" style="width:100%; accent-color:' . $accent . ';"></div>';
+                $lines .= '<li class="cc-calc-line"' . ($cost != 0 ? '' : ' hidden') . ' data-line="s' . $i . '" style="' . $lineStyle . '"><span class="cc-calc-line-label">' . $label . '</span><span class="cc-calc-line-amt">' . $money($cost * $f) . '</span></li>';
+            }
+            foreach ($addons as $i => $ad) {
+                $price = cc_num($ad['price'] ?? null, 0, 1e7, 0);
+                $on = ($ad['checked'] ?? false) === true;
+                $label = cc_esc($ad['label'] ?? '');
+                if ($on) $total += $price;
+                $controls .= '<label class="cc-calc-addon-row" style="display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:15px; color:#0f172a; cursor:pointer;"><input type="checkbox" class="cc-calc-addon" data-price="' . cc_plain($price) . '" data-line="a' . $i . '"' . ($on ? ' checked' : '') . ' style="width:18px; height:18px; accent-color:' . $accent . ';"><span class="cc-calc-addon-label" style="flex:1;">' . $label . '</span><span class="cc-calc-addon-price" style="color:#64748b; font-size:14px;">+ ' . $money($price) . $perM . '</span></label>';
+                $lines .= '<li class="cc-calc-line"' . ($on ? '' : ' hidden') . ' data-line="a' . $i . '" style="' . $lineStyle . '"><span class="cc-calc-line-label">' . $label . '</span><span class="cc-calc-line-amt">' . $money($price * $f) . '</span></li>';
+            }
+            $saved = $total * 12 - $total * $f;
+            $saveShown = $yearly && $saved > 0;
+            $btnText = cc_esc($c['buttonText'] ?? '');
+            $note = cc_br(cc_str($c['note'] ?? ''));
+            $id = '#' . $innerId;
+            $billing = $toggle
+                ? '<div class="cc-calc-billing" role="radiogroup" aria-label="Billing period" style="display:inline-flex; padding:4px; background:#f1f5f9; border-radius:999px; margin-bottom:24px;">'
+                    . '<label class="cc-calc-pill"><input type="radio" name="' . $innerId . '-billing" value="monthly"' . ($yearly ? '' : ' checked') . '><span>' . $word($c['monthlyLabel'] ?? '', 'Monthly') . '</span></label>'
+                    . '<label class="cc-calc-pill"><input type="radio" name="' . $innerId . '-billing" value="yearly"' . ($yearly ? ' checked' : '') . '><span>' . $word($c['yearlyLabel'] ?? '', 'Yearly') . ($disc > 0 ? '<em class="cc-calc-badge"> -' . cc_plain($disc) . '%</em>' : '') . '</span></label></div>'
+                : '';
+            return $customCss . '<style>' . $id . '[hidden],' . $id . ' [hidden]{display:none !important}' . $id . ' .cc-calc-pill input{position:absolute;opacity:0;pointer-events:none}' . $id . ' .cc-calc-pill span{display:inline-block;padding:8px 18px;border-radius:999px;font-weight:600;font-size:14px;color:#475569;cursor:pointer}' . $id . ' .cc-calc-pill input:checked+span{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(15,23,42,0.15)}' . $id . ' .cc-calc-pill input:focus-visible+span{outline:2px solid ' . $accent . ';outline-offset:2px}' . $id . ' .cc-calc-badge{font-style:normal;color:' . $accent . ';font-weight:700}' . $id . ' .cc-calc-btn:hover{filter:brightness(.92)}' . $id . ' input[type=range]:focus-visible,' . $id . ' .cc-calc-addon:focus-visible{outline:2px solid ' . $accent . ';outline-offset:2px}</style>'
+                . '<div id="' . $innerId . '" class="cc-calc' . $animClass . $innerClass . '" data-base="' . cc_plain($base) . '" data-disc="' . cc_plain($disc) . '" data-dec="' . $dec . '" data-fmt="' . ($eu ? 'eu' : 'en') . '" data-cur="' . htmlspecialchars($cur) . '" data-pos="' . ($after ? 'after' : 'before') . '" data-per-m="' . $perM . '" data-per-y="' . $perY . '" data-save="' . $saveTpl . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-calc-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'
+                . ($title !== '' ? '<div class="cc-calc-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">' . $title . '</div>' : '')
+                . ($intro !== '' ? '<p class="cc-calc-intro" style="margin:0 0 20px 0; font-size:15px; line-height:1.6; color:#475569;">' . $intro . '</p>' : '')
+                . $billing
+                . '<div class="cc-calc-controls">' . $controls . '</div>'
+                . '<div class="cc-calc-summary" style="border-top:1px solid #e2e8f0; padding-top:18px; margin-top:8px;">'
+                . ($lines !== '' ? '<ul class="cc-calc-lines" style="list-style:none; margin:0 0 12px 0; padding:0;">' . $lines . '</ul>' : '')
+                . '<div class="cc-calc-total-row" role="status" aria-live="polite" aria-atomic="true" style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;"><span class="cc-calc-total-label" style="font-weight:700; font-size:15px; color:#0f172a;">' . $word($c['totalLabel'] ?? '', 'Estimated total') . '</span><span><strong class="cc-calc-amount" style="font-size:40px; font-weight:800; line-height:1.1; color:#0f172a;">' . $money($total * $f) . '</strong><span class="cc-calc-per" style="font-size:15px; color:#64748b;">' . ($yearly ? $perY : $perM) . '</span></span></div>'
+                . '<div class="cc-calc-save"' . ($saveShown ? '' : ' hidden') . ' style="margin-top:6px; text-align:right; font-size:14px; font-weight:600; color:' . $accent . ';">' . ($saveShown ? str_replace('{amount}', $money($saved), $saveTpl) : '') . '</div>'
+                . ($btnText !== '' ? '<a class="cc-calc-btn" href="' . htmlspecialchars(cc_block_url(cc_str($c['buttonUrl'] ?? ''))) . '" style="display:block; margin-top:20px; padding:14px 24px; text-align:center; border-radius:10px; background:' . $accent . '; color:#ffffff; font-weight:700; text-decoration:none;">' . $btnText . '</a>' : '')
+                . ($note !== '' ? '<p class="cc-calc-note" style="margin:12px 0 0 0; font-size:13px; line-height:1.5; color:#64748b;">' . $note . '</p>' : '')
+                . '</div></div>' . "\n</div>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_CALC_SCRIPT) . "</script>\n";
+        }
+
+        case 'WIZARD': {
+            $c = $block['content'] ?? [];
+            $objs = function ($v) { return array_values(array_filter(is_array($v) ? $v : [], 'is_array')); };
+            $steps = array_slice($objs($c['steps'] ?? []), 0, 8);
+            $n = count($steps);
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $dots = ($c['progress'] ?? '') === 'steps';
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $text = function ($v, $d, $max) { $t = trim(cc_str($v)); if ($t === '') $t = $d; return htmlspecialchars(mb_substr($t, 0, $max)); };
+            $title = cc_esc($c['title'] ?? '');
+            $intro = cc_br(cc_str($c['intro'] ?? ''));
+            $stepLabel = $text($c['stepLabel'] ?? '', 'Step {n} of {total}', 60);
+            $successMsg = trim(cc_str($c['successMsg'] ?? '')); if ($successMsg === '') $successMsg = 'Thank you! We will be in touch.';
+            $raw_email = trim(cc_str($c['email'] ?? ''));
+            // Same registry as the Form block: submit_form.php accepts only these fields (in this order) and shows only this message
+            $form_id = !empty($c['customId'])
+                ? 'f_' . preg_replace('/[^a-zA-Z0-9_-]/', '', cc_str($c['customId']))
+                : 'f_' . substr(sha1('w|' . ($block['id'] ?? '') . '|' . $raw_email), 0, 16);
+            $fi = 0; $stepsHtml = ''; $dotsHtml = ''; $regLabels = [];
+            foreach ($steps as $si => $st) {
+                $fields = array_slice($objs($st['fields'] ?? []), 0, 12);
+                $stTitle = cc_esc($st['title'] ?? '');
+                $desc = cc_br(cc_str($st['description'] ?? ''));
+                $inner = '';
+                foreach ($fields as $f) {
+                    if ($fi >= 40) break;
+                    $name = 'field_' . $fi; $fid = $innerId . '-f' . $fi;
+                    $labelRaw = cc_str($f['label'] ?? '');
+                    $label = htmlspecialchars($labelRaw);
+                    $type = in_array($f['type'] ?? '', CC_WIZARD_TYPES, true) ? $f['type'] : 'text';
+                    $req = ($f['required'] ?? false) === true ? ' required' : '';
+                    $opts = array_map(function ($o) { return mb_substr($o, 0, 100); }, array_slice(cc_lines(cc_str($f['options'] ?? '')), 0, 20));
+                    $regLabels[] = mb_substr($labelRaw, 0, 200);
+                    $fi++;
+                    $inner .= '<input type="hidden" name="_label_' . $name . '" value="' . $label . '">' . "\n";
+                    if ($type === 'radio' || $type === 'checkboxes') {
+                        $radio = $type === 'radio';
+                        $inner .= '<fieldset class="cc-wz-field cc-wz-group" data-req="' . (!$radio && $req !== '' ? '1' : '0') . '" style="border:0; margin:0 0 16px 0; padding:0; min-width:0;"><legend class="cc-wz-label" style="padding:0;">' . $label . '</legend>';
+                        foreach ($opts as $o) $inner .= '<label class="cc-wz-opt" style="display:flex; align-items:center; gap:8px; margin:6px 0; font-size:15px; color:#0f172a;"><input type="' . ($radio ? 'radio' : 'checkbox') . '" name="' . $name . ($radio ? '' : '[]') . '" value="' . htmlspecialchars($o) . '"' . ($radio ? $req : '') . ' style="width:18px; height:18px; accent-color:' . $accent . ';"><span>' . htmlspecialchars($o) . '</span></label>';
+                        $inner .= '</fieldset>' . "\n";
+                    } elseif ($type === 'consent') {
+                        $inner .= '<div class="cc-wz-field"><label class="cc-wz-opt" style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#475569;"><input type="checkbox" id="' . $fid . '" name="' . $name . '" value="Yes"' . $req . ' style="width:18px; height:18px; margin-top:2px; accent-color:' . $accent . ';"><span>' . $label . '</span></label></div>' . "\n";
+                    } elseif ($type === 'select') {
+                        $inner .= '<div class="cc-wz-field"><label class="cc-wz-label" for="' . $fid . '">' . $label . '</label><select id="' . $fid . '" name="' . $name . '"' . $req . ' style="' . CC_WZ_INPUT . '"><option value="">' . $text($f['placeholder'] ?? '', 'Choose an option', 60) . '</option>';
+                        foreach ($opts as $o) $inner .= '<option value="' . htmlspecialchars($o) . '">' . htmlspecialchars($o) . '</option>';
+                        $inner .= '</select></div>' . "\n";
+                    } elseif ($type === 'textarea') {
+                        $inner .= '<div class="cc-wz-field"><label class="cc-wz-label" for="' . $fid . '">' . $label . '</label><textarea id="' . $fid . '" name="' . $name . '"' . $req . ' rows="4" style="' . CC_WZ_INPUT . '"></textarea></div>' . "\n";
+                    } else {
+                        $inner .= '<div class="cc-wz-field"><label class="cc-wz-label" for="' . $fid . '">' . $label . '</label><input type="' . $type . '" id="' . $fid . '" name="' . $name . '"' . $req . ' style="' . CC_WZ_INPUT . '"></div>' . "\n";
+                    }
+                }
+                $stepsHtml .= '<fieldset class="cc-wz-step" data-i="' . $si . '" tabindex="-1" style="border:0; margin:0; padding:0; min-width:0;"><legend class="cc-wz-step-title" style="padding:0; font-size:20px; font-weight:700; color:#0f172a; margin-bottom:4px;">' . ($stTitle !== '' ? $stTitle : 'Step ' . ($si + 1)) . '</legend>'
+                    . ($desc !== '' ? '<p class="cc-wz-step-desc" style="margin:0 0 16px 0; font-size:14px; color:#64748b;">' . $desc . '</p>' : '')
+                    . $inner . '</fieldset>' . "\n";
+                $dotsHtml .= '<li class="cc-wz-dot' . ($si === 0 ? ' is-current' : '') . '"' . ($si === 0 ? ' aria-current="step"' : '') . '><span class="cc-wz-dot-n">' . ($si + 1) . '</span><span class="cc-wz-dot-t">' . ($stTitle !== '' ? $stTitle : 'Step ' . ($si + 1)) . '</span></li>';
+            }
+            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $regLabels, 'success' => $successMsg];
+            $pct = $n > 0 ? number_format(100 / $n, 1, '.', '') : '100.0';
+            $progress = '<div class="cc-wz-progress" hidden style="margin-bottom:24px;">'
+                . ($dots ? '<ol class="cc-wz-dots" style="list-style:none; display:flex; gap:8px; margin:0 0 10px 0; padding:0;">' . $dotsHtml . '</ol>' : '<div class="cc-wz-track" style="height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden;"><div class="cc-wz-fill" style="height:100%; width:' . $pct . '%; background:' . $accent . '; border-radius:999px;"></div></div>')
+                . '<div class="cc-wz-count" aria-live="polite" style="margin-top:8px; font-size:13px; color:#64748b;">' . str_replace(['{n}', '{total}'], ['1', (string)$n], $stepLabel) . '</div></div>';
+            $id = '#' . $innerId;
+            return $customCss . '<style>' . $id . ' .cc-wz-label{display:block;margin-bottom:6px;font-weight:600;font-size:14px;color:#0f172a}' . $id . ' .cc-wz-field{margin-bottom:16px}' . $id . ' input:focus-visible,' . $id . ' select:focus,' . $id . ' textarea:focus{outline:2px solid ' . $accent . ';outline-offset:1px}'
+                . $id . ' .cc-wz-dot{display:flex;align-items:center;gap:8px;flex:1;font-size:13px;color:#94a3b8}' . $id . ' .cc-wz-dot-n{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#e2e8f0;color:#475569;font-weight:700;flex-shrink:0}'
+                . $id . ' .cc-wz-dot.is-current .cc-wz-dot-n,' . $id . ' .cc-wz-dot.is-done .cc-wz-dot-n{background:' . $accent . ';color:#fff}' . $id . ' .cc-wz-dot.is-current{color:#0f172a;font-weight:600}' . $id . ' .cc-wz-fill{transition:width .3s ease}' . $id . ' .cc-wz-step:focus{outline:none}' . $id . ' button:hover{filter:brightness(.94)}'
+                . '@media(max-width:600px){' . $id . ' .cc-wz-dot-t{display:none}' . $id . ' .cc-wz-card{padding:20px !important}}@media(prefers-reduced-motion:reduce){' . $id . ' .cc-wz-fill{transition:none}}</style>'
+                . '<div id="' . $innerId . '" class="cc-wizard' . $animClass . $innerClass . '" data-step-label="' . $stepLabel . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-wz-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'
+                . ($title !== '' ? '<div class="cc-wz-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">' . $title . '</div>' : '')
+                . ($intro !== '' ? '<p class="cc-wz-intro" style="margin:0 0 20px 0; font-size:15px; line-height:1.6; color:#475569;">' . $intro . '</p>' : '')
+                . $progress
+                . '<form id="' . $form_id . '" class="cc-wz-form" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST">' . "\n" . '<input type="hidden" name="_form" value="' . $form_id . '">' . "\n" . '<input type="hidden" name="_success" value="' . htmlspecialchars($successMsg) . '">' . "\n" . '<input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">' . "\n"
+                . $stepsHtml
+                . '<div class="cc-wz-nav" style="display:flex; align-items:center; gap:10px; margin-top:24px;"><button type="button" class="cc-wz-back" hidden style="' . CC_WZ_BTN . ' background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;">' . $text($c['backText'] ?? '', 'Back', 30) . '</button><span style="flex:1;"></span>'
+                . '<button type="button" class="cc-wz-next" hidden style="' . CC_WZ_BTN . ' background:' . $accent . '; color:#ffffff; border:none;">' . $text($c['nextText'] ?? '', 'Next', 30) . '</button>'
+                . '<button type="submit" class="cc-wz-submit" style="' . CC_WZ_BTN . ' background:' . $accent . '; color:#ffffff; border:none;">' . $text($c['btnText'] ?? '', 'Send', 30) . '</button></div>' . "\n</form>\n</div>\n</div>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_WIZARD_SCRIPT) . "</script>\n";
+        }
+
+        case 'VIDEO_HERO': {
+            $c = $block['content'] ?? [];
+            $objs = function ($v) { return array_values(array_filter(is_array($v) ? $v : [], 'is_array')); };
+            $sources = array_values(array_filter([cc_media_src(cc_str($c['video'] ?? '')), cc_media_src(cc_str($c['video2'] ?? ''))], function ($u) { return $u !== ''; }));
+            $poster = cc_img_url(cc_str($c['poster'] ?? ''));
+            $overlay = cc_color($c['overlay'] ?? '', '#0f172a');
+            $op = cc_int($c['overlayOpacity'] ?? null, 55, 0, 90);
+            $h = cc_int($c['height'] ?? null, 560, 280, 1000);
+            $center = ($c['align'] ?? '') !== 'left';
+            $color = cc_color($c['textColor'] ?? '', '#ffffff');
+            $title = cc_esc($c['title'] ?? '');
+            $subtitle = cc_br(cc_str($c['subtitle'] ?? ''));
+            // the first two buttons are taken before the empty ones are dropped, as in the editor's renderer
+            $btns = array_values(array_filter(array_slice($objs($c['buttons'] ?? []), 0, 2), function ($b) { return trim(cc_str($b['text'] ?? '')) !== ''; }));
+            $btnHtml = '';
+            foreach ($btns as $b) {
+                $primary = ($b['style'] ?? '') !== 'secondary';
+                $btnHtml .= '<a class="cc-vh-btn cc-vh-btn-' . ($primary ? 'primary' : 'secondary') . '" href="' . htmlspecialchars(cc_block_url(cc_str($b['url'] ?? ''))) . '" style="padding:14px 28px; border-radius:10px; font-weight:700; text-decoration:none; ' . ($primary ? 'background:#ffffff; color:#0f172a;' : 'border:2px solid rgba(255,255,255,0.85); color:#ffffff;') . '">' . cc_esc($b['text'] ?? '') . '</a>';
+            }
+            $icon = function ($cls, $d, $hidden) { return '<svg class="' . $cls . '"' . ($hidden ? ' style="display:none"' : '') . ' aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">' . $d . '</svg>'; };
+            $srcHtml = '';
+            foreach ($sources as $u) $srcHtml .= '<source src="' . htmlspecialchars($u) . '"' . (cc_media_mime($u) !== '' ? ' type="' . cc_media_mime($u) . '"' : '') . '>';
+            return $customCss . '<style>#' . $innerId . ' [hidden]{display:none !important}</style>' . '<section id="' . $innerId . '" class="cc-vhero' . $animClass . $innerClass . '" data-mobile="' . (($c['mobileVideo'] ?? false) === true ? '1' : '0') . '" style="' . $styleAttr . ' position:relative; overflow:hidden; min-height:' . $h . 'px; display:flex; align-items:center; justify-content:center; background:#0f172a; color:' . $color . ';">' . "\n"
+                . ($poster !== '' ? '<div class="cc-vh-poster" aria-hidden="true" style="position:absolute; inset:0; background-image:url(\'' . htmlspecialchars(cc_css_url($poster)) . '\'); background-size:cover; background-position:center;"></div>' : '')
+                . ($sources ? '<video class="cc-vh-video" muted loop playsinline preload="none" aria-hidden="true"' . ($poster !== '' ? ' poster="' . htmlspecialchars($poster) . '"' : '') . ' style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">' . $srcHtml . '</video>' : '')
+                . '<div class="cc-vh-overlay" aria-hidden="true" style="position:absolute; inset:0; background:' . $overlay . '; opacity:' . cc_plain($op / 100) . ';"></div>'
+                . '<div class="cc-vh-inner" style="position:relative; width:100%; max-width:900px; padding:64px 24px; box-sizing:border-box; text-align:' . ($center ? 'center' : 'left') . '; ' . ($center ? 'margin:0 auto;' : 'margin-right:auto;') . '">'
+                . ($title !== '' ? '<h2 class="cc-vh-title" style="margin:0; font-size:clamp(32px, 5vw, 56px); line-height:1.1; font-weight:800; color:inherit;">' . $title . '</h2>' : '')
+                . ($subtitle !== '' ? '<p class="cc-vh-subtitle" style="margin:16px 0 0 0; font-size:clamp(16px, 2vw, 20px); line-height:1.6; opacity:0.92;">' . $subtitle . '</p>' : '')
+                . ($btnHtml !== '' ? '<div class="cc-vh-buttons" style="display:flex; gap:12px; flex-wrap:wrap; justify-content:' . ($center ? 'center' : 'flex-start') . '; margin-top:28px;">' . $btnHtml . '</div>' : '')
+                . '</div>'
+                . ($sources && ($c['showPause'] ?? true) !== false ? '<button type="button" class="cc-vh-toggle" hidden aria-label="Pause the background video" style="position:absolute; right:16px; bottom:16px; width:40px; height:40px; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,0.6); background:rgba(15,23,42,0.55); color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">' . $icon('cc-vh-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', false) . $icon('cc-vh-i-play', '<path d="M8 5v14l11-7z"/>', true) . '</button>' : '')
+                . '</section>' . "\n"
+                . ($sources ? '<script>' . str_replace('%ID%', $innerId, CC_VIDEO_SCRIPT) . "</script>\n" : '');
+        }
+
+        case 'AUDIO_PLAYER': {
+            $c = $block['content'] ?? [];
+            $src = cc_media_src(cc_str($c['src'] ?? ''));
+            $cover = cc_img_url(cc_str($c['cover'] ?? ''));
+            $title = cc_esc($c['title'] ?? '');
+            $artist = cc_esc($c['artist'] ?? '');
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $skip = ($c['skip'] ?? true) !== false;
+            $speed = ($c['speed'] ?? true) !== false;
+            $ico = function ($cls, $d, $hidden) { return '<svg class="' . $cls . '"' . ($hidden ? ' style="display:none"' : '') . ' aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">' . $d . '</svg>'; };
+            $sBtn = 'min-width:44px; height:36px; padding:0 10px; border-radius:999px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a; font:600 13px/1 inherit; cursor:pointer;';
+            return $customCss . '<style>#' . $innerId . ' button:hover{filter:brightness(.95)}#' . $innerId . ' button:focus-visible,#' . $innerId . ' input:focus-visible{outline:2px solid ' . $accent . ';outline-offset:2px}</style>'
+                . '<div id="' . $innerId . '" class="cc-audio' . $animClass . $innerClass . '" data-skip="15" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-au-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'
+                . ($title !== '' || $artist !== '' || $cover !== ''
+                    ? '<div class="cc-au-head" style="display:flex; align-items:center; gap:16px; margin-bottom:14px;">'
+                        . ($cover !== '' ? '<img class="cc-au-cover" src="' . htmlspecialchars($cover) . '" alt="" loading="lazy" style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0;">' : '')
+                        . '<div class="cc-au-meta" style="min-width:0;">'
+                        . ($title !== '' ? '<div class="cc-au-title" style="font-weight:700; font-size:17px; color:#0f172a;">' . $title . '</div>' : '')
+                        . ($artist !== '' ? '<div class="cc-au-artist" style="font-size:14px; color:#64748b; margin-top:2px;">' . $artist . '</div>' : '')
+                        . '</div></div>' : '')
+                . '<audio class="cc-au-el" controls preload="none"' . ($src !== '' ? ' src="' . htmlspecialchars($src) . '"' : '') . ' style="display:block; width:100%;"></audio>'
+                . '<div class="cc-au-ui" hidden>'
+                . '<div class="cc-au-bar" style="display:flex; align-items:center; gap:10px;"><span class="cc-au-cur" style="min-width:40px; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;">0:00</span>'
+                . '<input type="range" class="cc-au-seek" min="0" max="0" step="0.1" value="0" aria-label="Seek" style="flex:1; min-width:0; accent-color:' . $accent . ';">'
+                . '<span class="cc-au-dur" style="min-width:40px; text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;">0:00</span></div>'
+                . '<div class="cc-au-controls" style="display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px;">'
+                . ($skip ? '<button type="button" class="cc-au-back" aria-label="Back 15 seconds" style="' . $sBtn . '">-15s</button>' : '')
+                . '<button type="button" class="cc-au-play" aria-label="Play" style="width:52px; height:52px; padding:0; border-radius:50%; border:none; background:' . $accent . '; color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">' . $ico('cc-au-i-play', '<path d="M8 5v14l11-7z"/>', false) . $ico('cc-au-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', true) . '</button>'
+                . ($skip ? '<button type="button" class="cc-au-fwd" aria-label="Forward 15 seconds" style="' . $sBtn . '">+15s</button>' : '')
+                . ($speed ? '<button type="button" class="cc-au-speed" aria-label="Playback speed" style="' . $sBtn . '">1&times;</button>' : '')
+                . '</div></div>' . "\n</div>\n</div>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_AUDIO_SCRIPT) . "</script>\n";
+        }
+
+        case 'ANNOUNCEMENT_BAR':
+            return $customCss . cc_announcement_html($block['content'] ?? [], $innerId, $animClass . $innerClass, $styleAttr, false);
+
+        case 'NEWSLETTER': {
+            $c = $block['content'] ?? [];
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $inline = ($c['formLayout'] ?? '') !== 'stacked';
+            $raw = function ($v, $d, $max) { $t = trim(cc_str($v)); if ($t === '') $t = $d; return mb_substr($t, 0, $max); };
+            $text = function ($v, $d, $max) use ($raw) { return htmlspecialchars($raw($v, $d, $max)); };
+            $title = cc_esc($c['title'] ?? '');
+            $intro = cc_br(cc_str($c['text'] ?? ''));
+            $emailLabel = $raw($c['emailLabel'] ?? '', 'Email', 100);
+            $nameLabel = $raw($c['nameLabel'] ?? '', 'Name', 100);
+            $consent = $raw($c['consentText'] ?? '', '', 300);
+            $askName = ($c['askName'] ?? false) === true;
+            $successMsg = trim(cc_str($c['successMsg'] ?? '')); if ($successMsg === '') $successMsg = 'Thank you for subscribing!';
+            $raw_email = trim(cc_str($c['email'] ?? ''));
+            // The same registry as the Form block: the recipient, the field labels (in order) and the message
+            $form_id = !empty($c['customId'])
+                ? 'f_' . preg_replace('/[^a-zA-Z0-9_-]/', '', cc_str($c['customId']))
+                : 'f_' . substr(sha1('n|' . ($block['id'] ?? '') . '|' . $raw_email), 0, 16);
+            $input = 'padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box; min-width:0; ' . ($inline ? 'flex:1 1 200px;' : 'width:100%;');
+            $fi = 0; $fields = ''; $labels = [];
+            if ($askName) { $fields .= '<input type="hidden" name="_label_field_' . $fi . '" value="' . htmlspecialchars($nameLabel) . '"><input type="text" name="field_' . $fi . '" required autocomplete="name" aria-label="' . htmlspecialchars($nameLabel) . '" placeholder="' . $text($c['namePlaceholder'] ?? '', $nameLabel, 100) . '" style="' . $input . '">'; $labels[] = $nameLabel; $fi++; }
+            $fields .= '<input type="hidden" name="_label_field_' . $fi . '" value="' . htmlspecialchars($emailLabel) . '"><input type="email" name="field_' . $fi . '" required autocomplete="email" aria-label="' . htmlspecialchars($emailLabel) . '" placeholder="' . $text($c['placeholder'] ?? '', $emailLabel, 100) . '" style="' . $input . '">'; $labels[] = $emailLabel; $fi++;
+            $button = '<button type="submit" class="cc-nl-submit" style="padding:12px 24px; border:none; border-radius:8px; background:' . $accent . '; color:#ffffff; font:700 15px/1 inherit; cursor:pointer; ' . ($inline ? '' : 'width:100%;') . '">' . $text($c['buttonText'] ?? '', 'Subscribe', 40) . '</button>';
+            $consentHtml = '';
+            if ($consent !== '') { $consentHtml = '<input type="hidden" name="_label_field_' . $fi . '" value="' . htmlspecialchars($consent) . '"><label class="cc-nl-consent" style="display:flex; align-items:flex-start; gap:8px; flex:1 1 100%; font-size:13px; line-height:1.5; color:#64748b;"><input type="checkbox" name="field_' . $fi . '" value="Yes" required style="width:18px; height:18px; margin-top:1px; accent-color:' . $accent . ';"><span>' . htmlspecialchars($consent) . '</span></label>'; $labels[] = $consent; }
+            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $labels, 'success' => $successMsg];
+            return $customCss . '<style>#' . $innerId . ' input:focus-visible,#' . $innerId . ' button:focus-visible{outline:2px solid ' . $accent . ';outline-offset:2px}#' . $innerId . ' .cc-nl-submit:hover{filter:brightness(.93)}@media(max-width:600px){#' . $innerId . ' .cc-nl-card{padding:20px !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-newsletter' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-nl-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'
+                . ($title !== '' ? '<div class="cc-nl-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">' . $title . '</div>' : '')
+                . ($intro !== '' ? '<p class="cc-nl-text" style="margin:0 0 18px 0; font-size:15px; line-height:1.6; color:#475569;">' . $intro . '</p>' : '')
+                . '<form id="' . $form_id . '" class="cc-nl-form" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST" style="display:flex; flex-wrap:wrap; gap:10px; ' . ($inline ? 'align-items:stretch;' : 'flex-direction:column; align-items:stretch;') . '">' . "\n"
+                . '<input type="hidden" name="_form" value="' . $form_id . '"><input type="hidden" name="_success" value="' . htmlspecialchars($successMsg) . '"><input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">' . "\n"
+                . ($inline ? $fields . $button . $consentHtml : $fields . $consentHtml . $button)
+                . "\n</form>\n</div>\n</div>\n";
+        }
 
         default: return "<!-- Unknown element: " . preg_replace('/[^A-Za-z0-9_]/', '', (string)$block['type']) . " -->\n";
     }

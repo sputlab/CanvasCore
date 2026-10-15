@@ -3,16 +3,18 @@ import { Image as ImageIcon, Trash2, Upload, Copy, Zap, Folder, FolderOpen, Fold
 import { Button, IconButton, PageHeader, EmptyState, SearchInput, Badge, Select } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog, promptDialog } from '../ui/dialog';
-import { formatBytes } from '../editor/mediaInfo';
+import { formatBytes, acceptFor, kindOf } from '../editor/mediaInfo';
+import MediaThumb from './MediaThumb';
 import { useUploader } from '../editor/useUploader';
 import { UploadPanel } from './UploadPanel';
 import MoveToFolderDialog from './MoveToFolderDialog';
 
-// Media library: folders (labels: the files never move, so image addresses don't change), upload with
-// progress (button or drag & drop), search and sort, select several images (Shift+click for a range) to
+// Media library: images, audio and video. Folders (labels: the files never move, so addresses don't change), upload with
+// progress (button or drag & drop), search and sort, select several files (Shift+click for a range) to
 // move, copy or delete them together, alt text, size info, optimized copies, drag images onto a folder.
 const ALL = '\u0000all';       // every image
 const LOOSE = '';             // images not in a folder
+const KINDS = [['all', 'All files'], ['image', 'Images'], ['audio', 'Audio'], ['video', 'Video']];
 const SORTS = [['new', 'Newest first'], ['old', 'Oldest first'], ['az', 'Name A–Z'], ['za', 'Name Z–A'], ['big', 'Largest first'], ['small', 'Smallest first']];
 const leaf = (p) => p.split('/').pop();
 const post = async (action, body) => (await fetch('api.php?action=' + action, { method: 'POST', body: JSON.stringify(body) })).json();
@@ -23,6 +25,7 @@ export default function MediaManager() {
   const [current, setCurrent] = useState(ALL);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('new');
+  const [kind, setKind] = useState('all');
   const [selected, setSelected] = useState(() => new Set());
   const [lastClicked, setLastClicked] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -44,6 +47,7 @@ export default function MediaManager() {
   // ---- what is shown
   const q = query.trim().toLowerCase();
   const inView = images.filter((img) => (current === ALL || (img.folder || '') === current)
+    && (kind === 'all' || kindOf(img) === kind)
     && (!q || `${img.name} ${img.alt || ''}`.toLowerCase().includes(q)));
   const sorters = {
     new: (a, b) => (b.mtime || 0) - (a.mtime || 0), old: (a, b) => (a.mtime || 0) - (b.mtime || 0),
@@ -180,7 +184,7 @@ export default function MediaManager() {
     setOptimizing(null);
     fetchMedia();
   };
-  const notOptimized = images.filter((x) => !x.optimized).length;
+  const notOptimized = images.filter((x) => kindOf(x) === 'image' && !x.optimized).length;
 
   const folderItem = (f, label, Icon, depth = 0, count) => (
     <div key={f === ALL ? 'all' : 'f:' + f} className="cc-media-folder" data-drop={dropFolder === f ? 'true' : undefined} style={{ paddingLeft: 8 + depth * 14 }} {...(f === ALL ? {} : folderDropProps(f))}>
@@ -202,11 +206,11 @@ export default function MediaManager() {
     <div onDragOver={(e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
       onDrop={(e) => { if (e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); upload(e.dataTransfer.files); } }}>
-      <PageHeader icon={ImageIcon} title="Media Library" description="Images you can use in any page. Drop files anywhere on this page to upload them into the open folder."
+      <PageHeader icon={ImageIcon} title="Media Library" description="Images, audio and video you can use in any page. Drop files anywhere on this page to upload them into the open folder."
         actions={<>
           <Button icon={FolderPlus} onClick={newFolder}>New folder</Button>
-          <Button variant="success" icon={Upload} onClick={() => fileRef.current && fileRef.current.click()}>{uploader.busy ? 'Uploading…' : 'Upload Images'}</Button>
-          <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
+          <Button variant="success" icon={Upload} onClick={() => fileRef.current && fileRef.current.click()}>{uploader.busy ? 'Uploading…' : 'Upload'}</Button>
+          <input ref={fileRef} type="file" multiple accept={acceptFor('all')} style={{ display: 'none' }} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
         </>} />
 
       <div className="cc-media-layout">
@@ -222,6 +226,7 @@ export default function MediaManager() {
           <div className="cc-media-toolbar">
             <h2 className="ui-card__title" style={{ margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</h2>
             <div style={{ flex: '1 1 220px', maxWidth: 320 }}><SearchInput value={query} onChange={setQuery} placeholder="Search name or description…" label="Search images" /></div>
+            <Select aria-label="Show" value={kind} onChange={(e) => setKind(e.target.value)} options={KINDS} style={{ width: 'auto' }} />
             <Select aria-label="Sort images" value={sort} onChange={(e) => setSort(e.target.value)} options={SORTS} style={{ width: 'auto' }} />
             {shown.length > 0 && (
               <label className="ui-check" style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={allShownSelected} onChange={selectAll} /> Select all</label>
@@ -269,7 +274,7 @@ export default function MediaManager() {
                   return (
                     <figure key={img.name} className="cc-media-card" data-selected={isSel ? 'true' : undefined} draggable onDragStart={(e) => dragStart(e, img)}>
                       <div className="cc-media-card__thumb" onClick={(e) => toggle(img.name, e)}>
-                        <img src={img.url} alt="" loading="lazy" draggable={false} />
+                        <MediaThumb item={img} draggable={false} />
                         <label className="cc-media-card__check" onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox" checked={isSel} onChange={() => {}} onClick={(e) => toggle(img.name, e)} aria-label={`Select ${img.name}`} />
                         </label>
@@ -284,13 +289,14 @@ export default function MediaManager() {
                           </span>
                         </div>
                         <div className="cc-media-card__meta">
+                          {kindOf(img) !== 'image' ? <span>{kindOf(img) === 'audio' ? 'Audio' : 'Video'}</span> : null}
                           {img.w ? <span>{img.w}×{img.h}</span> : null}
                           {img.bytes ? <span>{formatBytes(img.bytes)}</span> : null}
                           {current === ALL && img.folder ? <span className="cc-media-card__folder" title={img.folder}><Folder size={11} aria-hidden="true" /> {leaf(img.folder)}</span> : null}
-                          {img.variants && img.variants.length ? <Badge tone="published">Optimized</Badge> : null}
+                          {kindOf(img) === 'image' && img.variants && img.variants.length ? <Badge tone="published">Optimized</Badge> : null}
                         </div>
-                        <input className="ui-input cc-media-card__alt" aria-label={`Description of ${img.name}`} placeholder="Description (alt text)" defaultValue={img.alt || ''}
-                          onBlur={(e) => saveAlt(img, e.target.value.trim())} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+                        {kindOf(img) === 'image' && <input className="ui-input cc-media-card__alt" aria-label={`Description of ${img.name}`} placeholder="Description (alt text)" defaultValue={img.alt || ''}
+                          onBlur={(e) => saveAlt(img, e.target.value.trim())} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />}
                       </figcaption>
                     </figure>
                   );

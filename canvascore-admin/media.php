@@ -12,6 +12,31 @@ if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) 
 require_once __DIR__ . '/config.php';
 
 const CC_IMG_WIDTHS = [480, 960, 1600];
+
+// Audio and video files (Audio Player, Video Hero). Images are everything else in the library.
+const CC_MEDIA_AUDIO = ['mp3', 'm4a', 'ogg', 'wav'];
+const CC_MEDIA_VIDEO = ['mp4', 'webm'];
+const CC_MEDIA_MAX_AUDIO = 40 * 1048576;    // the server's own upload limit usually applies first
+const CC_MEDIA_MAX_VIDEO = 200 * 1048576;
+function cc_media_kind($ext) {
+    $ext = strtolower((string)$ext);
+    return in_array($ext, CC_MEDIA_AUDIO, true) ? 'audio' : (in_array($ext, CC_MEDIA_VIDEO, true) ? 'video' : 'image');
+}
+// Does the file start the way its type says? A script, page or document renamed to .mp3 / .mp4 is refused.
+function cc_media_sniff($path, $ext) {
+    $h = @fopen($path, 'rb');
+    if (!$h) return false;
+    $b = (string)fread($h, 16);
+    fclose($h);
+    switch (strtolower((string)$ext)) {
+        case 'mp3': return substr($b, 0, 3) === 'ID3' || (strlen($b) >= 2 && ord($b[0]) === 0xFF && (ord($b[1]) & 0xE0) === 0xE0);
+        case 'm4a': case 'mp4': return strlen($b) >= 12 && substr($b, 4, 4) === 'ftyp';
+        case 'webm': return substr($b, 0, 4) === "\x1A\x45\xDF\xA3";
+        case 'ogg': return substr($b, 0, 4) === 'OggS';
+        case 'wav': return strlen($b) >= 12 && substr($b, 0, 4) === 'RIFF' && substr($b, 8, 4) === 'WAVE';
+    }
+    return false;
+}
 const CC_IMG_VARIANT_DIR = '_cc';
 
 function cc_media_meta_file() { return $GLOBALS['CC_MEDIA_META_FILE'] ?? (cc_data_dir() . '/media.json'); }   // overridable for tests

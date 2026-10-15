@@ -112,12 +112,100 @@ const fixtures = [
   { id: 'ba2', type: 'BEFORE_AFTER', styles: {}, content: { startPosition: 999, showLabels: false, before: { src: 'b.jpg' }, after: { src: 'a.jpg' } } },
   { id: 'bz1', type: 'BUSINESS', styles: { width: '100%' }, content: { name: 'Bar Roma', businessType: 'CafeOrCoffeeShop', address: 'Via Roma 1\n00100 Roma', phone: '+39 06 123 4567', email: 'info@bar.example', website: 'bar.example/it', mapsLink: true, directionsLabel: 'Indicazioni', hoursTitle: 'Orari', closedLabel: 'Chiuso', note: 'Chiuso nei festivi', hours: [{ day: 'Lunedi', open: '08:00', close: '19:00', closed: false }, { day: 'Martedi', open: '', close: '', closed: true }, { day: 'Mercoledi', open: 'x', close: 'y', closed: false }] } },
   { id: 'bz2', type: 'BUSINESS', styles: {}, content: { name: '', address: '', phone: '', email: 'sbagliata', hours: [] } },
+  { id: 'bn1', type: 'BENTO', styles: { width: '100%' }, content: { columns: 4, rowHeight: 200, gap: 12, hover: 'zoom', tiles: [
+      { size: 'large', icon: '*', title: 'Big', text: 'Text', image: 'big.jpg', alt: 'Alt', bg: '#000', color: '', href: 'chi-siamo/index.html' },
+      { size: 'wide', title: 'Wide', bg: '#eff6ff', href: 'https://example.com' },
+      { size: 'tall', title: '', text: '', icon: '' },
+      { size: 'evil', title: 'Unknown size' }, 'not a tile', null, { size: ['wide'], title: 'Array size' } ] } },
+  { id: 'bn2', type: 'BENTO', styles: {}, content: { columns: 'x', rowHeight: 9999, gap: -5, hover: 'evil', tiles: [
+      { size: 'wide', title: '<b>x</b>', bg: 'red;}', color: 'url(x)', image: 'javascript:alert(1)', href: 'javascript:alert(2)' },
+      { title: ['array'], text: { o: 1 }, icon: true, image: 7 } ] } },
+  { id: 'bn3', type: 'BENTO', styles: {}, content: {} },
+  { id: 'sc1', type: 'SPLIT_CTA', styles: { width: '100%' }, content: { gap: 24, radius: 0,
+      left: { icon: '!', title: 'Left', text: 'L', buttonText: 'Go', buttonUrl: 'contatti/index.html', bg: '#111', color: '#fff', buttonBg: '#f00', buttonColor: '#fff' },
+      right: { title: 'Right', text: '', buttonText: '', bg: 'expression(x)' } } },
+  { id: 'sc2', type: 'SPLIT_CTA', styles: {}, content: { gap: 999, radius: 'r', left: 'nope', right: null } },
+  { id: 'cs1', type: 'CASE_STUDY', styles: { width: '100%' }, content: { layout: 'horizontal', image: 'case.jpg', alt: 'Team', logo: 'logo.svg', client: 'ACME', metric: '+240%', metricLabel: 'traffic', title: 'T', text: 'S', quote: 'Q', quoteAuthor: 'A', linkText: 'Read', linkUrl: 'https://example.com', accent: '#10b981' } },
+  { id: 'cs2', type: 'CASE_STUDY', styles: {}, content: { layout: 'vertical', image: 'case.jpg', title: 'Only a title', quote: 'Q', quoteAuthor: '' } },
+  { id: 'cs3', type: 'CASE_STUDY', styles: {}, content: { image: 'javascript:alert(1)', logo: 'data:text/html,x', accent: 'red;}', client: '', metric: '', linkText: 'L', linkUrl: 'javascript:alert(2)' } },
+  { id: 'ab1', type: 'AUTHOR_BIO', styles: { width: '100%' }, content: { layout: 'horizontal', boxed: true, label: 'About', name: 'Alex Morgan', role: 'Editor', bio: 'Line one\nLine two', photo: 'alex.jpg', links: [{ label: 'Site', url: 'example.com' }, { label: 'Mail', url: 'alex@example.com' }] } },
+  { id: 'ab2', type: 'AUTHOR_BIO', styles: {}, content: { layout: 'centered', boxed: false, label: '', name: 'solo', role: '', bio: '', photo: '',
+      links: ['x', null, { label: '', url: 'a.example' }, { label: 'Bad', url: 'javascript:alert(1)' }, { label: 'Empty', url: '' }] } },
+  { id: 'ab3', type: 'AUTHOR_BIO', styles: {}, content: { name: ['x'], bio: { a: 1 }, photo: 'vbscript:x', links: 'nope' } },
+  { id: 'lg3', type: 'LOGOS', styles: {}, content: { layout: 'marquee', speed: 45, direction: 'right', fade: true, logos: [{ src: 'a.png', alt: 'A' }, { src: 'b.png', alt: 'B' }] } },
+  { id: 'lg4', type: 'LOGOS', styles: {}, content: { layout: 'marquee', direction: 'up', fade: 'yes', logos: [{ src: 'a.png', alt: 'A' }] } },
+  { id: 'rs1', type: 'REVIEW_SUMMARY', styles: { width: '100%' }, content: { layout: 'side', title: 'Rating', average: 4.76, total: 1280, totalLabel: 'reviews', source: 'Google', color: '#ef4444', rowValue: 'count', linkText: 'All', linkUrl: 'recensioni/index.html',
+      distribution: [{ stars: 5, count: 1000 }, { stars: 4, count: 200 }, { stars: 3, count: 50 }, { stars: 2, count: 20 }, { stars: 1, count: 10 }] } },
+  { id: 'rs2', type: 'REVIEW_SUMMARY', styles: {}, content: { layout: 'stacked', average: 9, total: -3, rowValue: 'none', distribution: [{ stars: 9, count: 'x' }, 'junk', { stars: 0, count: 0 }] } },
+  { id: 'rs3', type: 'REVIEW_SUMMARY', styles: {}, content: { average: 'abc', showDistribution: false, color: 'red;}', distribution: [{ stars: 5, count: 3 }] } },
+  { id: 'rs4', type: 'REVIEW_SUMMARY', styles: {}, content: {} },
+  { id: 'tw1', type: 'TESTIMONIAL_WALL', styles: { width: '100%' }, content: { columns: 4, gap: 12, cardStyle: 'card', showRatings: true, starColor: '#000', items: [
+      { quote: 'One\nTwo', name: 'Laura Bianchi', role: 'Owner', avatar: 'l.jpg', rating: 5 }, { quote: 'Q', name: 'Tom', role: '', avatar: '', rating: 3 }, { quote: 'Q', name: '', rating: 0 }, 'junk' ] } },
+  { id: 'tw2', type: 'TESTIMONIAL_WALL', styles: {}, content: { columns: 9, gap: -1, cardStyle: 'minimal', showRatings: false, items: [{ quote: '<b>x</b>', name: ['n'], avatar: 'javascript:x', rating: 99 }] } },
+  { id: 'hg1', type: 'HOVER_GRID', styles: { width: '100%' }, content: { columns: 4, gap: 8, radius: 0, aspectRatio: '16 / 9', effect: 'fade', overlay: 'rgba(0,0,0,0.5)', items: [
+      { image: 'a.jpg', alt: 'A', title: 'T', text: 'X', href: 'servizi/index.html' }, { image: '', title: '', text: '' }, null ] } },
+  { id: 'hg2', type: 'HOVER_GRID', styles: {}, content: { columns: 0, aspectRatio: '99 / 1', effect: 'boom', overlay: 'url(x)', items: [{ image: 'javascript:alert(1)', href: 'javascript:alert(2)', title: '<img src=x>' }] } },
+  { id: 'ss1', type: 'SCROLLYTELLING', styles: { width: '100%' }, content: { side: 'right', ratio: '16 / 9', stickyTop: 100, stepHeight: 80, gap: 24, steps: [
+      { title: 'One', text: 'a\nb', image: 'one.jpg', alt: 'First' }, { title: 'Only a title' }, { text: 'Only text', image: '' }, 'junk', null, { title: 'Bad image', image: 'javascript:alert(1)' } ] } },
+  { id: 'ss2', type: 'SCROLLYTELLING', styles: {}, content: { side: 'x', ratio: '99 / 1', stickyTop: 'abc', stepHeight: 9999, gap: -5, steps: [{ title: '<b>x</b>', text: { o: 1 }, image: 7, alt: ['a'] }] } },
+  { id: 'ss3', type: 'SCROLLYTELLING', styles: {}, content: {} },
+  { id: 'hs1', type: 'HOTSPOTS', styles: { width: '100%' }, content: { image: 'product.jpg', alt: 'Product', radius: 0, pinColor: '#ef4444', pinTextColor: '#000', pulse: false, pins: [
+      { x: 10, y: 20, title: 'Left top', text: 'a\nb', linkText: 'More', href: 'prodotti/index.html' }, { x: 50, y: 60, title: 'Centre bottom' }, { x: 90, y: 90, title: '', text: 'No title' }, { x: 25, y: 55 }, { x: 75, y: 55.5 }, 'junk', null ] } },
+  { id: 'hs2', type: 'HOTSPOTS', styles: {}, content: { image: 'javascript:alert(1)', ratio: '99 / 1', pinColor: 'red;}', pins: [{ x: 'abc', y: 500, title: '<img src=x>', linkText: 'L', href: 'javascript:alert(2)' }, { x: -5, y: -5, title: ['t'] }] } },
+  { id: 'hs3', type: 'HOTSPOTS', styles: {}, content: {} },
+  { id: 'tc1', type: 'TABLE_OF_CONTENTS', styles: { width: '100%' }, content: { title: 'On this page', levels: 'h2h3', numbered: true, highlight: false, sticky: true, stickyTop: 120, offset: 100, layout: 'plain', accent: '#10b981' } },
+  { id: 'tc2', type: 'TABLE_OF_CONTENTS', styles: {}, content: { title: '<b>x</b>', levels: 'h9', numbered: 'yes', sticky: 'yes', stickyTop: 9999, offset: -1, layout: 'weird', accent: 'red;}' } },
+  { id: 'tc3', type: 'TABLE_OF_CONTENTS', styles: {}, content: {} },
+  { id: 'sb1', type: 'SHARE_BAR', styles: { width: '100%' }, content: { title: 'Share', message: 'Read this', networks: ['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email', 'copy', 'print', 'share'], style: 'icons', shape: 'square', colors: 'dark', size: 48, align: 'center' } },
+  { id: 'sb2', type: 'SHARE_BAR', styles: {}, content: { title: 'T', networks: ['copy', 'x', 'evil', 7, null, 'facebook'], style: 'buttons', shape: 'rounded', colors: 'mono', size: 9999, align: 'right' } },
+  { id: 'sb3', type: 'SHARE_BAR', styles: {}, content: { title: '<b>x</b>', message: '"><script>x</script>', networks: 'facebook', colors: 'neon', align: 'up' } },
+  { id: 'sb4', type: 'SHARE_BAR', styles: {}, content: {} },
+  { id: 'cn1', type: 'CODE_SNIPPET', styles: { width: '100%' }, content: { language: 'php', filename: 'index.php', theme: 'light', fontSize: 16, maxHeight: 300, lineNumbers: true, copyButton: true, code: '<?php\necho "hi"; // x\n\n$a = [1, 2];' } },
+  { id: 'cn2', type: 'CODE_SNIPPET', styles: {}, content: { language: 'evil', filename: '<b>x</b>', theme: 'neon', fontSize: 999, maxHeight: -5, lineNumbers: 'yes', copyButton: false, code: '</script><script>alert(1)</script>\r\nsecond\r\n\r\n\r\n' } },
+  { id: 'cn3', type: 'CODE_SNIPPET', styles: {}, content: { language: 'text', code: '' } },
+  { id: 'cn4', type: 'CODE_SNIPPET', styles: {}, content: { language: 'js', copyButton: false, code: { o: 1 } } },
+  { id: 'cn5', type: 'CODE_SNIPPET', styles: {}, content: {} },
+  { id: 'pc1', type: 'PRICE_CALCULATOR', styles: { width: '100%' }, content: { title: 'Prezzo', intro: 'a\nb', layout: 'card', accent: '#10b981', currency: '€', currencyPos: 'after', numberFormat: 'eu', decimals: 2, basePrice: 1234.5, baseLabel: 'Base', periodMonth: 'mese', periodYear: 'anno',
+      billingToggle: true, defaultBilling: 'yearly', monthlyLabel: 'Mensile', yearlyLabel: 'Annuale', yearlyDiscount: 15, saveText: 'Risparmi {amount}', totalLabel: 'Totale', buttonText: 'Vai', buttonUrl: 'contatti/index.html', note: 'x\ny',
+      sliders: [{ label: 'Utenti', unit: 'utenti', min: 1, max: 100, step: 1, value: 25, included: 5, price: 7.25 }, { label: 'Spazio', unit: 'GB', min: 0, max: 1, step: 0.1, value: 0.5, included: 0, price: 100 }],
+      addons: [{ label: 'Supporto', price: 49.99, checked: true }, { label: 'Dominio', price: 9, checked: false }] } },
+  { id: 'pc2', type: 'PRICE_CALCULATOR', styles: {}, content: { title: '<b>x</b>', currency: '<script>x</script>12345678', currencyPos: 'weird', numberFormat: 'xx', decimals: 99, basePrice: -5, accent: 'red;}', billingToggle: 'yes', defaultBilling: 'yearly', yearlyDiscount: 999,
+      sliders: [{ label: '<i>a</i>', unit: '<b>u</b>', min: 50, max: 10, step: 0, value: 999, included: -3, price: -2 }, 'junk', null, { min: 'a', max: 'b', step: 'c', value: 'd', price: 'e' }],
+      addons: [{ label: ['x'], price: 'y', checked: 'yes' }, 7], buttonText: 'B', buttonUrl: 'javascript:alert(1)', note: { o: 1 } } },
+  { id: 'pc3', type: 'PRICE_CALCULATOR', styles: {}, content: {} },
+  { id: 'pc4', type: 'PRICE_CALCULATOR', styles: {}, content: { layout: 'plain', billingToggle: true, yearlyDiscount: 0, defaultBilling: 'yearly', basePrice: 10, currency: '$', sliders: [] } },
+  { id: 'wz1', type: 'WIZARD', styles: { width: '100%' }, content: { title: 'Quote', intro: 'a\nb', progress: 'steps', layout: 'card', accent: '#ef4444', stepLabel: 'Passo {n} di {total}', btnText: 'Invia', nextText: 'Avanti', backText: 'Indietro', successMsg: 'Grazie', email: 'a@b.it', steps: [
+      { title: 'You', description: 'Who?', fields: [{ label: 'Name', type: 'text', required: true }, { label: 'Email', type: 'email', required: true }, { label: 'Phone', type: 'tel' }] },
+      { title: 'Project', fields: [{ label: 'Need', type: 'radio', required: true, options: 'A\nB\n\n  C  ' }, { label: 'Budget', type: 'select', options: 'x\ny', placeholder: 'Pick' }, { label: 'Extras', type: 'checkboxes', required: true, options: 'One\nTwo' }] },
+      { title: '', fields: [{ label: 'Message', type: 'textarea' }, { label: 'Agree', type: 'consent', required: true }, { label: 'Date', type: 'date' }, { label: 'N', type: 'number' }, { label: 'URL', type: 'url' }] }] } },
+  { id: 'wz2', type: 'WIZARD', styles: {}, content: { title: '<b>x</b>', progress: 'evil', layout: 'plain', accent: 'red;}', customId: 'My Form!', successMsg: '"><script>x</script>', steps: [
+      { title: '<img src=x onerror=a>', description: { o: 1 }, fields: [{ label: '"><b>', type: 'evil', required: 'yes' }, 'junk', null, { label: ['x'], type: 'select', options: Array.from({ length: 30 }, (_, i) => 'opt' + i).join('\n') }] }, 'junk', null,
+      { fields: 'nope' }] } },
+  { id: 'wz3', type: 'WIZARD', styles: {}, content: {} },
+  { id: 'wz4', type: 'WIZARD', styles: {}, content: { steps: [{ title: 'Only', fields: [{ label: 'A', type: 'text' }] }] } },
+  { id: 'vh1', type: 'VIDEO_HERO', styles: { width: '100%' }, content: { video: '/uploads/a.mp4', video2: 'https://cdn.example.com/a.webm?x=1#t', poster: '/uploads/p.jpg', height: 700, overlay: '#000000', overlayOpacity: 30, align: 'left', textColor: '#ffeeaa', title: 'Hello', subtitle: 'a\nb', showPause: false, mobileVideo: true,
+      buttons: [{ text: 'Go', url: 'contatti/index.html', style: 'primary' }, { text: 'More', url: 'https://example.com', style: 'secondary' }, { text: 'Third', url: 'x' }] } },
+  { id: 'vh2', type: 'VIDEO_HERO', styles: {}, content: { video: 'javascript:alert(1)', video2: 'data:text/html,x', poster: 'javascript:alert(2)', height: 99999, overlay: 'red;}', overlayOpacity: 500, align: 'evil', textColor: 'url(x)', title: '<img src=x onerror=a>', subtitle: { o: 1 },
+      buttons: ['junk', null, { text: '', url: 'a' }, { text: '<b>x</b>', url: 'javascript:alert(3)' }] } },
+  { id: 'vh3', type: 'VIDEO_HERO', styles: {}, content: {} },
+  { id: 'vh4', type: 'VIDEO_HERO', styles: {}, content: { poster: 'p.jpg', title: 'Only a poster' } },
+  { id: 'vh5', type: 'VIDEO_HERO', styles: {}, content: { video: 'noextension', buttons: [{ text: '' }, { text: 'Second' }, { text: 'Third' }] } },
+  { id: 'ap1', type: 'AUDIO_PLAYER', styles: { width: '100%' }, content: { src: '/uploads/a.mp3', title: 'Episode', artist: 'Show', cover: 'c.jpg', layout: 'plain', accent: '#ef4444', skip: false, speed: false } },
+  { id: 'ap2', type: 'AUDIO_PLAYER', styles: {}, content: { src: 'javascript:alert(1)', title: '<b>x</b>', artist: ['a'], cover: 'javascript:alert(2)', accent: 'red;}', layout: 'evil', skip: 'no', speed: 0 } },
+  { id: 'ap3', type: 'AUDIO_PLAYER', styles: {}, content: {} },
+  { id: 'an1', type: 'ANNOUNCEMENT_BAR', styles: { width: '100%' }, content: { text: 'Spedizione gratuita sopra 50 €', icon: '🎁', linkText: 'Scopri', linkUrl: 'offerte/index.html', preset: 'promo', sticky: true, dismissible: true, align: 'left' } },
+  { id: 'an2', type: 'ANNOUNCEMENT_BAR', styles: {}, content: { text: '<img src=x onerror=a>', icon: '12345678', linkText: 'L', linkUrl: 'javascript:alert(1)', preset: 'evil', bg: 'red;}', color: 'url(x)', sticky: 'yes', dismissible: false } },
+  { id: 'an3', type: 'ANNOUNCEMENT_BAR', styles: {}, content: {} },
+  { id: 'an4', type: 'ANNOUNCEMENT_BAR', styles: {}, content: { text: 'Warning', preset: 'warning', bg: '#123456', color: '#abcdef', dismissible: false } },
+  { id: 'nl1', type: 'NEWSLETTER', styles: { width: '100%' }, content: { title: 'Join', text: 'a\nb', placeholder: 'Mail', emailLabel: 'E-mail', askName: true, nameLabel: 'Nome', namePlaceholder: 'Il tuo nome', consentText: 'Accetto', buttonText: 'Iscriviti', successMsg: 'Grazie', email: 'a@b.it', layout: 'plain', formLayout: 'stacked', accent: '#10b981' } },
+  { id: 'nl2', type: 'NEWSLETTER', styles: {}, content: { title: '<b>x</b>', text: { o: 1 }, placeholder: '"><script>x</script>', emailLabel: '"><b>', askName: 'yes', consentText: '<i>c</i>', buttonText: '<u>b</u>', successMsg: '"><x>', customId: 'My Form!', formLayout: 'evil', accent: 'red;}' } },
+  { id: 'nl3', type: 'NEWSLETTER', styles: {}, content: {} },
 ];
 
 // Fixtures from the REAL DEFAULTS (blocks.json): exactly what the editor creates with addBlock.
 {
   const defs = JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks.json', import.meta.url)), 'utf-8'));
-  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS']) {
+  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER']) {
     const def = defs.types[type];
     if (!def) { console.error(`blocks.json: type ${type} is missing`); process.exit(1); }
     fixtures.push({ id: 'def_' + type.toLowerCase(), type, styles: { ...(defs._baseStyles || {}), ...(def.styles || {}) }, content: JSON.parse(JSON.stringify(def.content || {})) });
@@ -181,7 +269,7 @@ function diff(a, b, path = '') {
 
 // For these blocks the generated CSS carries LOGIC (radio tabs, open state, responsive):
 // besides the structure we also compare the text of the <style> tags.
-const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS']);
+const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER']);
 function styleTexts(html) {
   const $ = load(`<div id="__root__">${html}</div>`, null, false);
   return $('style').map((_, e) => $(e).text().replace(/\s+/g, ' ').replace(/:\s+/g, ':').replace(/,\s+/g, ',').trim()).get();

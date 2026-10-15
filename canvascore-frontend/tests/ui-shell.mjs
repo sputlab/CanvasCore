@@ -505,7 +505,54 @@ try {
     check('Global Options has a Cookie banner card', !!cookieBox);
     if (cookieBox) { click(cookieBox.querySelector('input')); await sleep(30); }
     check('…with text, buttons, privacy page and position once enabled', ['Accept button', 'Decline button', 'Privacy policy page', 'Position'].every((t) => $$('label').some((l) => l.textContent.trim() === t)));
+    const annBox = $$('label').find((l) => /Show the announcement bar on every page/.test(l.textContent));
+    check('Global Options has an Announcement bar card', !!annBox);
+    if (annBox) { click(annBox.querySelector('input')); await sleep(30); }
+    const annLab = (t) => $$('label').find((l) => l.textContent.trim() === t);
+    check('…with message, link, colors and alignment once enabled (and nothing before)', ['Message', 'Link text (empty = no link)', 'Link to a page', 'Link address', 'Colors', 'Alignment'].every((t) => !!annLab(t)));
+    check('…without a message there is no preview yet', !$('.cc-ann-preview'));
+    const annMsg = annLab('Message') && doc.getElementById(annLab('Message').getAttribute('for'));
+    if (annMsg) { typeIn(annMsg, 'Big sale <b>today</b>'); await sleep(40); }
+    const annPrev = $('.cc-ann-preview');
+    check('…then a preview drawn by the same renderer as the published bar, with the text escaped (no markup, no script)', !!annPrev && annPrev.textContent.includes('Big sale <b>today</b>') && !annPrev.querySelector('b') && !annPrev.querySelector('script') && !!annPrev.querySelector('.cc-announce'));
     check('admins see the Redirects card', /Redirects/.test(doc.body.textContent) && !!btnHas('Add redirect'));
+  }
+
+  console.log('\nMEDIA LIBRARY: AUDIO AND VIDEO');
+  {
+    MEDIA.push({ name: '1700000100_clip.mp4', kind: 'video', url: '/uploads/1700000100_clip.mp4', folder: '', mtime: 1700000100, alt: '', w: 0, h: 0, bytes: 5242880, optimized: true, variants: [] },
+      { name: '1700000200_episode.mp3', kind: 'audio', url: '/uploads/1700000200_episode.mp3', folder: '', mtime: 1700000200, alt: '', w: 0, h: 0, bytes: 3145728, optimized: true, variants: [] });
+    const MediaManager = (await vite.ssrLoadModule('/src/components/MediaManager.jsx')).default;
+    mount(React.createElement(MediaManager));
+    await waitFor(() => $$('figure').length === 5);
+    const card = (name) => $$('figure').find((f) => f.querySelector('.cc-media-card__name').textContent === name);
+    check('audio and video are listed next to the images, as tiles (no <img>, nothing loaded), with their type and size', !!card('1700000100_clip.mp4').querySelector('.cc-media-tile[data-kind="video"]') && !card('1700000100_clip.mp4').querySelector('img') && !!card('1700000200_episode.mp3').querySelector('.cc-media-tile[data-kind="audio"]') && /Video/.test(card('1700000100_clip.mp4').textContent) && /5\.0 MB/.test(card('1700000100_clip.mp4').textContent) && /MP3/.test(card('1700000200_episode.mp3').textContent));
+    check('…without a description field or an "Optimized" badge (those are for images)', !card('1700000100_clip.mp4').querySelector('input[aria-label^="Description"]') && !/Optimized/.test(card('1700000100_clip.mp4').textContent) && !!card('sky.jpg').querySelector('input[aria-label^="Description"]'));
+    check('the upload button takes images, audio and video', /\.mp4/.test($('input[type="file"]').getAttribute('accept')) && /\.mp3/.test($('input[type="file"]').getAttribute('accept')) && /image\/\*/.test($('input[type="file"]').getAttribute('accept')));
+    const show = $('select[aria-label="Show"]');
+    show.value = 'video'; show.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(40);
+    check('the "Show" filter narrows the library to video…', $$('figure').length === 1 && !!card('1700000100_clip.mp4'));
+    show.value = 'audio'; show.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(40);
+    check('…or audio…', $$('figure').length === 1 && !!card('1700000200_episode.mp3'));
+    show.value = 'image'; show.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(40);
+    check('…or images…', $$('figure').length === 3 && !card('1700000100_clip.mp4'));
+    show.value = 'all'; show.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(40);
+    check('…and "All files" shows everything again', $$('figure').length === 5);
+
+    const MediaPickerModal = (await vite.ssrLoadModule('/src/components/MediaPickerModal.jsx')).default;
+    const picked = [];
+    mount(React.createElement(MediaPickerModal, { kind: 'video', onClose: () => {}, onSelect: (u) => picked.push(u) }));
+    await waitFor(() => $$('.cc-picker__item').length === 1);
+    check('the picker for a video block offers only videos, and says so', /Choose a video/.test(doc.body.textContent) && $$('.cc-picker__item').length === 1 && /clip\.mp4/.test($('.cc-picker__item').getAttribute('title')) && /\.mp4/.test($('input[type="file"]').getAttribute('accept')) && !/\.mp3/.test($('input[type="file"]').getAttribute('accept')));
+    click($('.cc-picker__item')); await sleep(20);
+    check('…and choosing one hands back its address', picked[0] === '/uploads/1700000100_clip.mp4');
+    mount(React.createElement(MediaPickerModal, { kind: 'audio', onClose: () => {}, onSelect: () => {} }));
+    await waitFor(() => $$('.cc-picker__item').length === 1);
+    check('the picker for an audio block offers only audio, and says so ("Choose an audio file")', /Choose an audio file/.test(doc.body.textContent) && $$('.cc-picker__item').length === 1 && /episode\.mp3/.test($('.cc-picker__item').getAttribute('title')));
+    mount(React.createElement(MediaPickerModal, { onClose: () => {}, onSelect: () => {} }));
+    await waitFor(() => $$('.cc-picker__item').length === 3);
+    check('the usual image picker still shows only images (3), as before', /Choose an image/.test(doc.body.textContent) && !$$('.cc-picker__item').some((b) => /clip|episode/.test(b.getAttribute('title'))) && /image\/\*/.test($('input[type="file"]').getAttribute('accept')));
+    MEDIA.splice(MEDIA.length - 2, 2);
   }
 
   console.log('\nSITE BRANDING & ABOUT');

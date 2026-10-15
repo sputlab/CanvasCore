@@ -86,8 +86,8 @@ function addAndSelect(type) {
   return b;
 }
 
-const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS'];
-const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details' };
+const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER'];
+const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author', REVIEW_SUMMARY: 'Rating', TESTIMONIAL_WALL: 'Testimonials', HOVER_GRID: 'Grid Items', SCROLLYTELLING: 'Story Steps', HOTSPOTS: 'Hotspot Image', TABLE_OF_CONTENTS: 'Table of Contents', SHARE_BAR: 'Share Bar', CODE_SNIPPET: 'Code', PRICE_CALCULATOR: 'Calculator Texts', WIZARD: 'Steps and Fields', VIDEO_HERO: 'Background Video', AUDIO_PLAYER: 'Audio', ANNOUNCEMENT_BAR: 'Announcement', NEWSLETTER: 'Newsletter Signup' };
 let failedRun = false;
 try {
   console.log('\nADD BLOCK — the blocks.json defaults reach the editor');
@@ -95,6 +95,24 @@ try {
     const b = addAndSelect(t);
     const def = blockDefs.types[t];
     check(`${t}: addBlock creates the block with the default content`, b.type === t && JSON.stringify(b.content) === JSON.stringify(def.content));
+  }
+
+  console.log('\nADDING A BLOCK — it is selected and scrolled into view');
+  {
+    st().setBlocks([]); st().setSelectedBlockId(null);
+    const scrolled = [];
+    w.Element.prototype.scrollIntoView = function (o) { scrolled.push({ id: this.getAttribute('data-test-id') || this.id, el: this, o }); };
+    st().addBlock('DIVIDER');
+    const added = st().blocks[0];
+    check('addBlock selects the new block (so its settings open on the right) and flags it to be revealed', !!added && st().selectedBlockId === added.id && st().revealBlockId === added.id);
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [added.id] }, React.createElement(SortableBlock, { block: added }))));
+    await waitFor(() => scrolled.length > 0 && st().revealBlockId === null);
+    check('the block\'s frame scrolls into view, centred, and the flag is cleared so it happens only once', scrolled.length === 1 && scrolled[0].o.block === 'center' && st().revealBlockId === null);
+    await sleep(60);
+    check('re-rendering the block does not scroll again', scrolled.length === 1);
+    st().addBlock('DIVIDER');
+    check('a second block added becomes the selected one', st().blocks.length === 2 && st().selectedBlockId === st().blocks[1].id && st().selectedBlockId !== added.id);
+    st().setBlocks([]); st().setSelectedBlockId(null);
   }
 
   console.log('\nPANELS — mounted and editable');
@@ -170,6 +188,158 @@ try {
   click(buttonByText('+ Add member')); await sleep(40);
   check('TEAM: adding a member with all expected fields', content().members.length === 4 && ['name', 'role', 'bio', 'photo', 'email', 'linkedin', 'twitter', 'website'].every((k) => k in content().members[3]));
 
+  addAndSelect('BENTO'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add tile'));
+  click(buttonByText('+ Add tile')); await sleep(40);
+  check('BENTO: "+ Add tile" adds a tile with all expected fields', content().tiles.length === 6 && ['size', 'icon', 'title', 'text', 'image', 'alt', 'bg', 'color', 'href'].every((k) => k in content().tiles[5]));
+  setValue($$('select').find((s) => [...s.options].some((o) => o.value === 'large')), 'tall'); await sleep(40);
+  check('BENTO: the size of the first tile updates the store', content().tiles[0].size === 'tall');
+
+  addAndSelect('SPLIT_CTA'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Title'));
+  setValue(field('Title'), 'New left title'); await sleep(40);
+  check('SPLIT_CTA: editing the left title keeps the rest of the left side', content().left.title === 'New left title' && content().left.buttonText === 'Get a quote' && content().right.title === 'Just have a question?');
+
+  addAndSelect('CASE_STUDY'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Headline metric'));
+  setValue(field('Headline metric'), '3x'); await sleep(40);
+  check('CASE_STUDY: the metric updates the store', content().metric === '3x');
+
+  addAndSelect('AUTHOR_BIO'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Name'));
+  setValue(field('Name'), 'Sam Lee'); await sleep(40);
+  click(buttonByText('Author Links')); await sleep(40);
+  click(buttonByText('+ Add link')); await sleep(40);
+  check('AUTHOR_BIO: name and a new link update the store', content().name === 'Sam Lee' && content().links.length === 3 && content().links[2].label === 'New link');
+
+  addAndSelect('LOGOS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Logos Layout'));
+  click(buttonByText('Logos Layout')); await sleep(40);
+  check('LOGOS: direction, fade and speed are hidden for the grid layout', !field('Direction') && !checkbox('Fade the edges') && !$$('input[type="range"]').length);
+  setValue(field('Layout'), 'marquee'); await sleep(40);
+  setValue(field('Direction'), 'right'); await sleep(40);
+  click(checkbox('Fade the edges')); await sleep(40);
+  const speed = $$('input[type="range"]')[0];
+  setValue(speed, '60'); await sleep(40);
+  check('LOGOS strip: direction, fading edges and the speed slider update the store', content().direction === 'right' && content().fade === false && content().speed === 60, JSON.stringify({ d: content().direction, f: content().fade, s: content().speed }));
+  check('LOGOS strip: the slider label shows the loop time', $$('label').some((l) => l.textContent.includes('one loop every 60 s')));
+
+  addAndSelect('REVIEW_SUMMARY'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Average rating (0–5)'));
+  setValue(field('Average rating (0–5)'), '4.2'); await sleep(40);
+  check('REVIEW_SUMMARY: the average updates the store as a number', content().average === 4.2);
+
+  addAndSelect('TESTIMONIAL_WALL'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add testimonial'));
+  click(buttonByText('+ Add testimonial')); await sleep(40);
+  check('TESTIMONIAL_WALL: "+ Add testimonial" adds one with all expected fields', content().items.length === 7 && ['quote', 'name', 'role', 'avatar', 'rating'].every((k) => k in content().items[6]));
+
+  addAndSelect('HOVER_GRID'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add item'));
+  click(buttonByText('+ Add item')); await sleep(40);
+  click(buttonByText('Hover Layout')); await sleep(40);
+  setValue(field('Reveal effect'), 'fade'); await sleep(40);
+  check('HOVER_GRID: adding an item and changing the effect update the store', content().items.length === 4 && content().effect === 'fade');
+
+  addAndSelect('SCROLLYTELLING'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add step'));
+  click(buttonByText('+ Add step')); await sleep(40);
+  check('SCROLLYTELLING: "+ Add step" adds a step with all expected fields', content().steps.length === 4 && ['title', 'text', 'image', 'alt'].every((k) => k in content().steps[3]));
+
+  addAndSelect('HOTSPOTS'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('[aria-label^="Pin placement area"]').length);
+  const placer = $$('[aria-label^="Pin placement area"]')[0];
+  placer.getBoundingClientRect = () => ({ left: 100, top: 50, width: 400, height: 200, right: 500, bottom: 250 });
+  check('HOTSPOTS: the first pin is selected and the placer says so', /Pin 1 selected/.test(doc.body.textContent));
+  placer.dispatchEvent(new w.MouseEvent('click', { bubbles: true, clientX: 200, clientY: 100 })); await sleep(40);
+  check('HOTSPOTS: clicking on the placement area moves the selected pin there (in percent of the image)', content().pins[0].x === 25 && content().pins[0].y === 25, JSON.stringify([content().pins[0].x, content().pins[0].y]));
+  click($$('button[aria-label="Select pin 2"]')[0]); await sleep(40);
+  placer.dispatchEvent(new w.MouseEvent('click', { bubbles: true, clientX: 700, clientY: 400 })); await sleep(40);
+  check('HOTSPOTS: selecting another pin and clicking outside the area clamps to the edge', content().pins[1].x === 100 && content().pins[1].y === 100 && content().pins[0].x === 25);
+  click(buttonByText('+ Add pin')); await sleep(40);
+  check('HOTSPOTS: "+ Add pin" adds a centred pin with all expected fields and selects it', content().pins.length === 4 && content().pins[3].x === 50 && ['x', 'y', 'title', 'text', 'linkText', 'href'].every((k) => k in content().pins[3]) && /Pin 4 selected/.test(doc.body.textContent));
+
+  addAndSelect('TABLE_OF_CONTENTS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Contents Layout'));
+  click(buttonByText('Contents Layout')); await sleep(40);
+  check('TABLE_OF_CONTENTS: the distance from the top only appears for a sticky list', !field('Distance from the top px'));
+  click(checkbox('Stay in view while scrolling')); await sleep(40);
+  check('TABLE_OF_CONTENTS: sticky on → the field appears and the store follows', content().sticky === true && !!field('Distance from the top px'));
+  setValue(field('Headings to list'), 'h2h3'); await sleep(40);
+  check('TABLE_OF_CONTENTS: the headings level updates the store', content().levels === 'h2h3');
+
+  addAndSelect('SHARE_BAR'); mount(React.createElement(PropertyPanel)); await waitFor(() => checkbox('Telegram'));
+  check('SHARE_BAR: the default networks are ticked', checkbox('Facebook').checked && !checkbox('Telegram').checked && checkbox('Copy link').checked);
+  click(checkbox('Telegram')); await sleep(40);
+  check('SHARE_BAR: ticking a network adds it in the fixed order (not at the end)', JSON.stringify(content().networks) === JSON.stringify(['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email', 'copy']), JSON.stringify(content().networks));
+  click(checkbox('Facebook')); await sleep(40);
+  check('SHARE_BAR: unticking removes it', !content().networks.includes('facebook') && content().networks.length === 6);
+
+  addAndSelect('CODE_SNIPPET'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Code'));
+  setValue(field('Code'), 'echo 1;'); setValue(field('Language'), 'php'); await sleep(40);
+  check('CODE_SNIPPET: the code and the language update the store', content().code === 'echo 1;' && content().language === 'php');
+  click(buttonByText('Code Display')); await sleep(40);
+  click(checkbox('Line numbers')); await sleep(40);
+  check('CODE_SNIPPET: line numbers update the store; the copy button is on by default', content().lineNumbers === true && checkbox('Copy button').checked);
+
+  addAndSelect('PRICE_CALCULATOR'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Sliders'));
+  click(buttonByText('Sliders')); await sleep(40);
+  click(buttonByText('+ Add slider')); await sleep(40);
+  check('PRICE_CALCULATOR: "+ Add slider" adds a slider with all expected fields', content().sliders.length === 3 && ['label', 'unit', 'min', 'max', 'step', 'value', 'included', 'price'].every((k) => k in content().sliders[2]));
+  click(buttonByText('Add-ons')); await sleep(40);
+  click(buttonByText('+ Add add-on')); await sleep(40);
+  check('PRICE_CALCULATOR: "+ Add add-on" adds an add-on (not ticked)', content().addons.length === 3 && content().addons[2].checked === false && 'price' in content().addons[2]);
+  setValue(field('Currency symbol'), '$'); await sleep(40);
+  setValue(field('Number format'), 'eu'); await sleep(40);
+  check('PRICE_CALCULATOR: the currency and the number format update the store', content().currency === '$' && content().numberFormat === 'eu');
+  click(buttonByText('Monthly / Yearly')); await sleep(40);
+  check('PRICE_CALCULATOR: the yearly options are shown for a calculator with the switch', !!field('Discount for paying yearly (%)'));
+  click(checkbox('Let visitors switch between monthly and yearly')); await sleep(40);
+  check('PRICE_CALCULATOR: switching the option off hides them and updates the store', content().billingToggle === false && !field('Discount for paying yearly (%)'));
+
+  addAndSelect('WIZARD'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add step'));
+  const emailField = () => $$('input[type="email"]').find((i) => i.placeholder === 'Leave blank for Global Email');
+  st().userRole = 'admin'; mount(React.createElement(PropertyPanel)); await waitFor(() => emailField());
+  const adminSees = !!emailField();
+  st().userRole = 'editor'; mount(React.createElement(PropertyPanel)); await sleep(60);
+  const editorSees = !!emailField();
+  st().userRole = 'admin'; mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add step'));
+  check('WIZARD: the receiving email is offered to admins and not to editors', adminSees === true && editorSees === false, JSON.stringify({ adminSees, editorSees }));
+  click(buttonByText('+ Add step')); await sleep(40);
+  check('WIZARD: "+ Add step" adds a step with an empty field list', content().steps.length === 4 && Array.isArray(content().steps[3].fields) && content().steps[3].fields.length === 0);
+  click($$('button').filter((b) => b.textContent.trim() === '+ Add field')[0]); await sleep(40);
+  check('WIZARD: "+ Add field" adds a field to that step only, with all expected fields', content().steps[0].fields.length === 3 && ['label', 'type', 'required', 'options', 'placeholder'].every((k) => k in content().steps[0].fields[2]) && content().steps[1].fields.length === 2);
+  const selects = $$('select').filter((s2) => [...s2.options].some((o) => o.value === 'checkboxes'));
+  const choiceLists = () => $$('label').filter((l) => l.textContent.trim().startsWith('Choices (one per line)')).length;
+  check('WIZARD: only choose-one, drop-down and choose-several fields have a list of choices (the default form has a radio: 1; the new text field adds none)', choiceLists() === 2 && content().steps[0].fields[2].type === 'text', String(choiceLists()));
+  setValue(selects[2], 'select'); await sleep(40);
+  check('WIZARD: changing a field to a drop-down shows its list of choices and the empty-choice text, and keeps the other steps', content().steps[0].fields[2].type === 'select' && choiceLists() === 3 && $$('label').some((l) => l.textContent.trim().startsWith('Text before a choice is made')) && content().steps[1].fields.length === 2, String(choiceLists()));
+  const newChoices = $$('label').filter((l) => l.textContent.trim().startsWith('Choices (one per line)')).map((l) => l.parentElement.querySelector('textarea'))[0];
+  setValue(newChoices, 'a\nb'); await sleep(40);
+  check('WIZARD: the choices are stored as text, one per line', content().steps[0].fields[2].options === 'a\nb');
+
+  addAndSelect('VIDEO_HERO'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('input').find((i) => i.placeholder === 'Video file address'));
+  setValue($$('input').find((i) => i.placeholder === 'Video file address'), '/uploads/clip.mp4'); await sleep(40);
+  check('VIDEO_HERO: the video address updates the store', content().video === '/uploads/clip.mp4');
+  click(checkbox('Also play the video on phones (uses mobile data)')); await sleep(40);
+  check('VIDEO_HERO: "also on phones" updates the store (off by default)', content().mobileVideo === true);
+  click(buttonByText('Hero Buttons')); await sleep(40);
+  check('VIDEO_HERO: at most two buttons: the default hero has two, so there is no "+ Add button" until one is removed', !buttonByText('+ Add button') && content().buttons.length === 2);
+  click($$('button[title="Remove"]')[0]); await sleep(40);
+  check('VIDEO_HERO: removing one makes "+ Add button" appear', content().buttons.length === 1 && !!buttonByText('+ Add button'));
+  click(buttonByText('+ Add button')); await sleep(40);
+  check('VIDEO_HERO: …and it adds a button with all expected fields (and hides itself again at two)', content().buttons.length === 2 && ['text', 'url', 'style'].every((k) => k in content().buttons[1]) && !buttonByText('+ Add button'));
+  click($$('button[title="Choose from the media library"]')[0]); await sleep(80);
+  check('VIDEO_HERO: the library button asks for a VIDEO (the picker says so and offers video files)', /Choose a video/.test(doc.body.textContent));
+
+  addAndSelect('AUDIO_PLAYER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('input').find((i) => i.placeholder === 'Audio file address'));
+  setValue($$('input').find((i) => i.placeholder === 'Audio file address'), '/uploads/ep1.mp3'); await sleep(40);
+  setValue(field('Title (empty = none)'), 'Episode 1'); await sleep(40);
+  check('AUDIO_PLAYER: the audio address and title update the store', content().src === '/uploads/ep1.mp3' && content().title === 'Episode 1');
+
+  addAndSelect('ANNOUNCEMENT_BAR'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Message'));
+  setValue(field('Message'), 'Big sale today'); setValue(field('Colors'), 'warning'); await sleep(40);
+  click(checkbox('Stay at the top while scrolling')); await sleep(40);
+  check('ANNOUNCEMENT_BAR: the message, the colors and "stay at the top" update the store without losing the other fields', content().text === 'Big sale today' && content().preset === 'warning' && content().sticky === true && content().linkText === 'Shop now' && content().dismissible === true);
+
+  addAndSelect('NEWSLETTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Fields'));
+  click(buttonByText('Fields')); await sleep(40);
+  check('NEWSLETTER: the name fields only appear when "Ask for a name too" is ticked', !field('Name field name'));
+  click(checkbox('Ask for a name too')); await sleep(40);
+  check('NEWSLETTER: ticking it shows them and updates the store', content().askName === true && !!field('Name field name'));
+  setValue(field('Agreement text (empty = no checkbox)'), 'I agree'); await sleep(40);
+  check('NEWSLETTER: the agreement text updates the store', content().consentText === 'I agree');
+  check('NEWSLETTER: admins are offered the receiving email', !!$$('input[type="email"]').find((i) => i.placeholder === 'Leave blank for Global Email'));
+
   addAndSelect('BEFORE_AFTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('button').some((b) => b.textContent.includes('Before / After')));
   const imgs = $$('input[placeholder="Image URL"]');
   setValue(imgs[0], 'https://x.example/prima.jpg'); setValue(imgs[1], 'https://x.example/dopo.jpg'); await sleep(40);
@@ -193,7 +363,7 @@ try {
   check('BUSINESS: "+ Add weekly hours" restores the 7 days', content().hours.length === 7 && content().hours[0].day === 'Monday');
 
   console.log('\nCANVAS — every block is drawn in the editor (canonical renderer)');
-  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business' };
+  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author', REVIEW_SUMMARY: 'cc-review-summary', TESTIMONIAL_WALL: 'cc-testimonial-wall', HOVER_GRID: 'cc-hover-grid', SCROLLYTELLING: 'cc-story', HOTSPOTS: 'cc-hotspots', TABLE_OF_CONTENTS: 'cc-toc', SHARE_BAR: 'cc-share', CODE_SNIPPET: 'cc-code', PRICE_CALCULATOR: 'cc-calc', WIZARD: 'cc-wizard', VIDEO_HERO: 'cc-vhero', AUDIO_PLAYER: 'cc-audio', ANNOUNCEMENT_BAR: 'cc-announce', NEWSLETTER: 'cc-newsletter' };
   for (const t of TYPES) {
     const b = addAndSelect(t);
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));
@@ -207,9 +377,83 @@ try {
     const range = await waitFor(() => doc.querySelector('.cc-ba-range'));
     const ba = doc.querySelector('.cc-ba');
     check('BEFORE_AFTER canvas: start position 50%', ba.style.getPropertyValue('--pos') === '50%');
-    range.value = '80'; range.dispatchEvent(new w.Event('input', { bubbles: true }));
+    // the canvas wires the slider in an effect, after the HTML is in the page: keep moving it until the listener is there
+    await waitFor(() => { range.value = '80'; range.dispatchEvent(new w.Event('input', { bubbles: true })); return ba.style.getPropertyValue('--pos') === '80%'; });
     check('BEFORE_AFTER canvas: moving the slider updates the position (faithful preview)', ba.style.getPropertyValue('--pos') === '80%', ba.style.getPropertyValue('--pos'));
     check('BEFORE_AFTER canvas: the block receives clicks (usable slider)', doc.querySelector('.cc-ba').parentElement.style.pointerEvents === 'auto');
+  }
+  // batch 3 on the canvas: the published scripts don't run there, so the same functions are run by the editor
+  {
+    const codeBlock = addAndSelect('CODE_SNIPPET');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [codeBlock.id] }, React.createElement(SortableBlock, { block: { ...codeBlock, content: { ...codeBlock.content, code: 'const total = 42; // note' } } }))));
+    const kw = await waitFor(() => doc.querySelector('.cc-code-code .cc-tk-k'));
+    check('CODE_SNIPPET canvas: the code is colored and its text is unchanged', !!kw && kw.textContent === 'const' && doc.querySelector('.cc-code-code').textContent === 'const total = 42; // note' && !!doc.querySelector('.cc-code-code .cc-tk-c'));
+    check('CODE_SNIPPET canvas: the copy button is there and the block receives clicks', doc.querySelector('.cc-code-copy').hidden === false && doc.querySelector('.cc-code').parentElement.style.pointerEvents === 'auto');
+
+    const shareBlock = addAndSelect('SHARE_BAR');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [shareBlock.id] }, React.createElement(SortableBlock, { block: shareBlock }))));
+    const bar = await waitFor(() => { const e = doc.querySelector('.cc-share'); return e && !e.hidden ? e : null; });
+    check('SHARE_BAR canvas: the bar is shown (without its page links) so it can be designed', !!bar && doc.querySelectorAll('.cc-share-btn').length === 6 && doc.querySelector('a[data-net="x"]').getAttribute('href') === '#');
+
+    const hs = addAndSelect('HOTSPOTS');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [hs.id] }, React.createElement(SortableBlock, { block: hs }))));
+    await waitFor(() => doc.querySelector('.cc-hotspots'));
+    check('HOTSPOTS canvas: the block receives the mouse, so pins can be hovered', doc.querySelector('.cc-hotspots').parentElement.style.pointerEvents === 'auto' && doc.querySelectorAll('.cc-hs-pin').length === 3);
+
+    const calcBlock = addAndSelect('PRICE_CALCULATOR');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [calcBlock.id] }, React.createElement(SortableBlock, { block: calcBlock }))));
+    await waitFor(() => doc.querySelector('.cc-calc'));
+    const calcStart = doc.querySelector('.cc-calc-amount').textContent;
+    const rng = doc.querySelector('.cc-calc-range');
+    // the editor attaches the script's listeners just after the HTML is in the page: keep moving the slider until it answers
+    // 29 base + (20 - 3 free) * 8 + (50 - 10 free) * 0.5 + 9 for the ticked add-on = 194
+    await waitFor(() => { rng.value = '20'; rng.dispatchEvent(new w.Event('input', { bubbles: true })); return doc.querySelector('.cc-calc-amount').textContent === '€194'; });
+    check('PRICE_CALCULATOR canvas: moving a slider in the editor updates the total (so the design can be tried), and the block receives the mouse', calcStart === '€74' && doc.querySelector('.cc-calc-amount').textContent === '€194' && doc.querySelector('.cc-calc').parentElement.style.pointerEvents === 'auto', doc.querySelector('.cc-calc-amount').textContent);
+
+    const wzBlock = addAndSelect('WIZARD');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [wzBlock.id] }, React.createElement(SortableBlock, { block: wzBlock }))));
+    await waitFor(() => doc.querySelector('.cc-wizard'));
+    await waitFor(() => doc.querySelector('.cc-wz-progress') && !doc.querySelector('.cc-wz-progress').hidden);
+    const stepsShown = () => [...doc.querySelectorAll('.cc-wz-step')].map((e) => (e.hidden ? 0 : 1)).join('');
+    check('MULTI-STEP FORM canvas: starts on step 1 with the progress shown', stepsShown() === '100' && doc.querySelector('.cc-wz-count').textContent === 'Step 1 of 3');
+    click(doc.querySelector('.cc-wz-next')); await sleep(30);
+    check('MULTI-STEP FORM canvas: Next walks to the next step even with required fields empty (nothing is validated in the editor)', stepsShown() === '010' && doc.querySelector('.cc-wz-count').textContent === 'Step 2 of 3');
+    click(doc.querySelector('.cc-wz-next')); await sleep(30);
+    const sub = new w.Event('submit', { bubbles: true, cancelable: true }); doc.querySelector('.cc-wz-form').dispatchEvent(sub);
+    check('MULTI-STEP FORM canvas: Send does nothing in the editor (the form is never submitted)', stepsShown() === '001' && sub.defaultPrevented === true);
+
+    const vhBlock = addAndSelect('VIDEO_HERO');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [vhBlock.id] }, React.createElement(SortableBlock, { block: { ...vhBlock, content: { ...vhBlock.content, video: '/uploads/clip.mp4', poster: '/uploads/poster.jpg' } } }))));
+    await waitFor(() => doc.querySelector('.cc-vhero'));
+    await sleep(60);
+    check('VIDEO_HERO canvas: the poster is shown and the video does not load or play while editing (no preload, no button)', /poster\.jpg/.test(doc.querySelector('.cc-vh-poster').getAttribute('style')) && doc.querySelector('video').getAttribute('preload') === 'none' && doc.querySelector('.cc-vh-toggle').hidden === true && doc.querySelector('video').paused === true);
+
+    const auBlock = addAndSelect('AUDIO_PLAYER');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [auBlock.id] }, React.createElement(SortableBlock, { block: auBlock }))));
+    await waitFor(() => doc.querySelector('.cc-audio') && doc.querySelector('.cc-au-ui') && !doc.querySelector('.cc-au-ui').hidden);
+    check('AUDIO_PLAYER canvas: the custom player replaces the browser\'s controls, and the block receives the mouse', !doc.querySelector('.cc-au-el').hasAttribute('controls') && doc.querySelector('.cc-audio').parentElement.style.pointerEvents === 'auto' && doc.querySelector('.cc-au-title').textContent === 'Episode title');
+
+    const anBlock = addAndSelect('ANNOUNCEMENT_BAR');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [anBlock.id] }, React.createElement(SortableBlock, { block: anBlock }))));
+    await waitFor(() => doc.querySelector('.cc-announce') && doc.querySelector('.cc-ann-close') && !doc.querySelector('.cc-ann-close').hidden);
+    click(doc.querySelector('.cc-ann-close')); await sleep(30);
+    check('ANNOUNCEMENT_BAR canvas: the bar and its close button are shown, and the button does nothing in the editor (it is never hidden or remembered)', doc.querySelector('.cc-announce').hidden === false && doc.querySelector('.cc-ann-text').textContent.length > 0);
+
+    // Table of Contents: lists the headings of the page being edited, and follows them
+    const tocBlock = addAndSelect('TABLE_OF_CONTENTS');
+    const textBlock = { id: 'tx1', type: 'TEXT', styles: {}, content: { text: '<h2>First</h2><p>x</p><h2>Second</h2>' } };
+    mount(React.createElement('div', { className: 'cc-canvas' }, React.createElement(DndContext, null, React.createElement(SortableContext, { items: [textBlock.id, tocBlock.id] },
+      React.createElement(SortableBlock, { block: textBlock }), React.createElement(SortableBlock, { block: { ...tocBlock, content: { ...tocBlock.content, levels: 'h2' } } })))));
+    const listed = await waitFor(() => { const li = doc.querySelectorAll('.cc-toc-item'); return li.length === 2 ? li : null; });
+    check('TABLE_OF_CONTENTS canvas: lists the headings of the canvas', !!listed && [...listed].map((li) => li.textContent).join() === 'First,Second', listed ? [...listed].map((li) => li.textContent).join() : 'none');
+    check('TABLE_OF_CONTENTS canvas: the editor\'s headings are not given ids and the list is shown', !doc.querySelector('.cc-canvas h2').id && doc.querySelector('.cc-toc').hidden === false && doc.querySelector('.cc-toc-empty').hidden === true);
+    doc.querySelector('.cc-canvas h2').textContent = 'Renamed';
+    const renamed = await waitFor(() => doc.querySelector('.cc-toc-item') && doc.querySelector('.cc-toc-item').textContent === 'Renamed');
+    check('TABLE_OF_CONTENTS canvas: follows an edit of a heading on its own', !!renamed);
+    mount(React.createElement('div', { className: 'cc-canvas' }, React.createElement(DndContext, null, React.createElement(SortableContext, { items: [tocBlock.id] }, React.createElement(SortableBlock, { block: tocBlock })))));
+    await waitFor(() => doc.querySelector('.cc-toc'));
+    await sleep(80);
+    check('TABLE_OF_CONTENTS canvas: with no headings it stays visible with a hint, so the block can still be selected', doc.querySelector('.cc-toc').hidden === false && doc.querySelector('.cc-toc-empty').hidden === false);
   }
   // table/accordion as a control: static blocks don't capture the mouse (they get selected)
   {

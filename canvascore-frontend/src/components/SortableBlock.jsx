@@ -5,13 +5,15 @@ import { useStore } from '../store/useStore';
 import { InlineRegions } from '../editor/RichText';
 import { Crown } from 'lucide-react';
 import { renderBlock, blockRoot } from '../render/renderBlock.mjs';
+import { fillLogosMarquee } from '../render/logosMarquee.mjs';
+import { initCodeBlock, initShareBlock, initTocBlock, initCalcBlock, initWizardBlock, initVideoBlock, initAudioBlock, initAnnounceBlock } from '../render/blockRuntime.mjs';
 import { safeHtml } from '../utils/safeHtml';
 import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
 
 const CONTAINERS = CONTAINER_TYPES;
 // Blocks whose canonical HTML is interactive in the canvas too (native details/radio, no JS):
 // a click opens/switches the tab AND selects the block (the event bubbles up to the frame).
-const INTERACTIVE = ['ACCORDION', 'TABS', 'BEFORE_AFTER'];
+const INTERACTIVE = ['ACCORDION', 'TABS', 'BEFORE_AFTER', 'HOTSPOTS', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'AUDIO_PLAYER'];
 
 // Properties that define how the block is SIZED/POSITIONED as an item of its parent:
 // they go on the frame (so flex/grid behave as on the site), not duplicated in the content.
@@ -46,12 +48,22 @@ function canonicalHtml(block) {
 
 export default function SortableBlock({ block, isMasterPreview = false }) {
   const { selectedBlockId, setSelectedBlockId, updateBlock, viewport, masters } = useStore();
+  const revealBlockId = useStore((s) => s.revealBlockId);
+  const frameRef = useRef(null);
   const isSelected = selectedBlockId === block.id && !isMasterPreview;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: block.id,
     disabled: isMasterPreview,
   });
+
+  // A block that was just added from the Add panel scrolls into view (once)
+  useEffect(() => {
+    if (revealBlockId !== block.id || !frameRef.current) return;
+    const el = frameRef.current;
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    useStore.setState({ revealBlockId: null });
+  }, [revealBlockId, block.id]);
 
   // Slider animation (fade/slide) in the editor: drives the injected canonical DOM
   const sliderRef = useRef(null);
@@ -78,15 +90,36 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
 
   // Before/After: in the editor the injected HTML's <script>s don't run, so the slider is wired up here
   // (same behavior as the published script: the slider sets --pos).
-  const baRef = useRef(null);
+  // htmlRef: the element holding the block's injected HTML
+  const htmlRef = useRef(null);
   useEffect(() => {
     if (block.type !== 'BEFORE_AFTER') return undefined;
-    const root = baRef.current && baRef.current.querySelector('.cc-ba');
+    const root = htmlRef.current && htmlRef.current.querySelector('.cc-ba');
     const range = root && root.querySelector('.cc-ba-range');
     if (!range) return undefined;
     const set = () => root.style.setProperty('--pos', range.value + '%');
     range.addEventListener('input', set);
     return () => range.removeEventListener('input', set);
+  }, [block]);
+
+  // Logo Cloud scrolling strip: the logos repeat to cover the strip, as on the published page (CC_LOGOS_SCRIPT)
+  useEffect(() => {
+    if (block.type !== 'LOGOS' || block.content?.layout !== 'marquee') return undefined;
+    return fillLogosMarquee(htmlRef.current && htmlRef.current.querySelector('.cc-logos'), block.content?.speed);
+  }, [block]);
+
+  // Code Snippet, Share Bar, Table of Contents, Price Calculator and Multi-step Form: the published scripts don't run on the canvas, so the same
+  // functions (src/render/blockRuntime.mjs) are run here
+  useEffect(() => {
+    if (block.type === 'CODE_SNIPPET') initCodeBlock(htmlRef.current && htmlRef.current.querySelector('.cc-code'));
+    else if (block.type === 'SHARE_BAR') initShareBlock(htmlRef.current && htmlRef.current.querySelector('.cc-share'));
+    else if (block.type === 'PRICE_CALCULATOR') initCalcBlock(htmlRef.current && htmlRef.current.querySelector('.cc-calc'));
+    else if (block.type === 'WIZARD') initWizardBlock(htmlRef.current && htmlRef.current.querySelector('.cc-wizard'));
+    else if (block.type === 'VIDEO_HERO') initVideoBlock(htmlRef.current && htmlRef.current.querySelector('.cc-vhero'));
+    else if (block.type === 'AUDIO_PLAYER') initAudioBlock(htmlRef.current && htmlRef.current.querySelector('.cc-audio'));
+    else if (block.type === 'ANNOUNCEMENT_BAR') initAnnounceBlock(htmlRef.current && htmlRef.current.querySelector('.cc-announce'));
+    else if (block.type === 'TABLE_OF_CONTENTS') return initTocBlock(htmlRef.current && htmlRef.current.querySelector('.cc-toc'));
+    return undefined;
   }, [block]);
 
   // Where the click that selected a text block landed: the caret is placed there once it becomes editable
@@ -225,12 +258,12 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
 
     // Everything else (and unselected editables): canonical HTML = identical to the site
     return (
-      <div ref={block.type === 'BEFORE_AFTER' ? baRef : undefined} style={{ pointerEvents: (isMasterPreview || INTERACTIVE.includes(block.type)) ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock)) }} />
+      <div ref={htmlRef} style={{ pointerEvents: (isMasterPreview || INTERACTIVE.includes(block.type)) ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock)) }} />
     );
   };
 
   return (
-    <div ref={setNodeRef} style={wrapperStyle} onClick={handleClick}>
+    <div ref={(el) => { setNodeRef(el); frameRef.current = el; }} style={wrapperStyle} onClick={handleClick}>
       {dragHandle}
       {block.content?.customCss && <style>{String(block.content.customCss).replace(/__THIS__/g, `#${innerId}`)}</style>}
       {renderBody()}

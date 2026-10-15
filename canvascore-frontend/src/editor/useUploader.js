@@ -2,6 +2,7 @@
 // and result, shown by <UploadPanel> (components/UploadPanel.jsx).
 import { useCallback, useRef, useState } from 'react';
 import { uploadImage } from './upload';
+import { isAcceptedFile } from './mediaInfo';
 
 export function useUploader(onFinished) {
   const [queue, setQueue] = useState([]);   // [{ id, name, size, status: waiting|uploading|done|error, progress, message }]
@@ -14,8 +15,8 @@ export function useUploader(onFinished) {
     const list = [...(files || [])];
     if (!list.length) return;
     const items = list.map((file) => ({ id: ++seq.current, file, name: file.name, size: file.size, folder,
-      status: file.type && !file.type.startsWith('image/') ? 'error' : 'waiting', progress: 0,
-      message: file.type && !file.type.startsWith('image/') ? 'Not an image' : '' }));
+      status: isAcceptedFile(file) ? 'waiting' : 'error', progress: 0,
+      message: isAcceptedFile(file) ? '' : 'Not an image, audio or video file' }));
     setQueue((q) => [...q.filter((x) => x.status === 'waiting' || x.status === 'uploading'), ...items]);
     if (running.current) { pending.current.push(...items.filter((i) => i.status === 'waiting')); return; }
     running.current = true;

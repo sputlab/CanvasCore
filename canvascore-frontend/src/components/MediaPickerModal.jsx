@@ -4,12 +4,15 @@ import { Image as ImageIcon, X, Upload } from 'lucide-react';
 import { SearchInput } from '../ui/kit';
 import { useUploader } from '../editor/useUploader';
 import { UploadPanel } from './UploadPanel';
-import { formatBytes } from '../editor/mediaInfo';
+import { formatBytes, acceptFor, kindOf } from '../editor/mediaInfo';
+import MediaThumb from './MediaThumb';
 
-// Media library picker (modal): choose an uploaded image or upload new ones.
+// Media library picker (modal): choose an uploaded image (or audio / video file: `kind`) or upload new ones.
 // Used by the property panel and by the rich text editor. onSelect(url, alt): alt = the image's
 // description saved in the library (empty when none), so blocks can fill their alt field.
-const MediaPickerModal = ({ onClose, onSelect }) => {
+const NOUN = { image: ['an', 'image', 'images'], audio: ['an', 'audio file', 'audio files'], video: ['a', 'video', 'videos'] };
+const MediaPickerModal = ({ onClose, onSelect, kind = 'image' }) => {
+  const [article, one, many] = NOUN[kind] || NOUN.image;
   const [images, setImages] = useState(null);   // null = loading
   const [query, setQuery] = useState('');
   const [folders, setFolders] = useState([]);
@@ -32,7 +35,8 @@ const MediaPickerModal = ({ onClose, onSelect }) => {
   };
 
   const q = query.trim().toLowerCase();
-  const shown = (images || []).filter((img) => (folder === '\u0000all' || (img.folder || '') === folder) && (!q || `${img.name} ${img.alt || ''}`.toLowerCase().includes(q)))
+  const ofKind = (images || []).filter((img) => kindOf(img) === kind);
+  const shown = ofKind.filter((img) => (folder === '\u0000all' || (img.folder || '') === folder) && (!q || `${img.name} ${img.alt || ''}`.toLowerCase().includes(q)))
     .sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
 
   return (
@@ -42,21 +46,21 @@ const MediaPickerModal = ({ onClose, onSelect }) => {
         <div className="ui-dialog__head" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span className="ui-dialog__icon" aria-hidden="true"><ImageIcon size={18} /></span>
-            <h2 id="cc-picker-title" className="ui-dialog__title">Choose an image</h2>
+            <h2 id="cc-picker-title" className="ui-dialog__title">Choose {article} {one}</h2>
           </span>
           <span className="ui-row" style={{ gap: 8 }}>
             <label className="ui-btn ui-btn--success ui-btn--sm" style={{ cursor: 'pointer' }}>
               <Upload size={14} aria-hidden="true" /> {uploader.busy ? 'Uploading…' : 'Upload'}
-              <input type="file" multiple style={{ display: 'none' }} accept="image/*" onChange={handleUpload} />
+              <input type="file" multiple style={{ display: 'none' }} accept={acceptFor(kind)} onChange={handleUpload} />
             </label>
             <button ref={closeRef} type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label="Close" onClick={onClose}><X size={16} /></button>
           </span>
         </div>
-        {images && images.length > 0 && (
+        {images && ofKind.length > 0 && (
           <div style={{ margin: '6px 0 10px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 220px' }}><SearchInput value={query} onChange={setQuery} placeholder="Search by name or description…" label="Search images" /></div>
+            <div style={{ flex: '1 1 220px' }}><SearchInput value={query} onChange={setQuery} placeholder="Search by name or description…" label={`Search ${many}`} /></div>
             <select className="ui-select" aria-label="Folder" value={folder} onChange={(e) => setFolder(e.target.value)} style={{ flex: '0 1 220px' }}>
-              <option value={'\u0000all'}>All images</option>
+              <option value={'\u0000all'}>All {many}</option>
               <option value="">Not in a folder</option>
               {folders.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
@@ -64,13 +68,13 @@ const MediaPickerModal = ({ onClose, onSelect }) => {
         )}
         <div className="cc-picker__grid">
           {images === null ? <p className="ui-hint">Loading…</p>
-            : images.length === 0 ? <p className="ui-hint">No images yet: upload one.</p>
-            : shown.length === 0 ? <p className="ui-hint">No images match your search.</p>
+            : ofKind.length === 0 ? <p className="ui-hint">No {many} yet: upload one{kind === 'image' ? '' : ', or close this window and paste the address of a file hosted elsewhere'}.</p>
+            : shown.length === 0 ? <p className="ui-hint">No {many} match your search.</p>
             : shown.map((img) => (
               <button key={img.name} type="button" className="cc-picker__item" onClick={() => onSelect(img.url, img.alt || '')}
                 title={img.alt ? `${img.name} — ${img.alt}` : img.name} aria-label={`Choose ${img.alt || img.name}`}>
-                <img src={img.url} alt="" loading="lazy" />
-                <span className="cc-picker__meta">{img.w ? `${img.w}×${img.h}` : ''}{img.bytes ? ` · ${formatBytes(img.bytes)}` : ''}</span>
+                <MediaThumb item={img} />
+                <span className="cc-picker__meta">{kind !== 'image' ? img.name.replace(/^\d+_/, '') : (img.w ? `${img.w}×${img.h}` : '')}{img.bytes ? ` · ${formatBytes(img.bytes)}` : ''}</span>
               </button>
             ))}
         </div>

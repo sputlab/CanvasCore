@@ -199,6 +199,56 @@ $r = $ed->api('get_pages');
 check('editors don\'t receive a form\'s own email address', strpos($r['body'], 'secret-inbox') === false && strpos($r['body'], 'p-form') !== false);
 check('…admins do', strpos($own->api('get_pages')['body'], 'secret-inbox') !== false);
 
+echo "\nMULTI-STEP FORM RECIPIENTS ARE ADMIN-ONLY TOO\n";
+$wiz = function ($id, $email) { return ['id' => $id, 'type' => 'WIZARD', 'content' => ['email' => $email, 'steps' => [['title' => 'A', 'fields' => [['label' => 'Name', 'type' => 'text']]]]], 'styles' => []]; };
+$own->api('save_page', ['id' => 'p-wiz', 'title' => 'W', 'slug' => 'wizard', 'publish' => true, 'blocks' => [$wiz('w1', 'wizard-secret@corp.example')]]);
+$r = $ed->api('get_pages');
+check('editors don\'t receive a multi-step form\'s own email address', strpos($r['body'], 'wizard-secret') === false && strpos($r['body'], 'p-wiz') !== false);
+check('…admins do', strpos($own->api('get_pages')['body'], 'wizard-secret') !== false);
+$ed->api('save_page', ['id' => 'p-wiz', 'title' => 'W again', 'slug' => 'wizard', 'publish' => true, 'blocks' => [$wiz('w1', 'hacker@evil.example')]]);
+$stored = (string)db()->query("SELECT content_json FROM pages WHERE id = 'p-wiz'")->fetchColumn();
+check('an editor can\'t change it: the admin\'s address stays on save, theirs is not stored', strpos($stored, 'wizard-secret@corp.example') !== false && strpos($stored, 'hacker@evil.example') === false, $stored);
+$ed->api('save_page', ['id' => 'p-wiz2', 'title' => 'W3', 'slug' => 'wizard-two', 'publish' => true, 'blocks' => [$wiz('w2', 'hacker2@evil.example')]]);
+$stored2 = (string)db()->query("SELECT content_json FROM pages WHERE id = 'p-wiz2'")->fetchColumn();
+check('a multi-step form made by an editor has no recipient of its own (the global one is used)', $stored2 !== '' && strpos($stored2, 'hacker2@evil.example') === false, $stored2);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$regJson = (string)@file_get_contents($data . '/forms.json');
+check('the published registry holds the admin\'s address for that form and none of the editors\'', strpos($regJson, 'wizard-secret@corp.example') !== false && strpos($regJson, 'hacker') === false, $regJson);
+
+echo "\nNEWSLETTER RECIPIENTS ARE ADMIN-ONLY TOO\n";
+$nlb = function ($id, $email) { return ['id' => $id, 'type' => 'NEWSLETTER', 'content' => ['email' => $email], 'styles' => []]; };
+$own->api('save_page', ['id' => 'p-nl', 'title' => 'N', 'slug' => 'news', 'publish' => true, 'blocks' => [$nlb('n1', 'news-secret@corp.example')]]);
+$r = $ed->api('get_pages');
+check('editors don\'t receive a newsletter block\'s own email address', strpos($r['body'], 'news-secret') === false && strpos($r['body'], 'p-nl') !== false);
+check('…admins do', strpos($own->api('get_pages')['body'], 'news-secret') !== false);
+$ed->api('save_page', ['id' => 'p-nl', 'title' => 'N again', 'slug' => 'news', 'publish' => true, 'blocks' => [$nlb('n1', 'hacker-news@evil.example')]]);
+$storedN = (string)db()->query("SELECT content_json FROM pages WHERE id = 'p-nl'")->fetchColumn();
+check('an editor can\'t change it: the admin\'s address stays on save, theirs is not stored', strpos($storedN, 'news-secret@corp.example') !== false && strpos($storedN, 'hacker-news@evil.example') === false, $storedN);
+$ed->api('save_page', ['id' => 'p-nl2', 'title' => 'N3', 'slug' => 'news-two', 'publish' => true, 'blocks' => [$nlb('n2', 'hacker-news2@evil.example')]]);
+check('a newsletter made by an editor has no recipient of its own', strpos((string)db()->query("SELECT content_json FROM pages WHERE id = 'p-nl2'")->fetchColumn(), 'hacker-news2') === false);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$regJson = (string)@file_get_contents($data . '/forms.json');
+check('the published registry holds the admin\'s address for it and none of the editors\'', strpos($regJson, 'news-secret@corp.example') !== false && strpos($regJson, 'hacker-news') === false, $regJson);
+
+echo "\nSITE-WIDE ANNOUNCEMENT BAR\n";
+$cur = $own->api('get_settings')['json']; if (!is_array($cur)) $cur = [];
+$own->api('save_settings', array_merge($cur, ['announcement' => ['enabled' => true, 'text' => 'Sale $1 \\1 <b>x</b> "q"', 'linkText' => 'Go', 'linkUrl' => 'contact/index.html', 'preset' => 'promo', 'sticky' => true]]));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pg = (string)@file_get_contents($web . '/contact/index.html');
+check('every published page gets the bar right after <body>, before the menu', (bool)preg_match('~<body[^>]*>\s*<div id="cc-site-announce"~', $pg), substr($pg, strpos($pg, '<body'), 200));
+check('its text is escaped and keeps "$1" and backslashes as typed (a replacement string would have read them as references)', strpos($pg, 'Sale $1 \\1 &lt;b&gt;x&lt;/b&gt; &quot;q&quot;') !== false);
+check('the link points at the page under the site\'s address, and sticky is on', strpos($pg, 'href="/contact/"') !== false && strpos($pg, 'position:sticky; top:0') !== false);
+check('it carries its dismiss script and key (so a changed message shows again)', strpos($pg, 'ccAnnounceInit') !== false && (bool)preg_match('/data-key="[0-9a-f]{8}"/', $pg));
+$cur2 = $ed->api('get_settings')['json'];
+$ed->api('save_settings', array_merge(is_array($cur2) ? $cur2 : [], ['announcement' => ['enabled' => true, 'text' => '<script>alert(1)</script>', 'linkText' => 'x', 'linkUrl' => 'javascript:alert(2)', 'bg' => 'red;}x{']]));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pg = (string)@file_get_contents($web . '/contact/index.html');
+check('an editor can change it, but nothing in it can run: text is escaped, no javascript: link, an unsafe color is replaced', strpos($pg, '&lt;script&gt;alert(1)') !== false && strpos($pg, '<script>alert(1)') === false && stripos($pg, 'href="javascript:') === false && strpos($pg, 'red;}x{') === false);
+$cur3 = $own->api('get_settings')['json'];
+$own->api('save_settings', array_merge(is_array($cur3) ? $cur3 : [], ['announcement' => ['enabled' => false, 'text' => 'Gone']]));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('turned off (or with no text) the bar disappears from the next publish', strpos((string)@file_get_contents($web . '/contact/index.html'), 'cc-site-announce') === false);
+
 echo "\nSESSIONS END WITH THE ACCOUNT\n";
 $ed2 = new Client(); $ed2->login('eddie', 'Editor-pass-2');
 $own->api('force_password', ['id' => $edId, 'password' => 'Reset-pass-123']);
@@ -219,6 +269,37 @@ check('SVG: embedded HTML (form, button formaction) is refused', !$up('b.svg', '
 check('SVG: <use> of an external or data: document is refused', !$up('c.svg', '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="data:image/svg+xml;base64,PHN2Zy8+#x"/></svg>'));
 check('SVG: style sheets that load or import are refused', !$up('d.svg', '<svg xmlns="http://www.w3.org/2000/svg"><style>@import url(//evil/x.css);</style></svg>'));
 check('SVG: <set> and processing instructions are refused', !$up('e.svg', '<svg xmlns="http://www.w3.org/2000/svg"><set attributeName="href" to="x"/></svg>') && !$up('f.svg', '<?xml-stylesheet href="x.xsl"?><svg xmlns="http://www.w3.org/2000/svg"/>'));
+
+echo "\nAUDIO AND VIDEO UPLOADS\n";
+$upm = function ($name, $content) use ($own) {
+    $f = tempnam(sys_get_temp_dir(), 'up'); file_put_contents($f, $content);
+    $r = $own->req('POST', '/canvascore-admin/api.php?action=upload_media', ['file' => new CURLFile($f, 'application/octet-stream', $name)], [], false);
+    @unlink($f); return $r['json'] ?? [];
+};
+$mp3 = "ID3\x03\x00\x00\x00\x00\x00\x00" . str_repeat("\x00", 64);
+$mp3raw = "\xFF\xFB\x90\x00" . str_repeat("\x00", 64);
+$mp4 = "\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom" . str_repeat("\x00", 64);
+$webm = "\x1A\x45\xDF\xA3\x9F\x42\x86\x81\x01" . str_repeat("\x00", 64);
+$ogg = "OggS\x00\x02" . str_repeat("\x00", 64);
+$wav = "RIFF\x24\x00\x00\x00WAVEfmt " . str_repeat("\x00", 32);
+$r = $upm('song.mp3', $mp3);
+check('a real MP3 (ID3 tag) is accepted, listed as audio, and kept with its extension', !empty($r['success']) && ($r['kind'] ?? '') === 'audio' && substr($r['filename'] ?? '', -9) === '_song.mp3' && is_file($web . '/uploads/' . $r['filename']), json_encode($r));
+check('…an MP3 without a tag (frame sync) too', !empty($upm('raw.mp3', $mp3raw)['success']));
+$r = $upm('clip.mp4', $mp4);
+check('a real MP4 is accepted and listed as video', !empty($r['success']) && ($r['kind'] ?? '') === 'video', json_encode($r));
+check('…and WebM, OGG and WAV', !empty($upm('a.webm', $webm)['success']) && !empty($upm('a.ogg', $ogg)['success']) && !empty($upm('a.wav', $wav)['success']));
+check('the media list says what each file is (image, audio or video)', (function () use ($own) {
+    $kinds = []; foreach ($own->api('get_media')['json'] as $m) $kinds[pathinfo($m['name'], PATHINFO_EXTENSION)] = $m['kind'];
+    return ($kinds['mp3'] ?? '') === 'audio' && ($kinds['mp4'] ?? '') === 'video' && ($kinds['svg'] ?? '') === 'image';
+})());
+check('a script, page or text renamed to .mp3 / .mp4 / .webm / .ogg / .wav is refused', array_reduce(['evil.mp3', 'evil.mp4', 'evil.webm', 'evil.ogg', 'evil.wav', 'evil.m4a'], function ($ok, $n) use ($upm) { return $ok && empty($upm($n, "<?php system(\$_GET['c']); ?>")['success']) && empty($upm($n, '<html><script>alert(1)</script></html>')['success']); }, true));
+check('a real MP4 header does not make a .php / .phtml / .html file acceptable, and a double extension ends as the last one', empty($upm('x.php', $mp4)['success']) && empty($upm('x.phtml', $mp4)['success']) && empty($upm('x.html', $mp4)['success']) && empty($upm('x.mp4.php', $mp4)['success']));
+check('an MP3 header named .mp4 is refused (the header must match the type)', empty($upm('x.mp4', $mp3)['success']) && empty($upm('x.webm', $mp4)['success']));
+check('an empty file named .mp3 is refused', empty($upm('empty.mp3', '')['success']));
+$r = $upm('../../evil.mp3', $mp3);
+check('a path in the file name is dropped: the file stays inside uploads', !empty($r['success']) && strpos($r['filename'], '/') === false && strpos($r['filename'], '..') === false && is_file($web . '/uploads/' . $r['filename']), json_encode($r));
+$names = array_filter(scandir($web . '/uploads'), function ($f) { return preg_match('/\.(php|phtml|html)$/i', $f); });
+check('nothing executable ended up in the uploads folder', !$names, implode(',', $names));
 
 echo "\nPUBLIC FORM ENDPOINT\n";
 $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
