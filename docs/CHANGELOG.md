@@ -10,6 +10,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-15 — More starters, editor matches the site
+
 ### Added
 - **12 new starter pages** built with the 0.15.0 blocks: SaaS Product, Agency, Product Showcase, Blog Article,
   Podcast Episode, Documentation, Quote Request, Newsletter Landing, Webinar, Personal Portfolio, Restaurant and Our
@@ -975,7 +977,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/sputlab/CanvasCore/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sputlab/CanvasCore/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/sputlab/CanvasCore/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/sputlab/CanvasCore/releases/tag/v0.14.0
