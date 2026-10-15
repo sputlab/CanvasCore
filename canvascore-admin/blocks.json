@@ -1336,6 +1336,94 @@
         "width": "100%",
         "padding": "20px 0"
       }
+    },
+    "VIDEO_HERO": {
+      "content": {
+        "video": "",
+        "video2": "",
+        "poster": "",
+        "height": 560,
+        "overlay": "#0f172a",
+        "overlayOpacity": 55,
+        "align": "center",
+        "textColor": "#ffffff",
+        "title": "Make something people remember",
+        "subtitle": "A short line that says what you do and why it matters.",
+        "buttons": [
+          {
+            "text": "Get started",
+            "url": "",
+            "style": "primary"
+          },
+          {
+            "text": "Learn more",
+            "url": "",
+            "style": "secondary"
+          }
+        ],
+        "showPause": true,
+        "mobileVideo": false
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "0px"
+      }
+    },
+    "AUDIO_PLAYER": {
+      "content": {
+        "src": "",
+        "title": "Episode title",
+        "artist": "Show name",
+        "cover": "",
+        "layout": "card",
+        "accent": "",
+        "skip": true,
+        "speed": true
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
+    },
+    "ANNOUNCEMENT_BAR": {
+      "content": {
+        "text": "Free shipping on orders over \u20ac50",
+        "linkText": "Shop now",
+        "linkUrl": "",
+        "icon": "",
+        "preset": "info",
+        "bg": "",
+        "color": "",
+        "sticky": false,
+        "dismissible": true,
+        "align": "center"
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "0px"
+      }
+    },
+    "NEWSLETTER": {
+      "content": {
+        "title": "Stay in the loop",
+        "text": "One email a month. No spam, unsubscribe any time.",
+        "placeholder": "Your email address",
+        "emailLabel": "Email",
+        "askName": false,
+        "nameLabel": "Name",
+        "namePlaceholder": "",
+        "consentText": "I agree to receive emails and accept the privacy policy.",
+        "buttonText": "Subscribe",
+        "successMsg": "Thank you for subscribing!",
+        "email": "",
+        "layout": "card",
+        "formLayout": "inline",
+        "accent": ""
+      },
+      "styles": {
+        "width": "100%",
+        "padding": "20px 0"
+      }
     }
   }
 }

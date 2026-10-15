@@ -111,6 +111,9 @@ try {
     $feed_links = '';
     foreach ($feeds as $fd) $feed_links .= '<link rel="alternate" type="application/rss+xml" title="' . htmlspecialchars($fd['name'] . ($site_name !== '' ? ' — ' . $site_name : '')) . '" href="' . htmlspecialchars($site_url . '/' . $fd['slug'] . '/feed.xml') . '">' . "\n";
     $cookie_html = cc_cookie_banner_html($settings['cookieBanner'] ?? null);
+    // Global Options › Announcement bar: at the top of every page (nothing when it is off or has no text)
+    $ann = $settings['announcement'] ?? null;
+    $announce_html = (is_array($ann) && !empty($ann['enabled'])) ? cc_announcement_html($ann, 'cc-site-announce', '', '', true) : '';
     $search_index = [];
     // Plain text of a page for the site search (no tags, scripts or styles; collapsed spaces)
     $plain = function ($html) {
@@ -119,13 +122,15 @@ try {
         return trim(preg_replace('/\s+/u', ' ', $t));
     };
     // Every published page and item gets the same finishing touches
-    $finish = function ($html, $canonical, $noindex) use ($feed_links, $cookie_html, $base_url, &$media_meta) {
+    $finish = function ($html, $canonical, $noindex) use ($feed_links, $cookie_html, $announce_html, $base_url, &$media_meta) {
         $head = '';
         if ($canonical !== '') $head .= '<link rel="canonical" href="' . htmlspecialchars($canonical) . '">' . "\n";
         if ($noindex || cc_demo_on()) $head .= '<meta name="robots" content="noindex">' . "\n";
         $head .= $feed_links;
         if ($head !== '') $html = preg_replace('#</head>#i', $head . '</head>', $html, 1);
         if ($cookie_html !== '') $html = preg_replace('#</body>#i', str_replace('{{BASE_URL}}', $base_url, $cookie_html) . '</body>', $html, 1);
+        // (a callback: the text may contain $1 or \\, which a replacement string would read as references)
+        if ($announce_html !== '') $html = preg_replace_callback('#<body[^>]*>#i', function ($m) use ($announce_html, $base_url) { return $m[0] . "\n" . str_replace('{{BASE_URL}}', $base_url, $announce_html); }, $html, 1);
         return cc_optimize_images($html, $base_url . 'uploads/', $media_meta);
     };
     $master_file = __DIR__ . '/master.html';

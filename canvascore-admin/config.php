@@ -620,7 +620,7 @@ function cc_strip_code_surfaces(&$blocks) {
 
 // Blocks that send what visitors write to an email address: that address is an admin setting (see cc_keep_code_surfaces,
 // cc_redact_blocks)
-const CC_FORM_BLOCKS = ['FORM', 'WIZARD'];
+const CC_FORM_BLOCKS = ['FORM', 'WIZARD', 'NEWSLETTER'];
 // Non-admin save: the code an admin put in (Custom HTML blocks, custom CSS/JS, a form's receiving email) is KEPT as it was saved,
 // matched by block id, instead of being wiped; an editor can't add or change code, only move or delete
 // those blocks. $previous = the blocks currently stored (array or JSON string).

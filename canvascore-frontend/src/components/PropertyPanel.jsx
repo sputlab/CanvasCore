@@ -84,7 +84,7 @@ export default function PropertyPanel() {
   const renderMediaPicker = () => {
     if (!mediaPickerTarget) return null;
     // The image's alt text from the library fills the block's alt field when that is still empty
-    return <MediaPickerModal onClose={() => setMediaPickerTarget(null)} onSelect={(url, alt = '') => {
+    return <MediaPickerModal kind={(typeof mediaPickerTarget === 'object' && mediaPickerTarget.kind) || 'image'} onClose={() => setMediaPickerTarget(null)} onSelect={(url, alt = '') => {
       const t = mediaPickerTarget;
       const withAlt = (item, key = 'alt') => (alt && !(item && item[key]) ? { [key]: alt } : {});
       const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');

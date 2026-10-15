@@ -183,12 +183,29 @@ const fixtures = [
       { fields: 'nope' }] } },
   { id: 'wz3', type: 'WIZARD', styles: {}, content: {} },
   { id: 'wz4', type: 'WIZARD', styles: {}, content: { steps: [{ title: 'Only', fields: [{ label: 'A', type: 'text' }] }] } },
+  { id: 'vh1', type: 'VIDEO_HERO', styles: { width: '100%' }, content: { video: '/uploads/a.mp4', video2: 'https://cdn.example.com/a.webm?x=1#t', poster: '/uploads/p.jpg', height: 700, overlay: '#000000', overlayOpacity: 30, align: 'left', textColor: '#ffeeaa', title: 'Hello', subtitle: 'a\nb', showPause: false, mobileVideo: true,
+      buttons: [{ text: 'Go', url: 'contatti/index.html', style: 'primary' }, { text: 'More', url: 'https://example.com', style: 'secondary' }, { text: 'Third', url: 'x' }] } },
+  { id: 'vh2', type: 'VIDEO_HERO', styles: {}, content: { video: 'javascript:alert(1)', video2: 'data:text/html,x', poster: 'javascript:alert(2)', height: 99999, overlay: 'red;}', overlayOpacity: 500, align: 'evil', textColor: 'url(x)', title: '<img src=x onerror=a>', subtitle: { o: 1 },
+      buttons: ['junk', null, { text: '', url: 'a' }, { text: '<b>x</b>', url: 'javascript:alert(3)' }] } },
+  { id: 'vh3', type: 'VIDEO_HERO', styles: {}, content: {} },
+  { id: 'vh4', type: 'VIDEO_HERO', styles: {}, content: { poster: 'p.jpg', title: 'Only a poster' } },
+  { id: 'vh5', type: 'VIDEO_HERO', styles: {}, content: { video: 'noextension', buttons: [{ text: '' }, { text: 'Second' }, { text: 'Third' }] } },
+  { id: 'ap1', type: 'AUDIO_PLAYER', styles: { width: '100%' }, content: { src: '/uploads/a.mp3', title: 'Episode', artist: 'Show', cover: 'c.jpg', layout: 'plain', accent: '#ef4444', skip: false, speed: false } },
+  { id: 'ap2', type: 'AUDIO_PLAYER', styles: {}, content: { src: 'javascript:alert(1)', title: '<b>x</b>', artist: ['a'], cover: 'javascript:alert(2)', accent: 'red;}', layout: 'evil', skip: 'no', speed: 0 } },
+  { id: 'ap3', type: 'AUDIO_PLAYER', styles: {}, content: {} },
+  { id: 'an1', type: 'ANNOUNCEMENT_BAR', styles: { width: '100%' }, content: { text: 'Spedizione gratuita sopra 50 €', icon: '🎁', linkText: 'Scopri', linkUrl: 'offerte/index.html', preset: 'promo', sticky: true, dismissible: true, align: 'left' } },
+  { id: 'an2', type: 'ANNOUNCEMENT_BAR', styles: {}, content: { text: '<img src=x onerror=a>', icon: '12345678', linkText: 'L', linkUrl: 'javascript:alert(1)', preset: 'evil', bg: 'red;}', color: 'url(x)', sticky: 'yes', dismissible: false } },
+  { id: 'an3', type: 'ANNOUNCEMENT_BAR', styles: {}, content: {} },
+  { id: 'an4', type: 'ANNOUNCEMENT_BAR', styles: {}, content: { text: 'Warning', preset: 'warning', bg: '#123456', color: '#abcdef', dismissible: false } },
+  { id: 'nl1', type: 'NEWSLETTER', styles: { width: '100%' }, content: { title: 'Join', text: 'a\nb', placeholder: 'Mail', emailLabel: 'E-mail', askName: true, nameLabel: 'Nome', namePlaceholder: 'Il tuo nome', consentText: 'Accetto', buttonText: 'Iscriviti', successMsg: 'Grazie', email: 'a@b.it', layout: 'plain', formLayout: 'stacked', accent: '#10b981' } },
+  { id: 'nl2', type: 'NEWSLETTER', styles: {}, content: { title: '<b>x</b>', text: { o: 1 }, placeholder: '"><script>x</script>', emailLabel: '"><b>', askName: 'yes', consentText: '<i>c</i>', buttonText: '<u>b</u>', successMsg: '"><x>', customId: 'My Form!', formLayout: 'evil', accent: 'red;}' } },
+  { id: 'nl3', type: 'NEWSLETTER', styles: {}, content: {} },
 ];
 
 // Fixtures from the REAL DEFAULTS (blocks.json): exactly what the editor creates with addBlock.
 {
   const defs = JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks.json', import.meta.url)), 'utf-8'));
-  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD']) {
+  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER']) {
     const def = defs.types[type];
     if (!def) { console.error(`blocks.json: type ${type} is missing`); process.exit(1); }
     fixtures.push({ id: 'def_' + type.toLowerCase(), type, styles: { ...(defs._baseStyles || {}), ...(def.styles || {}) }, content: JSON.parse(JSON.stringify(def.content || {})) });
@@ -252,7 +269,7 @@ function diff(a, b, path = '') {
 
 // For these blocks the generated CSS carries LOGIC (radio tabs, open state, responsive):
 // besides the structure we also compare the text of the <style> tags.
-const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD']);
+const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER']);
 function styleTexts(html) {
   const $ = load(`<div id="__root__">${html}</div>`, null, false);
   return $('style').map((_, e) => $(e).text().replace(/\s+/g, ' ').replace(/:\s+/g, ':').replace(/,\s+/g, ',').trim()).get();

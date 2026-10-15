@@ -1,5 +1,5 @@
 // Behaviour of the blocks that need a script: Code Snippet (highlight + copy), Table of Contents, Share Bar,
-// Pricing Calculator, Multi-step Form.
+// Pricing Calculator, Multi-step Form, Video Hero, Audio Player, Announcement Bar.
 // The editor canvas runs these functions through the wrappers at the bottom; published pages run the SAME text
 // from canvascore-admin/compiler.php (the CC_*_SCRIPT constants). Every function between a "cc-xxx:begin" and
 // "cc-xxx:end" line is copied verbatim into the compiler (so no literal "<!--", "-->" or "</script" in them):
@@ -299,6 +299,116 @@ function ccWizardInit(root, editor) {
 }
 // cc-wizard:end
 
+// cc-video:begin
+function ccVideoInit(root, editor) {
+  var v = root.querySelector('.cc-vh-video'), btn = root.querySelector('.cc-vh-toggle');
+  if (!v || root.getAttribute('data-ready')) return;
+  var win = root.ownerDocument.defaultView, mq = function (q) { return !!(win.matchMedia && win.matchMedia(q).matches); };
+  root.setAttribute('data-ready', '1');
+  // the poster stays on the screen in the editor, and on phones unless the author chose video there
+  if (editor || (root.getAttribute('data-mobile') !== '1' && mq('(max-width: 768px)'))) return;
+  var pause = btn ? btn.querySelector('.cc-vh-i-pause') : null, play = btn ? btn.querySelector('.cc-vh-i-play') : null;
+  var show = function (playing) {
+    if (!btn) return;
+    // (an SVG element ignores the hidden attribute, so the icons are shown and hidden with display)
+    pause.style.display = playing ? '' : 'none';
+    play.style.display = playing ? 'none' : '';
+    btn.setAttribute('aria-label', playing ? 'Pause the background video' : 'Play the background video');
+  };
+  if (btn) {
+    btn.hidden = false;
+    btn.addEventListener('click', function () {
+      if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); } else v.pause();
+    });
+  }
+  v.addEventListener('play', function () { show(true); });
+  v.addEventListener('pause', function () { show(false); });
+  show(false);
+  // visitors who prefer reduced motion get the poster, and can start the video with the button
+  if (mq('(prefers-reduced-motion: reduce)')) return;
+  v.preload = 'auto';
+  var started = v.play();
+  if (started && started.catch) started.catch(function () {});
+}
+// cc-video:end
+
+// cc-audio:begin
+function ccAudioInit(root) {
+  var a = root.querySelector('.cc-au-el'), ui = root.querySelector('.cc-au-ui');
+  if (!a || !ui || root.getAttribute('data-ready')) return;
+  var doc = root.ownerDocument, playBtn = root.querySelector('.cc-au-play'), seek = root.querySelector('.cc-au-seek');
+  var cur = root.querySelector('.cc-au-cur'), dur = root.querySelector('.cc-au-dur'), speedBtn = root.querySelector('.cc-au-speed');
+  var back = root.querySelector('.cc-au-back'), fwd = root.querySelector('.cc-au-fwd'), step = parseInt(root.getAttribute('data-skip'), 10) || 15;
+  var rates = [1, 1.25, 1.5, 2, 0.75], ri = 0, drag = false;
+  root.setAttribute('data-ready', '1');
+  a.removeAttribute('controls');
+  ui.hidden = false;
+  var fmt = function (t) {
+    t = isFinite(t) && t > 0 ? Math.floor(t) : 0;
+    var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') + m : String(m)) + ':' + (s < 10 ? '0' : '') + s;
+  };
+  var paint = function () {
+    var t = a.currentTime || 0, d = isFinite(a.duration) ? a.duration : 0;
+    if (!drag) seek.value = String(t);
+    cur.textContent = fmt(t);
+    dur.textContent = fmt(d);
+    seek.max = String(d || 0);
+    seek.setAttribute('aria-valuetext', fmt(t) + ' of ' + fmt(d));
+  };
+  var state = function () {
+    var playing = !a.paused && !a.ended;
+    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    playBtn.querySelector('.cc-au-i-play').style.display = playing ? 'none' : '';   // (display: an SVG ignores hidden)
+    playBtn.querySelector('.cc-au-i-pause').style.display = playing ? '' : 'none';
+  };
+  playBtn.addEventListener('click', function () {
+    if (a.paused) { var p = a.play(); if (p && p.catch) p.catch(function () {}); } else a.pause();
+  });
+  if (back) back.addEventListener('click', function () { a.currentTime = Math.max(0, (a.currentTime || 0) - step); });
+  if (fwd) fwd.addEventListener('click', function () { a.currentTime = Math.min(isFinite(a.duration) ? a.duration : 1e9, (a.currentTime || 0) + step); });
+  if (speedBtn) speedBtn.addEventListener('click', function () {
+    ri = (ri + 1) % rates.length;
+    a.playbackRate = rates[ri];
+    speedBtn.textContent = rates[ri] + '×';
+  });
+  seek.addEventListener('input', function () { drag = true; a.currentTime = parseFloat(seek.value) || 0; cur.textContent = fmt(a.currentTime); });
+  seek.addEventListener('change', function () { drag = false; });
+  a.addEventListener('timeupdate', paint);
+  a.addEventListener('loadedmetadata', paint);
+  a.addEventListener('durationchange', paint);
+  a.addEventListener('play', function () {
+    state();
+    var all = doc.querySelectorAll('.cc-au-el');
+    for (var i = 0; i < all.length; i++) { if (all[i] !== a && !all[i].paused) all[i].pause(); }
+  });
+  a.addEventListener('pause', state);
+  a.addEventListener('ended', state);
+  state();
+  paint();
+}
+// cc-audio:end
+
+// cc-announce:begin
+function ccAnnounceInit(root, editor) {
+  var btn = root.querySelector('.cc-ann-close'), win = root.ownerDocument.defaultView, key = 'cc_ann_' + (root.getAttribute('data-key') || '');
+  if (root.getAttribute('data-ready')) return;
+  root.setAttribute('data-ready', '1');
+  if (!editor) {
+    var seen = false;
+    try { seen = win.localStorage.getItem(key) === '1'; } catch { seen = false; }
+    if (seen) { root.hidden = true; return; }
+  }
+  if (!btn) return;
+  btn.hidden = false;
+  btn.addEventListener('click', function () {
+    if (editor) return;
+    root.hidden = true;
+    try { win.localStorage.setItem(key, '1'); } catch { /* it is not remembered */ }
+  });
+}
+// cc-announce:end
+
 // ---- the editor canvas (scripts injected into the canvas HTML don't run: these wrappers do the same work) ----
 
 // Code Snippet: highlight and copy button
@@ -331,6 +441,15 @@ export function initCalcBlock(root) { if (root) ccCalcInit(root); }
 
 // Multi-step Form: the steps can be walked through to design them; nothing is validated or sent from the editor
 export function initWizardBlock(root) { if (root) ccWizardInit(root, true); }
+
+// Video Hero: the editor shows the poster (nothing plays while you edit)
+export function initVideoBlock(root) { if (root) ccVideoInit(root, true); }
+
+// Audio Player: the custom player, with the audio loaded only when played
+export function initAudioBlock(root) { if (root) ccAudioInit(root); }
+
+// Announcement Bar: shown with its close button, which does nothing in the editor
+export function initAnnounceBlock(root) { if (root) ccAnnounceInit(root, true); }
 
 // For tests: the highlighter on its own
 export { ccTokens, ccPlain };

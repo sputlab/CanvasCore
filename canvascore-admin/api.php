@@ -265,21 +265,31 @@ if ($action === 'upload_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
         $orig = basename($_FILES['file']['name']);
         $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
-        $allowed = ['jpg','jpeg','png','gif','webp','avif','svg','ico','bmp'];
+        $allowed = array_merge(['jpg','jpeg','png','gif','webp','avif','svg','ico','bmp'], CC_MEDIA_AUDIO, CC_MEDIA_VIDEO);
         if (!in_array($ext, $allowed, true)) {
-            echo json_encode(['success' => false, 'message' => 'File type not allowed. Only images are accepted.']); exit;
+            echo json_encode(['success' => false, 'message' => 'File type not allowed. Accepted: images, MP3 / M4A / OGG / WAV audio and MP4 / WebM video.']); exit;
+        }
+        $kind = cc_media_kind($ext);
+        if ($kind !== 'image') {
+            // audio / video: it must start like its type says, and stay within the size limit
+            if (!cc_media_sniff($_FILES['file']['tmp_name'], $ext)) {
+                echo json_encode(['success' => false, 'message' => 'The file is not a valid ' . strtoupper($ext) . ' ' . $kind . ' file.']); exit;
+            }
+            if ((int)$_FILES['file']['size'] > ($kind === 'video' ? CC_MEDIA_MAX_VIDEO : CC_MEDIA_MAX_AUDIO)) {
+                echo json_encode(['success' => false, 'message' => 'This ' . $kind . ' file is too large (' . round(($kind === 'video' ? CC_MEDIA_MAX_VIDEO : CC_MEDIA_MAX_AUDIO) / 1048576) . ' MB at most). Host it elsewhere and paste its address instead.']); exit;
+            }
         }
         if ($ext === 'svg' && !cc_svg_is_safe($_FILES['file']['tmp_name'])) {
             echo json_encode(['success' => false, 'message' => 'This SVG contains scripts or other active content and was not accepted. Export it again as a plain SVG (or as PNG).']); exit;
         }
         // For raster formats, check that it really is an image
-        if (!in_array($ext, ['svg','ico'], true)) {
+        if ($kind === 'image' && !in_array($ext, ['svg','ico'], true)) {
             if (@getimagesize($_FILES['file']['tmp_name']) === false) {
                 echo json_encode(['success' => false, 'message' => 'The file is not a valid image.']); exit;
             }
         }
         $safe = ltrim(preg_replace('/[^a-zA-Z0-9._-]/', '', $orig), '.-');
-        if ($safe === '' || strtolower(pathinfo($safe, PATHINFO_EXTENSION)) !== $ext) $safe = 'image.' . $ext;
+        if ($safe === '' || strtolower(pathinfo($safe, PATHINFO_EXTENSION)) !== $ext) $safe = ($kind === 'image' ? 'image.' : $kind . '.') . $ext;
         $fname = time() . '_' . $safe;
         if (file_exists($uploads_dir . '/' . $fname)) $fname = time() . '_' . bin2hex(random_bytes(3)) . '_' . $safe;   // never overwrite
         $target = $uploads_dir . '/' . $fname;
@@ -289,9 +299,16 @@ if ($action === 'upload_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $meta = cc_media_process($uploads_dir, $fname);   // smaller WebP copies + size info
             $upFolder = cc_media_folder_path($_POST['folder'] ?? '');
             if ($upFolder) { cc_media_move([$fname], $upFolder); $meta['folder'] = $upFolder; }
-            echo json_encode(['success' => true, 'message' => 'Uploaded successfully.', 'url' => $base_dir . '/uploads/' . $fname, 'filename' => $fname, 'meta' => $meta]);
+            echo json_encode(['success' => true, 'message' => 'Uploaded successfully.', 'url' => $base_dir . '/uploads/' . $fname, 'filename' => $fname, 'kind' => $kind, 'meta' => $meta]);
         } else { echo json_encode(['success' => false, 'message' => 'Cannot move the uploaded file.']); }
-    } else { echo json_encode(['success' => false, 'message' => 'No file received or upload error.']); }
+    } else {
+        // A file over the server's limit arrives as an error code (or, over post_max_size, as nothing at all)
+        $err = (int)($_FILES['file']['error'] ?? 0);
+        $tooBig = in_array($err, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) || (empty($_FILES) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0);
+        echo json_encode(['success' => false, 'message' => $tooBig
+            ? 'The file is larger than your server accepts (upload_max_filesize ' . ini_get('upload_max_filesize') . ', post_max_size ' . ini_get('post_max_size') . '). Use a smaller file, or host it elsewhere and paste its address.'
+            : 'No file received or upload error.']);
+    }
     exit;
 }
 if ($action === 'get_media') {
@@ -305,7 +322,7 @@ if ($action === 'get_media') {
     foreach ($files as $f) {
         if (!is_file($uploads_dir . '/' . $f)) continue;   // the _cc folder of optimized copies is not listed
         $m = is_array($meta[$f] ?? null) ? $meta[$f] : [];
-        $media[] = ['name' => $f, 'url' => $base_url . $f, 'folder' => (string)($m['folder'] ?? ''), 'mtime' => (int)@filemtime($uploads_dir . '/' . $f),
+        $media[] = ['name' => $f, 'kind' => cc_media_kind(pathinfo($f, PATHINFO_EXTENSION)), 'url' => $base_url . $f, 'folder' => (string)($m['folder'] ?? ''), 'mtime' => (int)@filemtime($uploads_dir . '/' . $f),
                     'alt' => (string)($m['alt'] ?? ''), 'w' => (int)($m['w'] ?? 0), 'h' => (int)($m['h'] ?? 0),
                     'bytes' => (int)($m['bytes'] ?? @filesize($uploads_dir . '/' . $f)), 'optimized' => !empty($m['optimized']), 'variants' => array_values($m['variants'] ?? [])];
     }
@@ -327,7 +344,7 @@ if ($action === 'optimize_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $meta = cc_media_meta_all();
     $todo = [];
     foreach (array_diff(scandir($uploads_dir) ?: [], ['.', '..', '.htaccess']) as $f) {
-        if (is_file($uploads_dir . '/' . $f) && empty($meta[$f]['optimized'])) $todo[] = $f;
+        if (is_file($uploads_dir . '/' . $f) && empty($meta[$f]['optimized']) && cc_media_kind(pathinfo($f, PATHINFO_EXTENSION)) === 'image') $todo[] = $f;
     }
     $done = 0; $tried = 0; $skipped = [];
     foreach ($todo as $f) {

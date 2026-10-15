@@ -160,6 +160,56 @@ function ccMoney(v, dec, eu, cur, after) {
 // Code Snippet languages: [id, label]. Twin of CC_CODE_LANGS in compiler.php.
 const CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['json', 'JSON'], ['php', 'PHP'], ['shell', 'Shell'], ['text', '']];
 
+// A media file address (audio, video): http(s) or a path on this site; any other scheme (javascript:, data:…) -> ''.
+// Twin of cc_media_src() in compiler.php.
+function ccMediaSrc(u) {
+  const t = String(u ?? '').trim();
+  // eslint-disable-next-line no-control-regex -- browsers ignore control characters in a URL scheme
+  const probe = t.replace(/[\x00-\x20\x7f]+/g, '').toLowerCase();
+  if (/^[a-z][a-z0-9+.-]*:/.test(probe) && !/^https?:/.test(probe)) return '';
+  return t;
+}
+// The MIME type a file's extension says ('' when unknown). Twin of cc_media_mime().
+const MEDIA_MIME = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav' };
+function ccMediaMime(src) {
+  const m = String(src).split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i);
+  return m && Object.prototype.hasOwnProperty.call(MEDIA_MIME, m[1].toLowerCase()) ? MEDIA_MIME[m[1].toLowerCase()] : '';
+}
+// CRC-32 of the UTF-8 text as 8 hex digits (the same as PHP's crc32()): the announcement's "dismissed" key
+function ccCrc32(str) {
+  let crc = 0xFFFFFFFF;
+  for (const byte of new TextEncoder().encode(str)) {
+    crc ^= byte;
+    for (let k = 0; k < 8; k++) crc = crc & 1 ? (crc >>> 1) ^ 0xEDB88320 : crc >>> 1;
+  }
+  return ((crc ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, '0');
+}
+// Announcement Bar presets: [background, text color]. Twin of cc_announcement_html() in compiler.php, which also
+// draws the site-wide bar (Global Options).
+const ANN_PRESETS = { info: ['#0f172a', '#ffffff'], promo: ['var(--brand-color, #3b82f6)', '#ffffff'], warning: ['#fef3c7', '#78350f'], success: ['#dcfce7', '#14532d'] };
+export function announcementHtml(c, id, extra, styleAttr, requireText) {
+  c = c && typeof c === 'object' ? c : {};
+  const text = [...ccStr(c.text).trim()].slice(0, 300).join('');
+  if (requireText && text === '') return '';
+  const preset = Object.prototype.hasOwnProperty.call(ANN_PRESETS, c.preset) ? c.preset : 'info';
+  const bg = ccColor(c.bg, ANN_PRESETS[preset][0]);
+  const fg = ccColor(c.color, ANN_PRESETS[preset][1]);
+  const linkText = [...ccStr(c.linkText).trim()].slice(0, 60).join('');
+  const linkUrl = ccStr(c.linkUrl).trim();
+  const icon = [...ccStr(c.icon).trim()].slice(0, 4).join('');
+  const sticky = c.sticky === true;
+  const dismissible = c.dismissible !== false;
+  const left = c.align === 'left';
+  const key = ccCrc32(text + '|' + linkText + '|' + linkUrl);
+  return `<div id="${id}" class="cc-announce cc-ann-${preset}${extra}" role="region" aria-label="Announcement" data-key="${key}" style="${styleAttr}${sticky ? ' position:sticky; top:0; z-index:2147482000;' : ''} background:${bg}; color:${fg}; padding:10px 16px; font-size:14px; line-height:1.4;">`
+    + `<div class="cc-ann-inner" style="display:flex; align-items:center; justify-content:${left ? 'flex-start' : 'center'}; flex-wrap:wrap; gap:4px 12px; max-width:1200px; margin:0 auto; position:relative; padding-right:${dismissible ? '36px' : '0'}; box-sizing:border-box;">`
+    + (icon !== '' ? `<span class="cc-ann-icon" aria-hidden="true">${escapeHtml(icon)}</span>` : '')
+    + `<span class="cc-ann-text">${escapeHtml(text)}</span>`
+    + (linkText !== '' ? `<a class="cc-ann-link" href="${escapeHtml(resolveBlockUrl(linkUrl))}" style="color:inherit; font-weight:700; text-decoration:underline; white-space:nowrap;">${escapeHtml(linkText)} &rarr;</a>` : '')
+    + (dismissible ? `<button type="button" class="cc-ann-close" hidden aria-label="Dismiss the announcement" style="position:absolute; right:0; top:50%; transform:translateY(-50%); width:28px; height:28px; padding:0; border:none; border-radius:50%; background:transparent; color:inherit; font-size:20px; line-height:1; cursor:pointer;">&times;</button>` : '')
+    + `</div></div>\n`;
+}
+
 // opts.fields (editor canvas only): marks the rich text fields as editable in place
 // (data-cc-field + contenteditable) on the same elements the site renders, so editing keeps the layout.
 export function renderBlock(block, opts = {}) {
@@ -1462,6 +1512,108 @@ export function renderBlock(block, opts = {}) {
         + `<div class="cc-wz-nav" style="display:flex; align-items:center; gap:10px; margin-top:24px;"><button type="button" class="cc-wz-back" hidden style="${WZ_BTN} background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;">${text(c.backText, 'Back', 30)}</button><span style="flex:1;"></span>`
         + `<button type="button" class="cc-wz-next" hidden style="${WZ_BTN} background:${accent}; color:#ffffff; border:none;">${text(c.nextText, 'Next', 30)}</button>`
         + `<button type="submit" class="cc-wz-submit" style="${WZ_BTN} background:${accent}; color:#ffffff; border:none;">${text(c.btnText, 'Send', 30)}</button></div>\n</form>\n</div>\n</div>\n`;
+    }
+
+    case 'VIDEO_HERO': {
+      const c = content;
+      const objs = (v) => (Array.isArray(v) ? v : []).filter((o) => o && typeof o === 'object');
+      const sources = [ccMediaSrc(ccStr(c.video)), ccMediaSrc(ccStr(c.video2))].filter((u) => u !== '');
+      const poster = ccImgUrl(ccStr(c.poster));
+      const overlay = ccColor(c.overlay, '#0f172a');
+      const op = ccInt(c.overlayOpacity, 55, 0, 90);
+      const h = ccInt(c.height, 560, 280, 1000);
+      const center = c.align !== 'left';
+      const color = ccColor(c.textColor, '#ffffff');
+      const title = ccEsc(c.title);
+      const subtitle = ccBr(ccStr(c.subtitle));
+      const btns = objs(c.buttons).slice(0, 2).filter((b) => ccStr(b.text).trim() !== '');
+      let btnHtml = '';
+      for (const b of btns) {
+        const primary = b.style !== 'secondary';
+        btnHtml += `<a class="cc-vh-btn cc-vh-btn-${primary ? 'primary' : 'secondary'}" href="${escapeHtml(resolveBlockUrl(ccStr(b.url)))}" style="padding:14px 28px; border-radius:10px; font-weight:700; text-decoration:none; ${primary ? 'background:#ffffff; color:#0f172a;' : 'border:2px solid rgba(255,255,255,0.85); color:#ffffff;'}">${ccEsc(b.text)}</a>`;
+      }
+      const icon = (cls, d, hidden) => `<svg class="${cls}"${hidden ? ' style="display:none"' : ''} aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">${d}</svg>`;
+      return customCss + `<section id="${innerId}" class="cc-vhero${animClass}${innerClass}" data-mobile="${c.mobileVideo === true ? '1' : '0'}" style="${styleAttr} position:relative; overflow:hidden; min-height:${h}px; display:flex; align-items:center; justify-content:center; background:#0f172a; color:${color};">\n`
+        + (poster !== '' ? `<div class="cc-vh-poster" aria-hidden="true" style="position:absolute; inset:0; background-image:url('${escapeHtml(ccCssUrl(poster))}'); background-size:cover; background-position:center;"></div>` : '')
+        + (sources.length ? `<video class="cc-vh-video" muted loop playsinline preload="none" aria-hidden="true"${poster !== '' ? ` poster="${escapeHtml(poster)}"` : ''} style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">${sources.map((u) => `<source src="${escapeHtml(u)}"${ccMediaMime(u) !== '' ? ` type="${ccMediaMime(u)}"` : ''}>`).join('')}</video>` : '')
+        + `<div class="cc-vh-overlay" aria-hidden="true" style="position:absolute; inset:0; background:${overlay}; opacity:${ccPlain(op / 100)};"></div>`
+        + `<div class="cc-vh-inner" style="position:relative; width:100%; max-width:900px; padding:64px 24px; box-sizing:border-box; text-align:${center ? 'center' : 'left'}; ${center ? 'margin:0 auto;' : 'margin-right:auto;'}">`
+        + (title !== '' ? `<h2 class="cc-vh-title" style="margin:0; font-size:clamp(32px, 5vw, 56px); line-height:1.1; font-weight:800; color:inherit;">${title}</h2>` : '')
+        + (subtitle !== '' ? `<p class="cc-vh-subtitle" style="margin:16px 0 0 0; font-size:clamp(16px, 2vw, 20px); line-height:1.6; opacity:0.92;">${subtitle}</p>` : '')
+        + (btnHtml !== '' ? `<div class="cc-vh-buttons" style="display:flex; gap:12px; flex-wrap:wrap; justify-content:${center ? 'center' : 'flex-start'}; margin-top:28px;">${btnHtml}</div>` : '')
+        + `</div>`
+        + (sources.length && c.showPause !== false ? `<button type="button" class="cc-vh-toggle" hidden aria-label="Pause the background video" style="position:absolute; right:16px; bottom:16px; width:40px; height:40px; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,0.6); background:rgba(15,23,42,0.55); color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">${icon('cc-vh-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', false)}${icon('cc-vh-i-play', '<path d="M8 5v14l11-7z"/>', true)}</button>` : '')
+        + `</section>\n`;
+    }
+
+    case 'AUDIO_PLAYER': {
+      const c = content;
+      const src = ccMediaSrc(ccStr(c.src));
+      const cover = ccImgUrl(ccStr(c.cover));
+      const title = ccEsc(c.title);
+      const artist = ccEsc(c.artist);
+      const accent = ccColor(c.accent, 'var(--brand-color, #3b82f6)');
+      const card = c.layout !== 'plain';
+      const skip = c.skip !== false;
+      const speed = c.speed !== false;
+      const ico = (cls, d, hidden) => `<svg class="${cls}"${hidden ? ' style="display:none"' : ''} aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">${d}</svg>`;
+      const sBtn = 'min-width:44px; height:36px; padding:0 10px; border-radius:999px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a; font:600 13px/1 inherit; cursor:pointer;';
+      return customCss + `<style>#${innerId} button:hover{filter:brightness(.95)}#${innerId} button:focus-visible,#${innerId} input:focus-visible{outline:2px solid ${accent};outline-offset:2px}</style>`
+        + `<div id="${innerId}" class="cc-audio${animClass}${innerClass}" data-skip="15" style="${styleAttr}">\n`
+        + `<div class="cc-au-card" style="${card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;'}">`
+        + (title !== '' || artist !== '' || cover !== ''
+          ? `<div class="cc-au-head" style="display:flex; align-items:center; gap:16px; margin-bottom:14px;">`
+            + (cover !== '' ? `<img class="cc-au-cover" src="${escapeHtml(cover)}" alt="" loading="lazy" style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0;">` : '')
+            + `<div class="cc-au-meta" style="min-width:0;">`
+            + (title !== '' ? `<div class="cc-au-title" style="font-weight:700; font-size:17px; color:#0f172a;">${title}</div>` : '')
+            + (artist !== '' ? `<div class="cc-au-artist" style="font-size:14px; color:#64748b; margin-top:2px;">${artist}</div>` : '')
+            + `</div></div>` : '')
+        + `<audio class="cc-au-el" controls preload="none"${src !== '' ? ` src="${escapeHtml(src)}"` : ''} style="display:block; width:100%;"></audio>`
+        + `<div class="cc-au-ui" hidden>`
+        + `<div class="cc-au-bar" style="display:flex; align-items:center; gap:10px;"><span class="cc-au-cur" style="min-width:40px; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;">0:00</span>`
+        + `<input type="range" class="cc-au-seek" min="0" max="0" step="0.1" value="0" aria-label="Seek" style="flex:1; min-width:0; accent-color:${accent};">`
+        + `<span class="cc-au-dur" style="min-width:40px; text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;">0:00</span></div>`
+        + `<div class="cc-au-controls" style="display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px;">`
+        + (skip ? `<button type="button" class="cc-au-back" aria-label="Back 15 seconds" style="${sBtn}">-15s</button>` : '')
+        + `<button type="button" class="cc-au-play" aria-label="Play" style="width:52px; height:52px; padding:0; border-radius:50%; border:none; background:${accent}; color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">${ico('cc-au-i-play', '<path d="M8 5v14l11-7z"/>', false)}${ico('cc-au-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', true)}</button>`
+        + (skip ? `<button type="button" class="cc-au-fwd" aria-label="Forward 15 seconds" style="${sBtn}">+15s</button>` : '')
+        + (speed ? `<button type="button" class="cc-au-speed" aria-label="Playback speed" style="${sBtn}">1&times;</button>` : '')
+        + `</div></div>\n</div>\n</div>\n`;
+    }
+
+    case 'ANNOUNCEMENT_BAR':
+      return customCss + announcementHtml(content, innerId, animClass + innerClass, styleAttr, false);
+
+    case 'NEWSLETTER': {
+      const c = content;
+      const accent = ccColor(c.accent, 'var(--brand-color, #3b82f6)');
+      const card = c.layout !== 'plain';
+      const inline = c.formLayout !== 'stacked';
+      const text = (v, d, max) => ccEsc([...(ccStr(v).trim() || d)].slice(0, max).join(''));
+      const raw = (v, d, max) => [...(ccStr(v).trim() || d)].slice(0, max).join('');
+      const title = ccEsc(c.title);
+      const intro = ccBr(ccStr(c.text));
+      const emailLabel = raw(c.emailLabel, 'Email', 100);
+      const nameLabel = raw(c.nameLabel, 'Name', 100);
+      const consent = raw(c.consentText, '', 300);
+      const askName = c.askName === true;
+      const successMsg = ccStr(c.successMsg).trim() || 'Thank you for subscribing!';
+      const formId = c.customId ? 'f_' + String(c.customId).replace(/[^a-zA-Z0-9_-]/g, '') : 'f_' + String(block.id ?? '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+      const input = `padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box; min-width:0; ${inline ? 'flex:1 1 200px;' : 'width:100%;'}`;
+      let fi = 0, fields = '';
+      if (askName) { fields += `<input type="hidden" name="_label_field_${fi}" value="${escapeHtml(nameLabel)}"><input type="text" name="field_${fi}" required autocomplete="name" aria-label="${escapeHtml(nameLabel)}" placeholder="${text(c.namePlaceholder, nameLabel, 100)}" style="${input}">`; fi++; }
+      fields += `<input type="hidden" name="_label_field_${fi}" value="${escapeHtml(emailLabel)}"><input type="email" name="field_${fi}" required autocomplete="email" aria-label="${escapeHtml(emailLabel)}" placeholder="${text(c.placeholder, emailLabel, 100)}" style="${input}">`; fi++;
+      const button = `<button type="submit" class="cc-nl-submit" style="padding:12px 24px; border:none; border-radius:8px; background:${accent}; color:#ffffff; font:700 15px/1 inherit; cursor:pointer; ${inline ? '' : 'width:100%;'}">${text(c.buttonText, 'Subscribe', 40)}</button>`;
+      const consentHtml = consent !== '' ? `<input type="hidden" name="_label_field_${fi}" value="${escapeHtml(consent)}"><label class="cc-nl-consent" style="display:flex; align-items:flex-start; gap:8px; flex:1 1 100%; font-size:13px; line-height:1.5; color:#64748b;"><input type="checkbox" name="field_${fi}" value="Yes" required style="width:18px; height:18px; margin-top:1px; accent-color:${accent};"><span>${escapeHtml(consent)}</span></label>` : '';
+      return customCss + `<style>#${innerId} input:focus-visible,#${innerId} button:focus-visible{outline:2px solid ${accent};outline-offset:2px}#${innerId} .cc-nl-submit:hover{filter:brightness(.93)}@media(max-width:600px){#${innerId} .cc-nl-card{padding:20px !important}}</style>`
+        + `<div id="${innerId}" class="cc-newsletter${animClass}${innerClass}" style="${styleAttr}">\n`
+        + `<div class="cc-nl-card" style="${card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;'}">`
+        + (title !== '' ? `<div class="cc-nl-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">${title}</div>` : '')
+        + (intro !== '' ? `<p class="cc-nl-text" style="margin:0 0 18px 0; font-size:15px; line-height:1.6; color:#475569;">${intro}</p>` : '')
+        + `<form id="${formId}" class="cc-nl-form" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST" style="display:flex; flex-wrap:wrap; gap:10px; ${inline ? 'align-items:stretch;' : 'flex-direction:column; align-items:stretch;'}">\n`
+        + `<input type="hidden" name="_form" value="${formId}"><input type="hidden" name="_success" value="${escapeHtml(successMsg)}"><input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">\n`
+        + (inline ? fields + button + consentHtml : fields + consentHtml + button)   // stacked: the agreement comes before the button
+        + `\n</form>\n</div>\n</div>\n`;
     }
 
     default:

@@ -6,7 +6,7 @@ import {
   GalleryHorizontal, GitCompare, Timer, ListOrdered, Hash, BarChart3, Table2, History, CreditCard, Users,
   Building2, Store, MapPin, Library, Crown, Square, Search, LayoutDashboard, Columns2, TrendingUp, CircleUserRound,
   StarHalf, MessagesSquare, SquareMousePointer, ScrollText, MapPinned, TableOfContents, Share2, Code2,
-  Calculator, ListChecks,
+  Calculator, ListChecks, Film, Headphones, Megaphone, MailPlus,
 } from 'lucide-react';
 
 export const CATEGORIES = [
@@ -30,6 +30,7 @@ export const BLOCKS = [
   { type: 'BUTTON', label: 'Button', icon: SquareChartGantt, category: 'basic', color: '#f472b6', keywords: 'link cta call to action' },
   { type: 'DIVIDER', label: 'Divider', icon: SeparatorHorizontal, category: 'basic', color: '#f59e0b', keywords: 'separator line wave spacer' },
   { type: 'CODE_SNIPPET', label: 'Code Snippet', icon: Code2, category: 'basic', color: '#f59e0b', keywords: 'code highlight syntax copy programming' },
+  { type: 'AUDIO_PLAYER', label: 'Audio Player', icon: Headphones, category: 'basic', color: '#ef4444', keywords: 'audio podcast music mp3 sound player episode' },
   { type: 'VIDEO', label: 'Video', icon: MonitorPlay, category: 'basic', color: '#ef4444', keywords: 'youtube vimeo embed' },
   { type: 'HTML', label: 'Custom HTML', icon: Code, category: 'basic', color: '#f59e0b', keywords: 'code embed script', admin: true },
 
@@ -44,6 +45,9 @@ export const BLOCKS = [
   { type: 'SPLIT_CTA', label: 'Split CTA', icon: Columns2, category: 'sections', color: '#fcd34d', keywords: 'call to action two buttons banner' },
   { type: 'CASE_STUDY', label: 'Case Study', icon: TrendingUp, category: 'sections', color: '#3b82f6', keywords: 'success story result client metric' },
   { type: 'AUTHOR_BIO', label: 'Author Bio', icon: CircleUserRound, category: 'sections', color: '#a78bfa', keywords: 'writer profile about person' },
+  { type: 'VIDEO_HERO', label: 'Video Hero', icon: Film, category: 'sections', color: '#fcd34d', keywords: 'header banner background video loop intro mp4' },
+  { type: 'ANNOUNCEMENT_BAR', label: 'Announcement Bar', icon: Megaphone, category: 'sections', color: '#f59e0b', keywords: 'notice banner promo offer top sticky dismiss' },
+  { type: 'NEWSLETTER', label: 'Newsletter Signup', icon: MailPlus, category: 'sections', color: '#a855f7', keywords: 'subscribe email list mailing signup form' },
   { type: 'WIZARD', label: 'Multi-step Form', icon: ListChecks, category: 'sections', color: '#a855f7', keywords: 'form steps wizard quote questionnaire survey progress' },
   { type: 'SCROLLYTELLING', label: 'Scrollytelling', icon: ScrollText, category: 'sections', color: '#fdba74', keywords: 'story sticky image scroll steps narrative' },
   { type: 'TESTIMONIAL_WALL', label: 'Testimonial Wall', icon: MessagesSquare, category: 'sections', color: '#3b82f6', keywords: 'reviews quotes masonry customers' },

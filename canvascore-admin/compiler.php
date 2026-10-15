@@ -278,6 +278,48 @@ function cc_money($v, $dec, $eu, $cur, $after) {
 // Code Snippet languages: [id, label]. Twin of CODE_LANGS in src/render/renderBlock.mjs.
 const CC_CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['json', 'JSON'], ['php', 'PHP'], ['shell', 'Shell'], ['text', '']];
 
+// A media file address (audio, video): http(s) or a path on this site; any other scheme (javascript:, data:…) -> ''.
+// Twin of ccMediaSrc() in src/render/renderBlock.mjs.
+function cc_media_src($u) {
+    $t = trim((string)$u);
+    $probe = strtolower(preg_replace('/[\x00-\x20\x7f]+/', '', $t));
+    if (preg_match('/^[a-z][a-z0-9+.-]*:/', $probe) && !preg_match('/^https?:/', $probe)) return '';
+    return $t;
+}
+// The MIME type a file's extension says ('' when unknown). Twin of ccMediaMime().
+function cc_media_mime($src) {
+    static $map = ['mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'webm' => 'video/webm', 'ogv' => 'video/ogg', 'mp3' => 'audio/mpeg', 'm4a' => 'audio/mp4', 'ogg' => 'audio/ogg', 'oga' => 'audio/ogg', 'wav' => 'audio/wav'];
+    $path = preg_split('/[?#]/', (string)$src)[0];
+    return preg_match('/\.([a-z0-9]+)$/i', $path, $m) && isset($map[strtolower($m[1])]) ? $map[strtolower($m[1])] : '';
+}
+// The Announcement Bar: the block, and the site-wide bar of Global Options (rebuild_all.php). $c: text, linkText, linkUrl,
+// preset, bg, color, icon, sticky, dismissible, align. $requireText: nothing at all when the text is empty (site-wide).
+// Twin of announcementHtml() in src/render/renderBlock.mjs.
+const CC_ANN_PRESETS = ['info' => ['#0f172a', '#ffffff'], 'promo' => ['var(--brand-color, #3b82f6)', '#ffffff'], 'warning' => ['#fef3c7', '#78350f'], 'success' => ['#dcfce7', '#14532d']];
+function cc_announcement_html($c, $id, $extra, $styleAttr, $requireText) {
+    $c = is_array($c) ? $c : [];
+    $text = mb_substr(trim(cc_str($c['text'] ?? '')), 0, 300);
+    if ($requireText && $text === '') return '';
+    $preset = (is_string($c['preset'] ?? null) && isset(CC_ANN_PRESETS[$c['preset']])) ? $c['preset'] : 'info';
+    $bg = cc_color($c['bg'] ?? '', CC_ANN_PRESETS[$preset][0]);
+    $fg = cc_color($c['color'] ?? '', CC_ANN_PRESETS[$preset][1]);
+    $linkText = mb_substr(trim(cc_str($c['linkText'] ?? '')), 0, 60);
+    $linkUrl = trim(cc_str($c['linkUrl'] ?? ''));
+    $icon = mb_substr(trim(cc_str($c['icon'] ?? '')), 0, 4);
+    $sticky = ($c['sticky'] ?? false) === true;
+    $dismissible = ($c['dismissible'] ?? true) !== false;
+    $left = ($c['align'] ?? '') === 'left';
+    $key = sprintf('%08x', crc32($text . '|' . $linkText . '|' . $linkUrl) & 0xFFFFFFFF);
+    return '<div id="' . $id . '" class="cc-announce cc-ann-' . $preset . $extra . '" role="region" aria-label="Announcement" data-key="' . $key . '" style="' . $styleAttr . ($sticky ? ' position:sticky; top:0; z-index:2147482000;' : '') . ' background:' . $bg . '; color:' . $fg . '; padding:10px 16px; font-size:14px; line-height:1.4;">'
+        . '<div class="cc-ann-inner" style="display:flex; align-items:center; justify-content:' . ($left ? 'flex-start' : 'center') . '; flex-wrap:wrap; gap:4px 12px; max-width:1200px; margin:0 auto; position:relative; padding-right:' . ($dismissible ? '36px' : '0') . '; box-sizing:border-box;">'
+        . ($icon !== '' ? '<span class="cc-ann-icon" aria-hidden="true">' . htmlspecialchars($icon) . '</span>' : '')
+        . '<span class="cc-ann-text">' . htmlspecialchars($text) . '</span>'
+        . ($linkText !== '' ? '<a class="cc-ann-link" href="' . htmlspecialchars(cc_block_url($linkUrl)) . '" style="color:inherit; font-weight:700; text-decoration:underline; white-space:nowrap;">' . htmlspecialchars($linkText) . ' &rarr;</a>' : '')
+        . ($dismissible ? '<button type="button" class="cc-ann-close" hidden aria-label="Dismiss the announcement" style="position:absolute; right:0; top:50%; transform:translateY(-50%); width:28px; height:28px; padding:0; border:none; border-radius:50%; background:transparent; color:inherit; font-size:20px; line-height:1; cursor:pointer;">&times;</button>' : '')
+        . '</div></div>' . "\n"
+        . '<script>' . str_replace('%ID%', $id, CC_ANNOUNCE_SCRIPT) . "</script>\n";
+}
+
 // Scripts of the Code Snippet, Table of Contents and Share Bar blocks. The regions between the "cc-xxx:begin" and
 // "cc-xxx:end" lines are VERBATIM copies from src/render/blockRuntime.mjs (the editor canvas runs the same text):
 // edit both, tests/blocks-content.mjs compares them. %ID% = the block's id.
@@ -582,6 +624,122 @@ function ccWizardInit(root, editor) {
 }
 // cc-wizard:end
 (function(){var r=document.getElementById('%ID%');if(r)ccWizardInit(r,false);})();
+CCJS;
+const CC_VIDEO_SCRIPT = <<<'CCJS'
+// cc-video:begin
+function ccVideoInit(root, editor) {
+  var v = root.querySelector('.cc-vh-video'), btn = root.querySelector('.cc-vh-toggle');
+  if (!v || root.getAttribute('data-ready')) return;
+  var win = root.ownerDocument.defaultView, mq = function (q) { return !!(win.matchMedia && win.matchMedia(q).matches); };
+  root.setAttribute('data-ready', '1');
+  // the poster stays on the screen in the editor, and on phones unless the author chose video there
+  if (editor || (root.getAttribute('data-mobile') !== '1' && mq('(max-width: 768px)'))) return;
+  var pause = btn ? btn.querySelector('.cc-vh-i-pause') : null, play = btn ? btn.querySelector('.cc-vh-i-play') : null;
+  var show = function (playing) {
+    if (!btn) return;
+    // (an SVG element ignores the hidden attribute, so the icons are shown and hidden with display)
+    pause.style.display = playing ? '' : 'none';
+    play.style.display = playing ? 'none' : '';
+    btn.setAttribute('aria-label', playing ? 'Pause the background video' : 'Play the background video');
+  };
+  if (btn) {
+    btn.hidden = false;
+    btn.addEventListener('click', function () {
+      if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); } else v.pause();
+    });
+  }
+  v.addEventListener('play', function () { show(true); });
+  v.addEventListener('pause', function () { show(false); });
+  show(false);
+  // visitors who prefer reduced motion get the poster, and can start the video with the button
+  if (mq('(prefers-reduced-motion: reduce)')) return;
+  v.preload = 'auto';
+  var started = v.play();
+  if (started && started.catch) started.catch(function () {});
+}
+// cc-video:end
+(function(){var r=document.getElementById('%ID%');if(r)ccVideoInit(r,false);})();
+CCJS;
+const CC_AUDIO_SCRIPT = <<<'CCJS'
+// cc-audio:begin
+function ccAudioInit(root) {
+  var a = root.querySelector('.cc-au-el'), ui = root.querySelector('.cc-au-ui');
+  if (!a || !ui || root.getAttribute('data-ready')) return;
+  var doc = root.ownerDocument, playBtn = root.querySelector('.cc-au-play'), seek = root.querySelector('.cc-au-seek');
+  var cur = root.querySelector('.cc-au-cur'), dur = root.querySelector('.cc-au-dur'), speedBtn = root.querySelector('.cc-au-speed');
+  var back = root.querySelector('.cc-au-back'), fwd = root.querySelector('.cc-au-fwd'), step = parseInt(root.getAttribute('data-skip'), 10) || 15;
+  var rates = [1, 1.25, 1.5, 2, 0.75], ri = 0, drag = false;
+  root.setAttribute('data-ready', '1');
+  a.removeAttribute('controls');
+  ui.hidden = false;
+  var fmt = function (t) {
+    t = isFinite(t) && t > 0 ? Math.floor(t) : 0;
+    var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') + m : String(m)) + ':' + (s < 10 ? '0' : '') + s;
+  };
+  var paint = function () {
+    var t = a.currentTime || 0, d = isFinite(a.duration) ? a.duration : 0;
+    if (!drag) seek.value = String(t);
+    cur.textContent = fmt(t);
+    dur.textContent = fmt(d);
+    seek.max = String(d || 0);
+    seek.setAttribute('aria-valuetext', fmt(t) + ' of ' + fmt(d));
+  };
+  var state = function () {
+    var playing = !a.paused && !a.ended;
+    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    playBtn.querySelector('.cc-au-i-play').style.display = playing ? 'none' : '';   // (display: an SVG ignores hidden)
+    playBtn.querySelector('.cc-au-i-pause').style.display = playing ? '' : 'none';
+  };
+  playBtn.addEventListener('click', function () {
+    if (a.paused) { var p = a.play(); if (p && p.catch) p.catch(function () {}); } else a.pause();
+  });
+  if (back) back.addEventListener('click', function () { a.currentTime = Math.max(0, (a.currentTime || 0) - step); });
+  if (fwd) fwd.addEventListener('click', function () { a.currentTime = Math.min(isFinite(a.duration) ? a.duration : 1e9, (a.currentTime || 0) + step); });
+  if (speedBtn) speedBtn.addEventListener('click', function () {
+    ri = (ri + 1) % rates.length;
+    a.playbackRate = rates[ri];
+    speedBtn.textContent = rates[ri] + '×';
+  });
+  seek.addEventListener('input', function () { drag = true; a.currentTime = parseFloat(seek.value) || 0; cur.textContent = fmt(a.currentTime); });
+  seek.addEventListener('change', function () { drag = false; });
+  a.addEventListener('timeupdate', paint);
+  a.addEventListener('loadedmetadata', paint);
+  a.addEventListener('durationchange', paint);
+  a.addEventListener('play', function () {
+    state();
+    var all = doc.querySelectorAll('.cc-au-el');
+    for (var i = 0; i < all.length; i++) { if (all[i] !== a && !all[i].paused) all[i].pause(); }
+  });
+  a.addEventListener('pause', state);
+  a.addEventListener('ended', state);
+  state();
+  paint();
+}
+// cc-audio:end
+(function(){var r=document.getElementById('%ID%');if(r)ccAudioInit(r);})();
+CCJS;
+const CC_ANNOUNCE_SCRIPT = <<<'CCJS'
+// cc-announce:begin
+function ccAnnounceInit(root, editor) {
+  var btn = root.querySelector('.cc-ann-close'), win = root.ownerDocument.defaultView, key = 'cc_ann_' + (root.getAttribute('data-key') || '');
+  if (root.getAttribute('data-ready')) return;
+  root.setAttribute('data-ready', '1');
+  if (!editor) {
+    var seen = false;
+    try { seen = win.localStorage.getItem(key) === '1'; } catch { seen = false; }
+    if (seen) { root.hidden = true; return; }
+  }
+  if (!btn) return;
+  btn.hidden = false;
+  btn.addEventListener('click', function () {
+    if (editor) return;
+    root.hidden = true;
+    try { win.localStorage.setItem(key, '1'); } catch { /* it is not remembered */ }
+  });
+}
+// cc-announce:end
+(function(){var r=document.getElementById('%ID%');if(r)ccAnnounceInit(r,false);})();
 CCJS;
 // Scrollytelling: the step in the middle of the screen decides which image shows ([data-active]); %ID% = the block's id
 const CC_STORY_SCRIPT = <<<'CCJS'
@@ -2586,6 +2744,119 @@ function render_block($block) {
                 . '<button type="button" class="cc-wz-next" hidden style="' . CC_WZ_BTN . ' background:' . $accent . '; color:#ffffff; border:none;">' . $text($c['nextText'] ?? '', 'Next', 30) . '</button>'
                 . '<button type="submit" class="cc-wz-submit" style="' . CC_WZ_BTN . ' background:' . $accent . '; color:#ffffff; border:none;">' . $text($c['btnText'] ?? '', 'Send', 30) . '</button></div>' . "\n</form>\n</div>\n</div>\n"
                 . '<script>' . str_replace('%ID%', $innerId, CC_WIZARD_SCRIPT) . "</script>\n";
+        }
+
+        case 'VIDEO_HERO': {
+            $c = $block['content'] ?? [];
+            $objs = function ($v) { return array_values(array_filter(is_array($v) ? $v : [], 'is_array')); };
+            $sources = array_values(array_filter([cc_media_src(cc_str($c['video'] ?? '')), cc_media_src(cc_str($c['video2'] ?? ''))], function ($u) { return $u !== ''; }));
+            $poster = cc_img_url(cc_str($c['poster'] ?? ''));
+            $overlay = cc_color($c['overlay'] ?? '', '#0f172a');
+            $op = cc_int($c['overlayOpacity'] ?? null, 55, 0, 90);
+            $h = cc_int($c['height'] ?? null, 560, 280, 1000);
+            $center = ($c['align'] ?? '') !== 'left';
+            $color = cc_color($c['textColor'] ?? '', '#ffffff');
+            $title = cc_esc($c['title'] ?? '');
+            $subtitle = cc_br(cc_str($c['subtitle'] ?? ''));
+            // the first two buttons are taken before the empty ones are dropped, as in the editor's renderer
+            $btns = array_values(array_filter(array_slice($objs($c['buttons'] ?? []), 0, 2), function ($b) { return trim(cc_str($b['text'] ?? '')) !== ''; }));
+            $btnHtml = '';
+            foreach ($btns as $b) {
+                $primary = ($b['style'] ?? '') !== 'secondary';
+                $btnHtml .= '<a class="cc-vh-btn cc-vh-btn-' . ($primary ? 'primary' : 'secondary') . '" href="' . htmlspecialchars(cc_block_url(cc_str($b['url'] ?? ''))) . '" style="padding:14px 28px; border-radius:10px; font-weight:700; text-decoration:none; ' . ($primary ? 'background:#ffffff; color:#0f172a;' : 'border:2px solid rgba(255,255,255,0.85); color:#ffffff;') . '">' . cc_esc($b['text'] ?? '') . '</a>';
+            }
+            $icon = function ($cls, $d, $hidden) { return '<svg class="' . $cls . '"' . ($hidden ? ' style="display:none"' : '') . ' aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">' . $d . '</svg>'; };
+            $srcHtml = '';
+            foreach ($sources as $u) $srcHtml .= '<source src="' . htmlspecialchars($u) . '"' . (cc_media_mime($u) !== '' ? ' type="' . cc_media_mime($u) . '"' : '') . '>';
+            return $customCss . '<section id="' . $innerId . '" class="cc-vhero' . $animClass . $innerClass . '" data-mobile="' . (($c['mobileVideo'] ?? false) === true ? '1' : '0') . '" style="' . $styleAttr . ' position:relative; overflow:hidden; min-height:' . $h . 'px; display:flex; align-items:center; justify-content:center; background:#0f172a; color:' . $color . ';">' . "\n"
+                . ($poster !== '' ? '<div class="cc-vh-poster" aria-hidden="true" style="position:absolute; inset:0; background-image:url(\'' . htmlspecialchars(cc_css_url($poster)) . '\'); background-size:cover; background-position:center;"></div>' : '')
+                . ($sources ? '<video class="cc-vh-video" muted loop playsinline preload="none" aria-hidden="true"' . ($poster !== '' ? ' poster="' . htmlspecialchars($poster) . '"' : '') . ' style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">' . $srcHtml . '</video>' : '')
+                . '<div class="cc-vh-overlay" aria-hidden="true" style="position:absolute; inset:0; background:' . $overlay . '; opacity:' . cc_plain($op / 100) . ';"></div>'
+                . '<div class="cc-vh-inner" style="position:relative; width:100%; max-width:900px; padding:64px 24px; box-sizing:border-box; text-align:' . ($center ? 'center' : 'left') . '; ' . ($center ? 'margin:0 auto;' : 'margin-right:auto;') . '">'
+                . ($title !== '' ? '<h2 class="cc-vh-title" style="margin:0; font-size:clamp(32px, 5vw, 56px); line-height:1.1; font-weight:800; color:inherit;">' . $title . '</h2>' : '')
+                . ($subtitle !== '' ? '<p class="cc-vh-subtitle" style="margin:16px 0 0 0; font-size:clamp(16px, 2vw, 20px); line-height:1.6; opacity:0.92;">' . $subtitle . '</p>' : '')
+                . ($btnHtml !== '' ? '<div class="cc-vh-buttons" style="display:flex; gap:12px; flex-wrap:wrap; justify-content:' . ($center ? 'center' : 'flex-start') . '; margin-top:28px;">' . $btnHtml . '</div>' : '')
+                . '</div>'
+                . ($sources && ($c['showPause'] ?? true) !== false ? '<button type="button" class="cc-vh-toggle" hidden aria-label="Pause the background video" style="position:absolute; right:16px; bottom:16px; width:40px; height:40px; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,0.6); background:rgba(15,23,42,0.55); color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">' . $icon('cc-vh-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', false) . $icon('cc-vh-i-play', '<path d="M8 5v14l11-7z"/>', true) . '</button>' : '')
+                . '</section>' . "\n"
+                . ($sources ? '<script>' . str_replace('%ID%', $innerId, CC_VIDEO_SCRIPT) . "</script>\n" : '');
+        }
+
+        case 'AUDIO_PLAYER': {
+            $c = $block['content'] ?? [];
+            $src = cc_media_src(cc_str($c['src'] ?? ''));
+            $cover = cc_img_url(cc_str($c['cover'] ?? ''));
+            $title = cc_esc($c['title'] ?? '');
+            $artist = cc_esc($c['artist'] ?? '');
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $skip = ($c['skip'] ?? true) !== false;
+            $speed = ($c['speed'] ?? true) !== false;
+            $ico = function ($cls, $d, $hidden) { return '<svg class="' . $cls . '"' . ($hidden ? ' style="display:none"' : '') . ' aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">' . $d . '</svg>'; };
+            $sBtn = 'min-width:44px; height:36px; padding:0 10px; border-radius:999px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a; font:600 13px/1 inherit; cursor:pointer;';
+            return $customCss . '<style>#' . $innerId . ' button:hover{filter:brightness(.95)}#' . $innerId . ' button:focus-visible,#' . $innerId . ' input:focus-visible{outline:2px solid ' . $accent . ';outline-offset:2px}</style>'
+                . '<div id="' . $innerId . '" class="cc-audio' . $animClass . $innerClass . '" data-skip="15" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-au-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'
+                . ($title !== '' || $artist !== '' || $cover !== ''
+                    ? '<div class="cc-au-head" style="display:flex; align-items:center; gap:16px; margin-bottom:14px;">'
+                        . ($cover !== '' ? '<img class="cc-au-cover" src="' . htmlspecialchars($cover) . '" alt="" loading="lazy" style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0;">' : '')
+                        . '<div class="cc-au-meta" style="min-width:0;">'
+                        . ($title !== '' ? '<div class="cc-au-title" style="font-weight:700; font-size:17px; color:#0f172a;">' . $title . '</div>' : '')
+                        . ($artist !== '' ? '<div class="cc-au-artist" style="font-size:14px; color:#64748b; margin-top:2px;">' . $artist . '</div>' : '')
+                        . '</div></div>' : '')
+                . '<audio class="cc-au-el" controls preload="none"' . ($src !== '' ? ' src="' . htmlspecialchars($src) . '"' : '') . ' style="display:block; width:100%;"></audio>'
+                . '<div class="cc-au-ui" hidden>'
+                . '<div class="cc-au-bar" style="display:flex; align-items:center; gap:10px;"><span class="cc-au-cur" style="min-width:40px; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;">0:00</span>'
+                . '<input type="range" class="cc-au-seek" min="0" max="0" step="0.1" value="0" aria-label="Seek" style="flex:1; min-width:0; accent-color:' . $accent . ';">'
+                . '<span class="cc-au-dur" style="min-width:40px; text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;">0:00</span></div>'
+                . '<div class="cc-au-controls" style="display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px;">'
+                . ($skip ? '<button type="button" class="cc-au-back" aria-label="Back 15 seconds" style="' . $sBtn . '">-15s</button>' : '')
+                . '<button type="button" class="cc-au-play" aria-label="Play" style="width:52px; height:52px; padding:0; border-radius:50%; border:none; background:' . $accent . '; color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">' . $ico('cc-au-i-play', '<path d="M8 5v14l11-7z"/>', false) . $ico('cc-au-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', true) . '</button>'
+                . ($skip ? '<button type="button" class="cc-au-fwd" aria-label="Forward 15 seconds" style="' . $sBtn . '">+15s</button>' : '')
+                . ($speed ? '<button type="button" class="cc-au-speed" aria-label="Playback speed" style="' . $sBtn . '">1&times;</button>' : '')
+                . '</div></div>' . "\n</div>\n</div>\n"
+                . '<script>' . str_replace('%ID%', $innerId, CC_AUDIO_SCRIPT) . "</script>\n";
+        }
+
+        case 'ANNOUNCEMENT_BAR':
+            return $customCss . cc_announcement_html($block['content'] ?? [], $innerId, $animClass . $innerClass, $styleAttr, false);
+
+        case 'NEWSLETTER': {
+            $c = $block['content'] ?? [];
+            $accent = cc_color($c['accent'] ?? '', 'var(--brand-color, #3b82f6)');
+            $card = ($c['layout'] ?? '') !== 'plain';
+            $inline = ($c['formLayout'] ?? '') !== 'stacked';
+            $raw = function ($v, $d, $max) { $t = trim(cc_str($v)); if ($t === '') $t = $d; return mb_substr($t, 0, $max); };
+            $text = function ($v, $d, $max) use ($raw) { return htmlspecialchars($raw($v, $d, $max)); };
+            $title = cc_esc($c['title'] ?? '');
+            $intro = cc_br(cc_str($c['text'] ?? ''));
+            $emailLabel = $raw($c['emailLabel'] ?? '', 'Email', 100);
+            $nameLabel = $raw($c['nameLabel'] ?? '', 'Name', 100);
+            $consent = $raw($c['consentText'] ?? '', '', 300);
+            $askName = ($c['askName'] ?? false) === true;
+            $successMsg = trim(cc_str($c['successMsg'] ?? '')); if ($successMsg === '') $successMsg = 'Thank you for subscribing!';
+            $raw_email = trim(cc_str($c['email'] ?? ''));
+            // The same registry as the Form block: the recipient, the field labels (in order) and the message
+            $form_id = !empty($c['customId'])
+                ? 'f_' . preg_replace('/[^a-zA-Z0-9_-]/', '', cc_str($c['customId']))
+                : 'f_' . substr(sha1('n|' . ($block['id'] ?? '') . '|' . $raw_email), 0, 16);
+            $input = 'padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box; min-width:0; ' . ($inline ? 'flex:1 1 200px;' : 'width:100%;');
+            $fi = 0; $fields = ''; $labels = [];
+            if ($askName) { $fields .= '<input type="hidden" name="_label_field_' . $fi . '" value="' . htmlspecialchars($nameLabel) . '"><input type="text" name="field_' . $fi . '" required autocomplete="name" aria-label="' . htmlspecialchars($nameLabel) . '" placeholder="' . $text($c['namePlaceholder'] ?? '', $nameLabel, 100) . '" style="' . $input . '">'; $labels[] = $nameLabel; $fi++; }
+            $fields .= '<input type="hidden" name="_label_field_' . $fi . '" value="' . htmlspecialchars($emailLabel) . '"><input type="email" name="field_' . $fi . '" required autocomplete="email" aria-label="' . htmlspecialchars($emailLabel) . '" placeholder="' . $text($c['placeholder'] ?? '', $emailLabel, 100) . '" style="' . $input . '">'; $labels[] = $emailLabel; $fi++;
+            $button = '<button type="submit" class="cc-nl-submit" style="padding:12px 24px; border:none; border-radius:8px; background:' . $accent . '; color:#ffffff; font:700 15px/1 inherit; cursor:pointer; ' . ($inline ? '' : 'width:100%;') . '">' . $text($c['buttonText'] ?? '', 'Subscribe', 40) . '</button>';
+            $consentHtml = '';
+            if ($consent !== '') { $consentHtml = '<input type="hidden" name="_label_field_' . $fi . '" value="' . htmlspecialchars($consent) . '"><label class="cc-nl-consent" style="display:flex; align-items:flex-start; gap:8px; flex:1 1 100%; font-size:13px; line-height:1.5; color:#64748b;"><input type="checkbox" name="field_' . $fi . '" value="Yes" required style="width:18px; height:18px; margin-top:1px; accent-color:' . $accent . ';"><span>' . htmlspecialchars($consent) . '</span></label>'; $labels[] = $consent; }
+            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $labels, 'success' => $successMsg];
+            return $customCss . '<style>#' . $innerId . ' input:focus-visible,#' . $innerId . ' button:focus-visible{outline:2px solid ' . $accent . ';outline-offset:2px}#' . $innerId . ' .cc-nl-submit:hover{filter:brightness(.93)}@media(max-width:600px){#' . $innerId . ' .cc-nl-card{padding:20px !important}}</style>'
+                . '<div id="' . $innerId . '" class="cc-newsletter' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
+                . '<div class="cc-nl-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'
+                . ($title !== '' ? '<div class="cc-nl-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">' . $title . '</div>' : '')
+                . ($intro !== '' ? '<p class="cc-nl-text" style="margin:0 0 18px 0; font-size:15px; line-height:1.6; color:#475569;">' . $intro . '</p>' : '')
+                . '<form id="' . $form_id . '" class="cc-nl-form" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST" style="display:flex; flex-wrap:wrap; gap:10px; ' . ($inline ? 'align-items:stretch;' : 'flex-direction:column; align-items:stretch;') . '">' . "\n"
+                . '<input type="hidden" name="_form" value="' . $form_id . '"><input type="hidden" name="_success" value="' . htmlspecialchars($successMsg) . '"><input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">' . "\n"
+                . ($inline ? $fields . $button . $consentHtml : $fields . $consentHtml . $button)
+                . "\n</form>\n</div>\n</div>\n";
         }
 
         default: return "<!-- Unknown element: " . preg_replace('/[^A-Za-z0-9_]/', '', (string)$block['type']) . " -->\n";

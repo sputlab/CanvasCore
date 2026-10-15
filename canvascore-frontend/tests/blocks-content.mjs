@@ -446,24 +446,33 @@ section('Placeholder images survive saving');
 }
 
 // =============================================================== batch 3: scripts shared by the editor canvas and published pages
-section('Shared scripts (Code Snippet, Table of Contents, Share Bar, Price Calculator, Multi-step Form)');
+section('Shared scripts (Code Snippet, Table of Contents, Share Bar, Price Calculator, Multi-step Form, Video Hero, Audio Player, Announcement Bar)');
 const RUNTIME_SRC = readFileSync(new URL('../src/render/blockRuntime.mjs', import.meta.url), 'utf-8');
 const COMPILER_SRC = readFileSync(new URL('../../canvascore-admin/compiler.php', import.meta.url), 'utf-8');
 const regionOf = (src, name) => { const m = src.match(new RegExp(`// cc-${name}:begin\\n[\\s\\S]*?// cc-${name}:end\\n`)); return m ? m[0] : null; };
 {
-  for (const name of ['hl', 'code', 'toc', 'share', 'calc', 'wizard']) {
+  for (const name of ['hl', 'code', 'toc', 'share', 'calc', 'wizard', 'video', 'audio', 'announce']) {
     const a = regionOf(RUNTIME_SRC, name), b = regionOf(COMPILER_SRC, name);
     check(`"${name}": the text in the compiler is identical to the editor's (blockRuntime.mjs)`, !!a && a === b);
     check(`"${name}": nothing in it can end or confuse a <script> element`, !!a && !/<\/script|<!--|-->/i.test(a));
   }
 }
-const pub = (html, { title = 'Page title', url = 'https://example.com/page/?x=1#top', clipboard = true, share = false, io = false, reduced = false } = {}) => {
-  const calls = { written: [], printed: 0, shared: [], exec: 0 }; const ios = [];
+const pub = (html, { title = 'Page title', url = 'https://example.com/page/?x=1#top', clipboard = true, share = false, io = false, reduced = false, mobile = false, storage = {}, storageBlocked = false, playRejects = false } = {}) => {
+  const calls = { written: [], printed: 0, shared: [], exec: 0, played: 0, paused: 0 }; const ios = [];
   const dom = new JSDOM(`<!doctype html><html><head><title>${title}</title></head><body><main>${html}</main></body></html>`, {
     runScripts: 'dangerously', url, pretendToBeVisual: true,
     beforeParse(win) {
-      win.matchMedia = () => ({ matches: reduced });
+      win.matchMedia = (q) => ({ matches: /max-width/.test(String(q)) ? mobile : reduced });
       win.print = () => { calls.printed++; };
+      // jsdom has no media playback: a small stand-in (play / pause events, a clock and a length that the tests set)
+      const mp = win.HTMLMediaElement.prototype;
+      Object.defineProperty(mp, 'paused', { get() { return this.__paused !== false; }, configurable: true });
+      Object.defineProperty(mp, 'currentTime', { get() { return this.__t || 0; }, set(v) { this.__t = Number(v); }, configurable: true });
+      Object.defineProperty(mp, 'duration', { get() { return this.__d === undefined ? NaN : this.__d; }, configurable: true });
+      mp.play = function () { calls.played++; if (playRejects) return Promise.reject(new Error('blocked')); this.__paused = false; this.dispatchEvent(new win.Event('play')); return Promise.resolve(); };
+      mp.pause = function () { calls.paused++; this.__paused = true; this.dispatchEvent(new win.Event('pause')); };
+      if (storageBlocked) Object.defineProperty(win, 'localStorage', { get() { throw new Error('storage blocked'); }, configurable: true });
+      else for (const [k, v] of Object.entries(storage)) { try { win.localStorage.setItem(k, v); } catch { /* none */ } }
       win.requestAnimationFrame = (cb) => { cb(); return 1; };
       if (clipboard) Object.defineProperty(win.navigator, 'clipboard', { value: { writeText: (t) => { calls.written.push(t); return Promise.resolve(); } }, configurable: true });
       if (share) Object.defineProperty(win.navigator, 'share', { value: (d) => { calls.shared.push(d); return Promise.resolve(); }, configurable: true });
@@ -850,6 +859,145 @@ section('WIZARD');
   const dots = pub(php('WIZARD', { ...wiz, progress: 'steps' }));
   dots.doc.querySelector('[name="field_0"]').value = 'A'; dots.doc.querySelector('[name="field_1"]').value = 'a@b.co'; dots.click(dots.doc.querySelector('.cc-wz-next'));
   check('published: numbered steps mark the finished and the current one (aria-current)', [...dots.doc.querySelectorAll('.cc-wz-dot')].map((e) => /is-done/.test(e.className) ? 'done' : /is-current/.test(e.className) ? 'current' : 'todo').join() === 'done,current,todo' && dots.doc.querySelectorAll('.cc-wz-dot[aria-current="step"]').length === 1);
+}
+
+// =============================================================== VIDEO_HERO
+section('VIDEO_HERO');
+{
+  const vh = { video: '/uploads/a.mp4', video2: 'https://cdn.example.com/a.webm?x=1#t', poster: '/uploads/p.jpg', title: 'Hello', subtitle: 'a\nb', height: 700, overlayOpacity: 30,
+    buttons: [{ text: 'Go', url: 'contatti/index.html', style: 'primary' }, { text: 'More', url: 'https://example.com', style: 'secondary' }, { text: 'Third', url: 'x' }] };
+  const h = php('VIDEO_HERO', vh); const d = $(h);
+  check('one <source> per video address, with the type its extension says (a query string or #fragment does not hide it)', d('video source').map((_, e) => d(e).attr('src') + ' ' + d(e).attr('type')).get().join('|') === '/uploads/a.mp4 video/mp4|https://cdn.example.com/a.webm?x=1#t video/webm');
+  check('the video is muted, loops, plays inline, is decorative for screen readers and loads nothing until the script starts it (preload none, no autoplay attribute)', d('video').attr('muted') !== undefined && d('video').attr('loop') !== undefined && d('video').attr('playsinline') !== undefined && d('video').attr('aria-hidden') === 'true' && d('video').attr('preload') === 'none' && d('video').attr('autoplay') === undefined && d('video').attr('poster') === '/uploads/p.jpg');
+  check('the poster is also a layer behind everything, so it shows where the video is not loaded (phones, reduced motion, no script)', /background-image:url\('\/uploads\/p\.jpg'\)/.test(d('.cc-vh-poster').attr('style')));
+  check('the headline, subtitle with line breaks, and at most two buttons (internal link resolved)', d('h2.cc-vh-title').text() === 'Hello' && d('.cc-vh-subtitle').html() === 'a<br>b' && d('.cc-vh-btn').length === 2 && d('.cc-vh-btn-primary').attr('href') === '{{BASE_URL}}contatti/' && d('.cc-vh-btn-secondary').attr('href') === 'https://example.com');
+  check('the pause / play icons are SVG, which ignores the hidden attribute: the one not shown starts with display:none (in PHP and in the editor\'s renderer)', [php, js].every((fn) => { const q = $(fn('VIDEO_HERO', vh)); return q('.cc-vh-i-pause').attr('style') === undefined && q('.cc-vh-i-play').attr('style') === 'display:none' && q('.cc-vh-i-play').attr('hidden') === undefined; }));
+  check('the pause button exists but stays hidden until the script runs; it is left out with "no pause button" and with no video', d('.cc-vh-toggle').attr('hidden') !== undefined && $(php('VIDEO_HERO', { ...vh, showPause: false }))('.cc-vh-toggle').length === 0 && $(php('VIDEO_HERO', { poster: 'p.jpg' }))('.cc-vh-toggle').length === 0);
+  check('height and overlay strength are applied and clamped', /min-height:700px/.test(h) && /opacity:0\.3;/.test(h) && /min-height:1000px/.test(php('VIDEO_HERO', { height: 99999 })) && /min-height:280px/.test(php('VIDEO_HERO', { height: 5 })) && /opacity:0\.9;/.test(php('VIDEO_HERO', { overlayOpacity: 500 })));
+  const bad = php('VIDEO_HERO', { video: 'javascript:alert(1)', video2: 'data:text/html,x', poster: 'javascript:alert(2)', overlay: 'red;}', textColor: 'url(x)', title: '<img src=x onerror=a>', subtitle: { o: 1 }, buttons: ['junk', null, { text: '', url: 'a' }, { text: '<b>x</b>', url: 'javascript:alert(3)' }] });
+  const bd = $(bad);
+  check('hostile values: no <video> from javascript: or data: addresses, no javascript: poster or link, text escaped, unsafe colors replaced', bd('video').length === 0 && !/javascript:alert\((1|2)\)/.test(bad) && !/href="javascript:/i.test(bad) && !/<img src=x|<b>x/.test(bad) && !/red;\}|url\(x\)/.test(bad) && !/data:text/.test(bad));
+  check('with no video there is no script and no pause button; with one there is exactly one script', !/<script/.test(bad) && [...h.matchAll(/<script>/g)].length === 1);
+  const same = ['/uploads/a.mp4', 'https://x.example/a.webm?y=1', 'javascript:alert(1)', '  data:text/html,x  ', 'noextension', 'a.MP4', '//cdn.example.com/v.mp4', 'jav\tascript:alert(1)', '/uploads/video.ogv'];
+  check('PHP and the editor\'s renderer accept and refuse exactly the same video addresses, with the same types', same.every((u) => { const f = (fn) => $(fn('VIDEO_HERO', { video: u }))('source').map((_, e) => $(fn('VIDEO_HERO', { video: u }))(e).attr('src') + '|' + $(fn('VIDEO_HERO', { video: u }))(e).attr('type')).get().join(); return f(php) === f(js); }), same.map((u) => $(php('VIDEO_HERO', { video: u }))('source').length).join());
+
+  // the published script
+  const mk = (extra = {}, opts = {}) => pub(php('VIDEO_HERO', { ...vh, ...extra }), opts);
+  const label = (q) => q.doc.querySelector('.cc-vh-toggle').getAttribute('aria-label');
+  const a1 = mk();
+  check('published: the video is started (muted autoplay needs a script), its preload is raised, and the button appears showing "pause"', a1.calls.played === 1 && a1.doc.querySelector('video').preload === 'auto' && a1.doc.querySelector('.cc-vh-toggle').hidden === false && label(a1) === 'Pause the background video' && a1.doc.querySelector('.cc-vh-i-pause').style.display !== 'none' && a1.doc.querySelector('.cc-vh-i-play').style.display === 'none');
+  a1.click(a1.doc.querySelector('.cc-vh-toggle'));
+  check('published: the button pauses it (label and icon switch)…', a1.calls.paused === 1 && label(a1) === 'Play the background video' && a1.doc.querySelector('.cc-vh-i-play').style.display !== 'none' && a1.doc.querySelector('.cc-vh-i-pause').style.display === 'none');
+  a1.click(a1.doc.querySelector('.cc-vh-toggle'));
+  check('published: …and starts it again', a1.calls.played === 2 && label(a1) === 'Pause the background video');
+  const r1 = mk({}, { reduced: true });
+  check('published: for visitors who prefer reduced motion the video is NOT started (poster only), and the button offers to play it', r1.calls.played === 0 && r1.doc.querySelector('video').preload === 'none' && r1.doc.querySelector('.cc-vh-toggle').hidden === false && label(r1) === 'Play the background video');
+  r1.click(r1.doc.querySelector('.cc-vh-toggle'));
+  check('published: …and pressing it plays the video', r1.calls.played === 1 && label(r1) === 'Pause the background video');
+  const m1 = mk({}, { mobile: true });
+  check('published: on a phone the poster stays (nothing is loaded, no button) unless the author chose video there', m1.calls.played === 0 && m1.doc.querySelector('video').preload === 'none' && m1.doc.querySelector('.cc-vh-toggle').hidden === true);
+  const m2 = mk({ mobileVideo: true }, { mobile: true });
+  check('published: with "also on phones" the video plays there too', m2.calls.played === 1 && m2.doc.querySelector('.cc-vh-toggle').hidden === false);
+  const blocked = mk({}, { playRejects: true });
+  check('published: if the browser refuses to autoplay, nothing breaks: the poster stays and the button offers play', blocked.calls.played === 1 && label(blocked) === 'Play the background video');
+}
+
+// =============================================================== AUDIO_PLAYER
+section('AUDIO_PLAYER');
+{
+  const au = { src: '/uploads/a.mp3', title: 'Episode 1', artist: 'The Show', cover: '/uploads/c.jpg' };
+  const h = php('AUDIO_PLAYER', au); const d = $(h);
+  check('a real <audio> element with the file, not loaded until played (preload none) and with the browser\'s own controls (used when the script does not run)', d('audio.cc-au-el').attr('src') === '/uploads/a.mp3' && d('audio').attr('controls') !== undefined && d('audio').attr('preload') === 'none');
+  check('title, artist and cover are shown whatever the script does (cover is decorative)', d('.cc-au-title').text() === 'Episode 1' && d('.cc-au-artist').text() === 'The Show' && d('.cc-au-cover').attr('alt') === '' && d('.cc-au-cover').attr('src') === '/uploads/c.jpg');
+  check('the play / pause icons are SVG, which ignores the hidden attribute: the pause icon starts with display:none (in PHP and in the editor\'s renderer)', [php, js].every((fn) => { const q = $(fn('AUDIO_PLAYER', au)); return q('.cc-au-i-play').attr('style') === undefined && q('.cc-au-i-pause').attr('style') === 'display:none' && q('.cc-au-i-pause').attr('hidden') === undefined; }));
+  check('the custom player is hidden until the script runs, and made of real buttons with names and a labelled seek bar', d('.cc-au-ui').attr('hidden') !== undefined && d('button.cc-au-play').attr('aria-label') === 'Play' && d('input.cc-au-seek').attr('aria-label') === 'Seek' && d('.cc-au-back').attr('aria-label') === 'Back 15 seconds' && d('.cc-au-fwd').attr('aria-label') === 'Forward 15 seconds' && d('.cc-au-speed').attr('aria-label') === 'Playback speed');
+  check('the skip and speed buttons can be left out; no title/artist/cover means no heading row', $(php('AUDIO_PLAYER', { ...au, skip: false, speed: false }))('.cc-au-back, .cc-au-fwd, .cc-au-speed').length === 0 && $(php('AUDIO_PLAYER', { src: 'a.mp3' }))('.cc-au-head').length === 0);
+  const bad = php('AUDIO_PLAYER', { src: 'javascript:alert(1)', title: '<b>x</b>', artist: ['a'], cover: 'javascript:alert(2)', accent: 'red;}' });
+  check('hostile values: no javascript: file or cover, text escaped, unsafe color replaced', $(bad)('audio').attr('src') === undefined && !/javascript:alert/.test(bad) && !/<b>x/.test(bad) && !/red;\}/.test(bad));
+  check('PHP and the editor\'s renderer write the same title, artist, buttons and addresses', [au, { ...au, skip: false }, { src: 'javascript:x', title: 'T' }, {}].every((v) => { const t = (fn) => { const q = $(fn('AUDIO_PLAYER', v)); return q('audio').attr('src') + '|' + q('.cc-au-title').text() + '|' + q('.cc-au-artist').text() + '|' + q('button').map((_, e) => q(e).attr('class') + q(e).attr('aria-label')).get().join(); }; return t(php) === t(js); }));
+
+  const p = pub(h);
+  const el = p.doc.querySelector('.cc-au-el'); const q = (c) => p.doc.querySelector(c);
+  check('published: the custom player replaces the browser\'s controls', !el.hasAttribute('controls') && q('.cc-au-ui').hidden === false);
+  el.__d = 200; el.dispatchEvent(new p.win.Event('loadedmetadata'));
+  check('published: the length is shown as minutes:seconds and sets the seek bar', q('.cc-au-dur').textContent === '3:20' && q('.cc-au-seek').max === '200' && q('.cc-au-seek').getAttribute('aria-valuetext') === '0:00 of 3:20');
+  p.click(q('.cc-au-play'));
+  check('published: Play starts the audio and the button becomes Pause', p.calls.played === 1 && q('.cc-au-play').getAttribute('aria-label') === 'Pause' && q('.cc-au-i-pause').style.display !== 'none' && q('.cc-au-i-play').style.display === 'none');
+  el.currentTime = 65; el.dispatchEvent(new p.win.Event('timeupdate'));
+  check('published: the position follows the audio (1:05 of 3:20), also for screen readers', q('.cc-au-cur').textContent === '1:05' && q('.cc-au-seek').value === '65' && q('.cc-au-seek').getAttribute('aria-valuetext') === '1:05 of 3:20');
+  el.__d = 3725; el.dispatchEvent(new p.win.Event('durationchange'));
+  check('published: a long file shows hours (1:02:05)', q('.cc-au-dur').textContent === '1:02:05');
+  el.__d = 200; el.dispatchEvent(new p.win.Event('durationchange'));
+  p.click(q('.cc-au-back'));
+  check('published: back 15 seconds', el.currentTime === 50);
+  el.currentTime = 5; p.click(q('.cc-au-back'));
+  check('published: back never goes before the start', el.currentTime === 0);
+  el.currentTime = 195; p.click(q('.cc-au-fwd'));
+  check('published: forward never goes past the end', el.currentTime === 200);
+  const sp = []; for (let i = 0; i < 5; i++) { p.click(q('.cc-au-speed')); sp.push(q('.cc-au-speed').textContent + el.playbackRate); }
+  check('published: the speed button cycles 1.25×, 1.5×, 2×, 0.75× and back to 1×', sp.join(' ') === '1.25×1.25 1.5×1.5 2×2 0.75×0.75 1×1', sp.join(' '));
+  q('.cc-au-seek').value = '120'; q('.cc-au-seek').dispatchEvent(new p.win.Event('input', { bubbles: true }));
+  check('published: dragging the seek bar moves the audio', el.currentTime === 120 && q('.cc-au-cur').textContent === '2:00');
+  p.click(q('.cc-au-play'));
+  check('published: Pause pauses', p.calls.paused === 1 && q('.cc-au-play').getAttribute('aria-label') === 'Play');
+  const two = pub(php('AUDIO_PLAYER', { ...au, src: '/uploads/1.mp3' }).replace('id="tb"', 'id="tb"') + php('AUDIO_PLAYER', au).replace(/tb/g, 'tc'));
+  const [e1, e2] = two.doc.querySelectorAll('.cc-au-el');
+  two.click(two.doc.querySelector('#tb .cc-au-play')); two.click(two.doc.querySelector('#tc .cc-au-play'));
+  check('published: starting one player pauses the other (never two at once)', e1.paused === true && e2.paused === false);
+  const rej = pub(h, { playRejects: true }); rej.click(rej.doc.querySelector('.cc-au-play'));
+  check('published: a refused play() breaks nothing (the button stays on Play)', rej.doc.querySelector('.cc-au-play').getAttribute('aria-label') === 'Play');
+}
+
+// =============================================================== ANNOUNCEMENT_BAR
+section('ANNOUNCEMENT_BAR');
+const phpCall = (code) => execFileSync('php', ['-r', `require ${JSON.stringify(fileURLToPath(new URL('../../canvascore-admin/compiler.php', import.meta.url)))}; ${code}`]).toString();
+{
+  const an = { text: 'Spedizione gratuita sopra 50 €', icon: '🎁', linkText: 'Scopri', linkUrl: 'offerte/index.html', preset: 'promo', sticky: true };
+  const h = php('ANNOUNCEMENT_BAR', an); const d = $(h);
+  check('a labelled region with the message, an emoji icon (hidden from screen readers) and a link to the internal page', d('.cc-announce').attr('role') === 'region' && d('.cc-announce').attr('aria-label') === 'Announcement' && d('.cc-ann-text').text() === 'Spedizione gratuita sopra 50 €' && d('.cc-ann-icon').attr('aria-hidden') === 'true' && d('.cc-ann-icon').text() === '🎁' && d('.cc-ann-link').attr('href') === '{{BASE_URL}}offerte/' && d('.cc-ann-link').text() === 'Scopri →');
+  check('the close button exists but stays hidden until the script runs (the message itself is visible without any script)', d('.cc-ann-close').attr('hidden') !== undefined && d('.cc-announce').attr('hidden') === undefined && d('.cc-ann-close').attr('aria-label') === 'Dismiss the announcement' && $(php('ANNOUNCEMENT_BAR', { text: 'x', dismissible: false }))('.cc-ann-close').length === 0);
+  check('sticky pins it to the top of the screen; the presets and custom colors', /position:sticky; top:0; z-index:2147482000/.test(h) && /background:var\(--brand-color, #3b82f6\); color:#ffffff/.test(h) && /background:#fef3c7; color:#78350f/.test(php('ANNOUNCEMENT_BAR', { text: 'x', preset: 'warning' })) && /background:#123456; color:#abcdef/.test(php('ANNOUNCEMENT_BAR', { text: 'x', bg: '#123456', color: '#abcdef' })) && !/sticky/.test(php('ANNOUNCEMENT_BAR', { text: 'x' })));
+  const bad = php('ANNOUNCEMENT_BAR', { text: '<img src=x onerror=a>', icon: '12345678', linkText: 'L', linkUrl: 'javascript:alert(1)', preset: 'evil', bg: 'red;}', color: 'url(x)', sticky: 'yes' });
+  check('hostile values: escaped text, no javascript: link, unsafe colors replaced, unknown preset → dark, the icon is cut at 4 characters, sticky needs exactly true', !/<img src=x/.test(bad) && !/href="javascript:/i.test(bad) && !/red;\}|url\(x\)/.test(bad) && /background:#0f172a/.test(bad) && $(bad)('.cc-ann-icon').text() === '1234' && !/sticky/.test(bad));
+  check('the block with no message still draws an (empty) bar so it can be selected and edited; the site-wide bar draws nothing', $(php('ANNOUNCEMENT_BAR', {}))('.cc-announce').length === 1 && phpCall("echo cc_announcement_html(['enabled' => true, 'text' => '   '], 'x', '', '', true);") === '' && phpCall("echo cc_announcement_html(['text' => 'Hello'], 'x', '', '', true);").includes('Hello'));
+  const key = (fn, c) => $(fn('ANNOUNCEMENT_BAR', c))('.cc-announce').attr('data-key');
+  const msgs = [{ text: 'Hello' }, { text: 'Spedizione gratuita sopra 50 €', linkText: 'Scopri', linkUrl: 'a/index.html' }, { text: '🎁 日本語 é ñ' }, { text: '' }];
+  check('the "dismissed" key is the same in PHP and in the editor (8 hex digits), and changes when the message, link text or link changes', msgs.every((m) => /^[0-9a-f]{8}$/.test(key(php, m)) && key(php, m) === key(js, m)) && new Set([key(php, { text: 'A' }), key(php, { text: 'B' }), key(php, { text: 'A', linkText: 'x' }), key(php, { text: 'A', linkUrl: 'y' })]).size === 4 && key(php, { text: 'A', icon: '!' }) === key(php, { text: 'A' }));
+  check('PHP and the editor\'s renderer write the same message, link and buttons', [an, { text: 'x', dismissible: false, align: 'left' }, {}].every((v) => { const t = (fn) => { const q = $(fn('ANNOUNCEMENT_BAR', v)); return q('.cc-ann-text').text() + '|' + q('.cc-ann-link').attr('href') + '|' + q('.cc-ann-close').length + '|' + q('.cc-ann-icon').text(); }; return t(php) === t(js); }));
+
+  const p = pub(h); const root = p.doc.querySelector('.cc-announce');
+  check('published: the close button appears; the bar is shown', root.hidden === false && root.querySelector('.cc-ann-close').hidden === false);
+  p.click(root.querySelector('.cc-ann-close'));
+  check('published: dismissing hides it and remembers that for this message', root.hidden === true && p.win.localStorage.getItem('cc_ann_' + root.getAttribute('data-key')) === '1');
+  const again = pub(h, { storage: { ['cc_ann_' + $(h)('.cc-announce').attr('data-key')]: '1' } });
+  check('published: on the next page the dismissed bar stays hidden', again.doc.querySelector('.cc-announce').hidden === true);
+  const changed = pub(php('ANNOUNCEMENT_BAR', { ...an, text: 'A new offer' }), { storage: { ['cc_ann_' + $(h)('.cc-announce').attr('data-key')]: '1' } });
+  check('published: a changed message comes back for visitors who dismissed the old one', changed.doc.querySelector('.cc-announce').hidden === false);
+  const blocked = pub(h, { storageBlocked: true });
+  blocked.click(blocked.doc.querySelector('.cc-ann-close'));
+  check('published: where the browser blocks storage, it is simply shown again on the next page, and dismissing still works now', blocked.doc.querySelector('.cc-announce').hidden === true);
+}
+
+// =============================================================== NEWSLETTER
+section('NEWSLETTER');
+{
+  const nl = { title: 'Join', text: 'Monthly news', placeholder: 'Your email', emailLabel: 'E-mail', askName: true, nameLabel: 'Nome', consentText: 'I agree <3', buttonText: 'Subscribe now', successMsg: 'Thanks!', email: 'owner@corp.example' };
+  const out = phpReg('NEWSLETTER', nl, 'nl-1'); const h = out.html; const d = $(h);
+  check('it posts to the same endpoint as the Form block, with its hidden fields and honeypot, and the message', d('form').attr('action') === '{{BASE_URL}}canvascore-admin/submit_form.php' && d('form').attr('method') === 'POST' && d('input[name="_form"]').attr('value') === d('form').attr('id') && d('input[name="_hp"]').length === 1 && d('input[name="_success"]').attr('value') === 'Thanks!');
+  check('fields are numbered in order (name, email, agreement) with their labels, for the form endpoint', d('input[name^="_label_field_"]').map((_, e) => d(e).attr('name') + '=' + d(e).attr('value')).get().join() === '_label_field_0=Nome,_label_field_1=E-mail,_label_field_2=I agree <3');
+  check('the registry holds the same labels in the same order, the recipient and the message', JSON.stringify(out.registry[d('form').attr('id')]) === JSON.stringify({ to: 'owner@corp.example', labels: ['Nome', 'E-mail', 'I agree <3'], success: 'Thanks!' }), JSON.stringify(out.registry));
+  check('the recipient never appears in the page', !/owner@corp\.example/.test(h));
+  check('the email field is a required email input named for screen readers, the name field required text, the agreement a required checkbox', d('input[type="email"][name="field_1"]').attr('required') !== undefined && d('input[name="field_1"]').attr('aria-label') === 'E-mail' && d('input[name="field_1"]').attr('placeholder') === 'Your email' && d('input[type="text"][name="field_0"]').attr('required') !== undefined && d('input[type="checkbox"][name="field_2"]').attr('required') !== undefined && d('input[name="field_2"]').attr('value') === 'Yes' && d('.cc-nl-consent span').text() === 'I agree <3');
+  const plain = phpReg('NEWSLETTER', {}, 'nl-2');
+  check('by default: only an email field and the button; the registry has just "Email"', $(plain.html)('input[name^="field_"]').length === 1 && $(plain.html)('.cc-nl-submit').text() === 'Subscribe' && JSON.stringify(Object.values(plain.registry)[0].labels) === '["Email"]' && $(plain.html)('.cc-nl-consent').length === 0);
+  const order = (layout) => { const q = $(php('NEWSLETTER', { ...nl, formLayout: layout })); return q('form').children().toArray().map((e) => (q(e).hasClass('cc-nl-submit') ? 'button' : q(e).hasClass('cc-nl-consent') ? 'consent' : '')).filter(Boolean).join(); };
+  check('in a row the agreement sits below the button; stacked, it comes before the button', order('inline') === 'button,consent' && order('stacked') === 'consent,button');
+  const id1 = d('form').attr('id'), id2 = $(phpReg('NEWSLETTER', nl, 'nl-3').html)('form').attr('id');
+  check('every newsletter has its own form id (so its sign-ups are told apart); a custom id is cleaned', id1 !== id2 && /^f_[a-f0-9]{16}$/.test(id1) && $(php('NEWSLETTER', { customId: 'My Form!' }))('form').attr('id') === 'f_MyForm');
+  const bad = phpReg('NEWSLETTER', { title: '<b>x</b>', text: { o: 1 }, placeholder: '"><script>x</script>', emailLabel: '"><b>', consentText: '<i>c</i>', buttonText: '<u>b</u>', successMsg: '"><x>', accent: 'red;}' }, 'nl-4');
+  check('hostile values: escaped everywhere (labels, hint, button, message), unsafe color replaced', !/<b>x|"><script>|"><b>|<i>c|<u>b|"><x>/.test(bad.html) && !/red;\}/.test(bad.html) && $(bad.html)('input[name="_success"]').attr('value') === '"><x>');
+  const texts = (html) => { const q = $(html); return ['.cc-nl-title', '.cc-nl-text', 'button', '.cc-nl-consent span'].map((sel) => q(sel).map((_, e) => q(e).text()).get().join('|')).join(' # ') + ' # ' + q('input').map((_, e) => (q(e).attr('type') || '') + (q(e).attr('placeholder') || '') + (q(e).attr('aria-label') || '')).get().join(); };
+  check('PHP and the editor\'s renderer write the same texts, labels and fields', [nl, {}, { ...nl, formLayout: 'stacked', askName: false }].every((v) => texts(php('NEWSLETTER', v)) === texts(js('NEWSLETTER', v))));
 }
 
 // =============================================================== LOGOS strip: logos repeat to cover the strip

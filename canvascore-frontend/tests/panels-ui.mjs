@@ -86,8 +86,8 @@ function addAndSelect(type) {
   return b;
 }
 
-const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD'];
-const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author', REVIEW_SUMMARY: 'Rating', TESTIMONIAL_WALL: 'Testimonials', HOVER_GRID: 'Grid Items', SCROLLYTELLING: 'Story Steps', HOTSPOTS: 'Hotspot Image', TABLE_OF_CONTENTS: 'Table of Contents', SHARE_BAR: 'Share Bar', CODE_SNIPPET: 'Code', PRICE_CALCULATOR: 'Calculator Texts', WIZARD: 'Steps and Fields' };
+const TYPES = ['DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER'];
+const PANEL = { DIVIDER: 'Divider', CALLOUT: 'Callout', STEPS: 'Steps', COUNTERS: 'Counters', PROGRESS: 'Progress Bars', TABLE: 'Data Table', COUNTDOWN: 'Countdown', TIMELINE: 'Timeline', LOGOS: 'Logos', TEAM: 'Team Members', BEFORE_AFTER: 'Before / After', BUSINESS: 'Business Details', BENTO: 'Bento Tiles', SPLIT_CTA: 'Left Side', CASE_STUDY: 'Case Study', AUTHOR_BIO: 'Author', REVIEW_SUMMARY: 'Rating', TESTIMONIAL_WALL: 'Testimonials', HOVER_GRID: 'Grid Items', SCROLLYTELLING: 'Story Steps', HOTSPOTS: 'Hotspot Image', TABLE_OF_CONTENTS: 'Table of Contents', SHARE_BAR: 'Share Bar', CODE_SNIPPET: 'Code', PRICE_CALCULATOR: 'Calculator Texts', WIZARD: 'Steps and Fields', VIDEO_HERO: 'Background Video', AUDIO_PLAYER: 'Audio', ANNOUNCEMENT_BAR: 'Announcement', NEWSLETTER: 'Newsletter Signup' };
 let failedRun = false;
 try {
   console.log('\nADD BLOCK — the blocks.json defaults reach the editor');
@@ -289,6 +289,39 @@ try {
   setValue(newChoices, 'a\nb'); await sleep(40);
   check('WIZARD: the choices are stored as text, one per line', content().steps[0].fields[2].options === 'a\nb');
 
+  addAndSelect('VIDEO_HERO'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('input').find((i) => i.placeholder === 'Video file address'));
+  setValue($$('input').find((i) => i.placeholder === 'Video file address'), '/uploads/clip.mp4'); await sleep(40);
+  check('VIDEO_HERO: the video address updates the store', content().video === '/uploads/clip.mp4');
+  click(checkbox('Also play the video on phones (uses mobile data)')); await sleep(40);
+  check('VIDEO_HERO: "also on phones" updates the store (off by default)', content().mobileVideo === true);
+  click(buttonByText('Hero Buttons')); await sleep(40);
+  check('VIDEO_HERO: at most two buttons: the default hero has two, so there is no "+ Add button" until one is removed', !buttonByText('+ Add button') && content().buttons.length === 2);
+  click($$('button[title="Remove"]')[0]); await sleep(40);
+  check('VIDEO_HERO: removing one makes "+ Add button" appear', content().buttons.length === 1 && !!buttonByText('+ Add button'));
+  click(buttonByText('+ Add button')); await sleep(40);
+  check('VIDEO_HERO: …and it adds a button with all expected fields (and hides itself again at two)', content().buttons.length === 2 && ['text', 'url', 'style'].every((k) => k in content().buttons[1]) && !buttonByText('+ Add button'));
+  click($$('button[title="Choose from the media library"]')[0]); await sleep(80);
+  check('VIDEO_HERO: the library button asks for a VIDEO (the picker says so and offers video files)', /Choose a video/.test(doc.body.textContent));
+
+  addAndSelect('AUDIO_PLAYER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('input').find((i) => i.placeholder === 'Audio file address'));
+  setValue($$('input').find((i) => i.placeholder === 'Audio file address'), '/uploads/ep1.mp3'); await sleep(40);
+  setValue(field('Title (empty = none)'), 'Episode 1'); await sleep(40);
+  check('AUDIO_PLAYER: the audio address and title update the store', content().src === '/uploads/ep1.mp3' && content().title === 'Episode 1');
+
+  addAndSelect('ANNOUNCEMENT_BAR'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Message'));
+  setValue(field('Message'), 'Big sale today'); setValue(field('Colors'), 'warning'); await sleep(40);
+  click(checkbox('Stay at the top while scrolling')); await sleep(40);
+  check('ANNOUNCEMENT_BAR: the message, the colors and "stay at the top" update the store without losing the other fields', content().text === 'Big sale today' && content().preset === 'warning' && content().sticky === true && content().linkText === 'Shop now' && content().dismissible === true);
+
+  addAndSelect('NEWSLETTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Fields'));
+  click(buttonByText('Fields')); await sleep(40);
+  check('NEWSLETTER: the name fields only appear when "Ask for a name too" is ticked', !field('Name field name'));
+  click(checkbox('Ask for a name too')); await sleep(40);
+  check('NEWSLETTER: ticking it shows them and updates the store', content().askName === true && !!field('Name field name'));
+  setValue(field('Agreement text (empty = no checkbox)'), 'I agree'); await sleep(40);
+  check('NEWSLETTER: the agreement text updates the store', content().consentText === 'I agree');
+  check('NEWSLETTER: admins are offered the receiving email', !!$$('input[type="email"]').find((i) => i.placeholder === 'Leave blank for Global Email'));
+
   addAndSelect('BEFORE_AFTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('button').some((b) => b.textContent.includes('Before / After')));
   const imgs = $$('input[placeholder="Image URL"]');
   setValue(imgs[0], 'https://x.example/prima.jpg'); setValue(imgs[1], 'https://x.example/dopo.jpg'); await sleep(40);
@@ -312,7 +345,7 @@ try {
   check('BUSINESS: "+ Add weekly hours" restores the 7 days', content().hours.length === 7 && content().hours[0].day === 'Monday');
 
   console.log('\nCANVAS — every block is drawn in the editor (canonical renderer)');
-  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author', REVIEW_SUMMARY: 'cc-review-summary', TESTIMONIAL_WALL: 'cc-testimonial-wall', HOVER_GRID: 'cc-hover-grid', SCROLLYTELLING: 'cc-story', HOTSPOTS: 'cc-hotspots', TABLE_OF_CONTENTS: 'cc-toc', SHARE_BAR: 'cc-share', CODE_SNIPPET: 'cc-code', PRICE_CALCULATOR: 'cc-calc', WIZARD: 'cc-wizard' };
+  const CLS = { DIVIDER: 'cc-divider', CALLOUT: 'cc-callout', STEPS: 'cc-steps', COUNTERS: 'cc-counters', PROGRESS: 'cc-progress', TABLE: 'cc-table-block', COUNTDOWN: 'cc-countdown', TIMELINE: 'cc-timeline', LOGOS: 'cc-logos', TEAM: 'cc-team', BEFORE_AFTER: 'cc-ba', BUSINESS: 'cc-business', BENTO: 'cc-bento', SPLIT_CTA: 'cc-split-cta', CASE_STUDY: 'cc-case', AUTHOR_BIO: 'cc-author', REVIEW_SUMMARY: 'cc-review-summary', TESTIMONIAL_WALL: 'cc-testimonial-wall', HOVER_GRID: 'cc-hover-grid', SCROLLYTELLING: 'cc-story', HOTSPOTS: 'cc-hotspots', TABLE_OF_CONTENTS: 'cc-toc', SHARE_BAR: 'cc-share', CODE_SNIPPET: 'cc-code', PRICE_CALCULATOR: 'cc-calc', WIZARD: 'cc-wizard', VIDEO_HERO: 'cc-vhero', AUDIO_PLAYER: 'cc-audio', ANNOUNCEMENT_BAR: 'cc-announce', NEWSLETTER: 'cc-newsletter' };
   for (const t of TYPES) {
     const b = addAndSelect(t);
     mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));
@@ -370,6 +403,23 @@ try {
     click(doc.querySelector('.cc-wz-next')); await sleep(30);
     const sub = new w.Event('submit', { bubbles: true, cancelable: true }); doc.querySelector('.cc-wz-form').dispatchEvent(sub);
     check('MULTI-STEP FORM canvas: Send does nothing in the editor (the form is never submitted)', stepsShown() === '001' && sub.defaultPrevented === true);
+
+    const vhBlock = addAndSelect('VIDEO_HERO');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [vhBlock.id] }, React.createElement(SortableBlock, { block: { ...vhBlock, content: { ...vhBlock.content, video: '/uploads/clip.mp4', poster: '/uploads/poster.jpg' } } }))));
+    await waitFor(() => doc.querySelector('.cc-vhero'));
+    await sleep(60);
+    check('VIDEO_HERO canvas: the poster is shown and the video does not load or play while editing (no preload, no button)', /poster\.jpg/.test(doc.querySelector('.cc-vh-poster').getAttribute('style')) && doc.querySelector('video').getAttribute('preload') === 'none' && doc.querySelector('.cc-vh-toggle').hidden === true && doc.querySelector('video').paused === true);
+
+    const auBlock = addAndSelect('AUDIO_PLAYER');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [auBlock.id] }, React.createElement(SortableBlock, { block: auBlock }))));
+    await waitFor(() => doc.querySelector('.cc-audio') && doc.querySelector('.cc-au-ui') && !doc.querySelector('.cc-au-ui').hidden);
+    check('AUDIO_PLAYER canvas: the custom player replaces the browser\'s controls, and the block receives the mouse', !doc.querySelector('.cc-au-el').hasAttribute('controls') && doc.querySelector('.cc-audio').parentElement.style.pointerEvents === 'auto' && doc.querySelector('.cc-au-title').textContent === 'Episode title');
+
+    const anBlock = addAndSelect('ANNOUNCEMENT_BAR');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [anBlock.id] }, React.createElement(SortableBlock, { block: anBlock }))));
+    await waitFor(() => doc.querySelector('.cc-announce') && doc.querySelector('.cc-ann-close') && !doc.querySelector('.cc-ann-close').hidden);
+    click(doc.querySelector('.cc-ann-close')); await sleep(30);
+    check('ANNOUNCEMENT_BAR canvas: the bar and its close button are shown, and the button does nothing in the editor (it is never hidden or remembered)', doc.querySelector('.cc-announce').hidden === false && doc.querySelector('.cc-ann-text').textContent.length > 0);
 
     // Table of Contents: lists the headings of the page being edited, and follows them
     const tocBlock = addAndSelect('TABLE_OF_CONTENTS');

@@ -45,6 +45,10 @@ import ShareBarPanel from './ShareBarPanel';
 import CodeSnippetPanel from './CodeSnippetPanel';
 import PriceCalculatorPanel from './PriceCalculatorPanel';
 import WizardPanel from './WizardPanel';
+import VideoHeroPanel from './VideoHeroPanel';
+import AudioPlayerPanel from './AudioPlayerPanel';
+import AnnouncementBarPanel from './AnnouncementBarPanel';
+import NewsletterPanel from './NewsletterPanel';
 
 export const CONTENT_PANELS = {
   ACCORDION: AccordionTabsPanel,
@@ -96,4 +100,8 @@ export const CONTENT_PANELS = {
   CODE_SNIPPET: CodeSnippetPanel,
   PRICE_CALCULATOR: PriceCalculatorPanel,
   WIZARD: WizardPanel,
+  VIDEO_HERO: VideoHeroPanel,
+  AUDIO_PLAYER: AudioPlayerPanel,
+  ANNOUNCEMENT_BAR: AnnouncementBarPanel,
+  NEWSLETTER: NewsletterPanel,
 };
