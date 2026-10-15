@@ -660,7 +660,7 @@ On the canvas you see grey placeholder cards. The real items are filled in when 
 Click **Media** in the sidebar to open the **Media Library**, where all your images are kept. On the left is the list of folders; on the right, the images of the folder you opened.
 
 - **Uploading**: click **Upload Images** and choose one or more files. You can also drag files from your computer and drop them anywhere on the page. New images go into the folder that is open (with **All images** open, they go in no folder).
-- **Accepted files**: JPG, PNG, GIF, WebP, AVIF, SVG, ICO and BMP.
+- **Accepted files**: images (JPG, PNG, GIF, WebP, AVIF, SVG, ICO and BMP), audio (MP3, M4A, OGG and WAV) and video (MP4 and WebM). Audio and video appear as tiles, with a type filter, and the picker of each block offers only the kind that block needs. A file must really be of its type: a script, page or document renamed to `.mp3` or `.mp4` is refused. Files over the size limit are refused with a message; if the server's own limit is the cause, the message says so.
 - **SVG files** are accepted only when they contain plain drawing: files with scripts, animated links, embedded web content, links to outside files or other active content are refused. Export the SVG again as a plain SVG, or as PNG. Uploading never replaces an image already in the library, even one with the same name.
 - **Searching**: type in **Search name or description…**. It searches the folder that is open.
 - **Sorting**: choose **Newest first**, **Oldest first**, **Name A–Z**, **Name Z–A**, **Largest first** or **Smallest first**.
@@ -809,6 +809,18 @@ The header and footer are groups of blocks shown at the top and bottom of every 
 - **Edit header** / **Edit footer**: opens it in the editor, with a **Global header** or **Global footer** badge. Edit it like a page, then click **Save**. Click **Publish** to also put it online.
 - **Delete**: removes all its blocks from every page and republishes the site. This can't be undone.
 
+### Announcement bar
+
+A message shown across the top of every page, for example an offer or a closing time.
+
+1. Tick **Show the announcement bar on every page**.
+2. Type the **Message**, and optionally an icon (one emoji), the **Link text (empty = no link)** and a link: pick a page, or type an address in **Link address**.
+3. Choose the **Colors** and the **Alignment**.
+4. Look at the **Preview** under the card.
+5. Click **Save & Publish**.
+
+Options: **Stay at the top while scrolling** keeps the bar visible as the visitor scrolls, and **Visitors can dismiss it** adds a close button. A dismissed bar stays hidden until you change its message. When the top menu is pinned, the bar sticks under it.
+
 ### Cookie banner
 
 The cookie banner is a notice shown on every page of the site with an Accept and a Decline button. The visitor's choice is remembered, so the banner doesn't come back on every page.
@@ -854,9 +866,9 @@ Editors don't see the **Redirects**, **Form emails** and **Security** cards. The
 These sections appear under **Administration** in the sidebar only for admins. Details are in the [Administrator Guide](ADMIN-GUIDE.md).
 
 - **Forms**: the **Form** block's **Form Settings** set the **Form Title**, the **Receiving Email** and the **Submit Button Text**, and **Form Fields** lists the fields (for example **Short Text**, **Email**, **Long Text**, **Number**). See the [Block Reference](BLOCK-REFERENCE.md).
-- **Submissions** (**Form Submissions**): messages visitors sent through your forms. You can search them, **Refresh** the list, **Export CSV**, delete single messages or **Clear all**.
+- **Submissions** (**Form Submissions**): messages visitors sent through your forms, including the **Multi-step Form** and **Newsletter Signup** blocks. You can search them, **Refresh** the list, **Export CSV**, delete single messages or **Clear all**.
 - **Accounts**: **Add a user** with a **Username** (3–32 letters, digits, `.`, `_`, `-` or `@`; `Anna` and `anna` count as the same name), **Password** and **Role**. In the list you can **Change password** of another account (it is signed out at once and must choose a new password at the next sign-in; for your own, use the key icon) or delete an account. You can't delete your own account or the last admin.
-- **Backup**: **Download backup (.zip)** saves the whole site in one file: pages and their drafts, collections and items, templates, masters, the global header and footer, redirects, Global Options, the menu and every uploaded image (with its description and folder). Version history and form messages are optional. User accounts and passwords are never included. **Keep a copy on the server** stores it on the server instead, where it can later be downloaded, restored or deleted. **Restore** (from a file, or from a copy on the server) **replaces** the whole site with the backup; user accounts are kept, a safety copy of the current site is saved first, and the site is published again afterwards. Older `.json` backups can still be imported.
+- **Backup**: **Download backup (.zip)** saves the whole site in one file: pages and their drafts, collections and items, templates, masters, the global header and footer, redirects, Global Options, the menu and every uploaded image, audio and video file (with its description and folder). Version history and form messages are optional. User accounts and passwords are never included. **Keep a copy on the server** stores it on the server instead, where it can later be downloaded, restored or deleted. **Restore** (from a file, or from a copy on the server) **replaces** the whole site with the backup; user accounts are kept, a safety copy of the current site is saved first, and the site is published again afterwards. Older `.json` backups can still be imported.
 
 ---
 

@@ -30,6 +30,8 @@ This manual covers each block's Content tab. For the editor in general, and for 
 | | [Button](#button) | A call-to-action link |
 | | [Divider](#divider) | A line, a decorative shape or empty space |
 | | [Video](#video) | A YouTube or Vimeo video |
+| | [Audio Player](#audio-player) | A podcast episode, song or recording |
+| | [Code Snippet](#code-snippet) | Code with colors, line numbers and a copy button |
 | | [Custom HTML](#custom-html) | Embed codes and widgets (admins only) |
 | **Sections** | [Hero](#hero) | The big opening banner of a page |
 | | [Image + Text](#image--text) | A picture next to a paragraph |
@@ -38,6 +40,16 @@ This manual covers each block's Content tab. For the editor in general, and for 
 | | [Testimonial](#testimonial) | A customer quote |
 | | [Callout](#callout) | A highlighted note, tip or warning |
 | | [Form](#form) | A contact or request form |
+| | [Multi-step Form](#multi-step-form) | A long form split into steps, checked as the visitor goes |
+| | [Newsletter Signup](#newsletter-signup) | An email sign-up box |
+| | [Video Hero](#video-hero) | A banner with a background video |
+| | [Announcement Bar](#announcement-bar) | A short message bar at the top of the page |
+| | [Bento Grid](#bento-grid) | Tiles of mixed sizes |
+| | [Split CTA](#split-cta) | A call to action in two halves |
+| | [Case Study](#case-study) | A client story with a headline result |
+| | [Author Bio](#author-bio) | A short profile of the author |
+| | [Testimonial Wall](#testimonial-wall) | Several customer quotes in columns |
+| | [Scrollytelling](#scrollytelling) | Steps of text beside an image that changes as you scroll |
 | **Interactive** | [Accordion](#accordion) | Content that opens and closes |
 | | [Tabs](#tabs) | Content split into tabbed panels |
 | | [FAQ](#faq) | A simple list of questions and answers |
@@ -45,6 +57,9 @@ This manual covers each block's Content tab. For the editor in general, and for 
 | | [Gallery](#gallery) | A grid of photos that open full screen |
 | | [Before / After](#before--after) | Comparing two images with a drag handle |
 | | [Countdown](#countdown) | Time left until a date |
+| | [Price Calculator](#price-calculator) | A price estimate the visitor sets with sliders and add-ons |
+| | [Product Hotspots](#product-hotspots) | Numbered pins on an image, each with a short text |
+| | [Hover Reveal Grid](#hover-reveal-grid) | Images that reveal a title and text on hover |
 | **Lists & data** | [Steps](#steps) | A numbered "how it works" process |
 | | [Counters](#counters) | Big numbers and stats |
 | | [Progress Bars](#progress-bars) | Skills or percentages as bars |
@@ -53,10 +68,13 @@ This manual covers each block's Content tab. For the editor in general, and for 
 | | [Pricing](#pricing) | Plans and prices side by side |
 | | [Team](#team) | People with photo, role and links |
 | | [Logo Cloud](#logo-cloud) | Client or partner logos |
+| | [Review Summary](#review-summary) | An average rating with stars and the number of reviews |
 | **Business & dynamic** | [Business Info](#business-info) | Address, contacts and opening hours |
 | | [Map](#map) | A Google map of a place |
 | | [Collection List](#collection-list) | The latest posts, news or items of a collection |
 | | [Site Search](#site-search) | A search box that finds your pages and items |
+| | [Table of Contents](#table-of-contents) | A list of the page's headings, which follows you down the page |
+| | [Share Bar](#share-bar) | Buttons to share the page on social networks, by email or by copying the link |
 
 Tip: the **Search blocks…** box in the Add tab also finds blocks by keyword, for example "carousel" finds Slider and "faq" finds Accordion and FAQ.
 
@@ -226,6 +244,35 @@ Raw HTML code, for example an embed from another service.
 
 ---
 
+### Audio Player
+
+A player for an audio file: a podcast episode, a song or a recording.
+
+**Player**
+- **Audio file (MP3, M4A, OGG or WAV)**: type an address, or pick the file from the media library (audio files are uploaded there too).
+- **Title (empty = none)**, **Artist or show (empty = none)** and **Cover image (optional)**.
+- **Skip back / forward 15 seconds** and **Playback speed button**: show or hide the buttons.
+- **Accent color (empty = brand color)**.
+
+**Tips**
+- The file is downloaded only when someone presses play.
+- Without JavaScript the visitor gets the browser's own audio controls.
+- Starting one player pauses the others on the same page.
+
+---
+
+### Code Snippet
+
+Shows code with colors, line numbers and a copy button. The code is always shown as text and never runs.
+
+- **Code**: the code itself.
+- **Language**: HTML, CSS, JS, JSON, PHP or shell.
+- **File name (optional)**: shown above the code.
+- **Theme**, **Line numbers**, **Copy button** (on or off), **Text size px**.
+- **Maximum height px (0 = show everything)**: long code gets a scrollbar past this height.
+
+---
+
 ## Sections
 
 ### Hero
@@ -334,6 +381,147 @@ A form visitors fill in. Submissions are sent by email.
 - The form includes a hidden anti-spam trap; you do not need to set anything.
 - The server accepts only the fields defined here, with these labels, and always shows this **Message after sending**: after changing the fields, the message or the receiving email, publish the site so the change applies to new submissions.
 - Each answer can be up to 5,000 characters, and a whole submission up to 64 KB.
+
+---
+
+### Multi-step Form
+
+A form split into steps. Each step is checked before the visitor can go on, and every step is checked again on **Send**.
+
+**Form Settings**
+- **Title (empty = none)**, **Introduction (empty = none)**, **Short text under the title**, **Accent color (empty = brand color)**.
+- **Next button**, **Back button** and **Send button**: their text.
+- **Message after sending**: shown once the answers are sent.
+- **Leave blank for Global Email**: the receiving email (set by an admin; editors don't see it).
+
+**Progress**: a progress bar or numbered steps.
+
+**Steps and Fields**: one card per step, with a **Step title** and **Step text**. Each step holds fields, each with a **Type**:
+- **Text**, **Email**, **Phone**, **Number**, **Address**, **Date** or **Long text**;
+- **Drop-down**, **Choose one** or **Choose several** (write the choices one per line);
+- **Agreement** (a checkbox for something the visitor must accept).
+
+Tick **Required** for a field the visitor must fill in.
+
+**Tips**
+- Without JavaScript the whole form is shown as one long form.
+- The answers appear in **Submissions** with the other form messages.
+
+---
+
+### Newsletter Signup
+
+An email sign-up box. Each sign-up is stored in **Submissions**, like a form message, and sent to the receiving email.
+
+- **Title (empty = none)** and **Text (empty = none)**.
+- **Email field name (shown in Submissions)**, **Email field hint (empty = the name)** and **Your email address**.
+- **Ask for a name too**, with its own **Name field name** and hint.
+- **Agreement text (empty = no checkbox)**: for example a line about receiving emails. Visitors must tick it to sign up.
+- **Button text** and **Message after signing up**.
+- **Leave blank for Global Email**: the receiving email (set by an admin, like the Form block's).
+
+---
+
+### Video Hero
+
+A full-width banner with a background video. The video is muted and loops.
+
+**Background Video**
+- **Video file (MP4 or WebM)**, or type an address.
+- **Second format (optional, e.g. WebM)**: lets browsers that don't play the first format use the second.
+- **Poster image**: shown while the video loads, on phones and for visitors who prefer reduced motion.
+- **Show a pause button**, and **Also play the video on phones (uses mobile data)**.
+
+**Hero Text**: **Title**, **Subtitle**, **Text alignment** and **Text color**.
+
+**Hero Buttons**: up to two, each with **Text** and **Link** (`/page` or `https://…`).
+
+**Hero Layout**: **Height px (280–1000)**, **Overlay color** and **Overlay strength % (0–90)**, which darkens the video so the text reads well.
+
+**Tips**
+- Nothing loads until the page starts the video, so a page with a video hero stays light.
+- On phones the poster is shown instead, unless **Also play the video on phones** is ticked.
+
+---
+
+### Announcement Bar
+
+A short message bar, for example a promotion or a closing time, shown across the top of the page.
+
+- **Announcement**: the message, an optional icon (one emoji), the link text and link, the colors and the alignment.
+- **Stay at the top while scrolling** and **Visitors can dismiss it**.
+
+To show one on **every** page, use the site-wide bar in [Global Options](USER-GUIDE.md#12-global-options) instead. A bar in one page shows on that page only.
+
+**Tips**
+- A dismissed bar stays hidden until its message changes.
+- The bar sits under the top menu when that menu is pinned.
+
+---
+
+### Bento Grid
+
+A grid of tiles, some normal, some wide, tall or large, each with its own text and image.
+
+**Bento Layout**: **Columns**, **Gap px**, **Row height px**, and **Hover effect**.
+
+**Bento Tiles**: one card per tile, with **Size** (normal, wide, tall or large), **Icon (emoji)**, **Title**, **Text**, **Text color (empty = automatic)**, **Background image (optional)** with its **Image alt text**, and **Link (optional)**.
+
+---
+
+### Split CTA
+
+A call to action in two halves, one on each side.
+
+**Split Layout**: **Gap px** and **Corner radius px**.
+
+**Left Side** and **Right Side**, each with **Icon (emoji)**, **Title**, **Text**, **Text color**, **Button text (empty = no button)**, **Button link**, **Button background** and **Button text color**.
+
+---
+
+### Case Study
+
+A client story with a headline result.
+
+- **Case Study**: **Title**, **Story**, **Client** and an optional **Client logo**.
+- **Headline metric** (for example `+240%`) and **Metric label**.
+- **Link text (empty = no link)** and **Link**.
+- **Case Study Images**: an **Image (empty = none)** and its **Image alt text**.
+- **Case Study Quote**: the **Quote (empty = none)** and its **Quote author**.
+- **Case Study Layout**: **Layout** and **Accent color**.
+
+---
+
+### Author Bio
+
+A short profile of the person who wrote the page or the site.
+
+- **Author**: **Name**, **Role**, **Bio**, **Photo (empty = initials)** and **Label (empty = none)**, shown above the name.
+- **Author Links**: one card per link, with its **Label** and an **Address or email** (`example.com` or `name@example.com`).
+- **Author Layout**: **Layout**, and **Show as a card**.
+
+---
+
+### Testimonial Wall
+
+Several customer quotes in columns.
+
+- **Testimonials**: one card per quote, with **Quote**, **Name**, **Role or company** and **Photo (empty = initials)**, and **Stars**.
+- **Wall Layout**: **Columns**, **Gap px**, **Show star ratings** and **Star color**.
+
+---
+
+### Scrollytelling
+
+Steps of text scroll past while a sticky image beside them changes with each step. Up to 12 steps.
+
+**Story Layout**: **Image side** (left or right), **Image shape**, **Distance from the top while sticky px**, **Gap px** and **Height of each step (% of the screen)**.
+
+**Story Steps**: one card per step, with **Title**, **Text**, **Image shown with this step** and its **Image alt text**.
+
+**Tips**
+- On phones the image sits above the text, one step after another.
+- Without JavaScript the first image stays on screen.
 
 ---
 
@@ -459,6 +647,54 @@ Shows days, hours, minutes and seconds left until a date.
 **Tips**
 - Always set the target date: a new countdown points to 2030 until you change it.
 - With **Visitor's local time**, people in different countries reach zero at different moments. For a live event, choose a fixed offset.
+
+---
+
+### Price Calculator
+
+Lets a visitor work out a price: sliders with a price per unit, add-ons they tick, and a total.
+
+**Calculator Texts**: **Title**, **Introduction**, **Total label**, **Note under the button**, **Button text (empty = no button)** and **Button link**.
+
+**Prices**: **Base price**, **Currency symbol**, **Symbol position** (before or after the amount), **Number format** (`1,234.56` or `1.234,56`) and **Decimals**. The currency is shown as text.
+
+**Sliders**: one card per slider, with **Label**, **Unit (e.g. people, GB)**, **Smallest value**, **Largest value**, **Step**, **Starting value**, **Price per unit (per month)** and **Units included for free**.
+
+**Add-ons**: one card per add-on, with **Label**, **Price (per month)** and **Ticked to begin with**.
+
+**Monthly / Yearly**: **Let visitors switch between monthly and yearly**, **Discount for paying yearly (%)**, the button texts, the words for a month and a year, and the **saving message** shown under the total (`You save {amount}`).
+
+**Fixed monthly price**: a price that is always added, with its own **Name of the fixed price**.
+
+**Tips**
+- The starting total is worked out on the server, so the page shows the right figure even without JavaScript.
+- The total, breakdown and button update as the visitor moves the sliders or ticks an add-on.
+
+---
+
+### Product Hotspots
+
+Numbered pins on an image. Each pin opens a short text when the visitor points at it, focuses it or taps it.
+
+**Hotspot Image**: the **Image** and its **Image alt text**.
+
+**Hotspot Pins**: one card per pin, with **Title**, **Text**, **Link text (empty = no link)**, **Link** (`/page` or `https://…`), and its position: **Position from the left (%)** and **Position from the top (%)**. Click in the picture to move the selected pin there.
+
+**Hotspot Style**: **Pin color**, **Pin number color**, **Image shape**, **Corner radius px**, and **Pulsing ring**.
+
+**Tips**
+- Press Escape to close an open text.
+- The pulsing ring is off for visitors who prefer reduced motion.
+
+---
+
+### Hover Reveal Grid
+
+A grid of images. When the visitor hovers over one, a title and text appear over it.
+
+**Hover Layout**: **Columns**, **Gap px**, **Corner radius px**, **Image shape**, **Overlay color** and **Reveal effect**.
+
+**Grid Items**: one card per item, with **Image**, **Image alt text**, **Title**, **Text** and **Link (optional)**.
 
 ---
 
@@ -606,6 +842,22 @@ A row of client or partner logos.
 
 ---
 
+### Review Summary
+
+An average rating with stars and the number of reviews, optionally with a bar for each star rating.
+
+**Rating**: **Average rating (0–5)**, **Number of reviews**, **Reviews label** (for example "reviews"), **Source (optional)** (for example "Google"), and **Based on verified reviews**.
+
+**Rating Breakdown**: **Show the breakdown bars**, and **Star and bar color**.
+
+**Rating Layout**: **Title (empty = none)**, **Layout**, and **Stars**. **Link text (empty = no link)** and **Link** (for example `/reviews`) take the visitor to the full list.
+
+**Tips**
+- The block shows the numbers you type. It doesn't collect or count reviews.
+- It doesn't add review markup for search engines.
+
+---
+
 ## Business & dynamic
 
 ### Business Info
@@ -685,6 +937,35 @@ A search box. Visitors type a word and see a list of matching pages and collecti
 **Tips**
 - Put this block on a page called "Search" (address `/search/`), then link to that page from your menu.
 - The box takes up to 720px and is centered. Change it in **Style**.
+
+---
+
+### Table of Contents
+
+A numbered list of the headings on the page. It builds itself, so you don't type the list.
+
+- **Title (empty = none)**, and **Headings to list**.
+- **Number the entries**, **Highlight the section being read** and **Stay in view while scrolling (sticky)**.
+- **Distance from the top px** (for the sticky list), **Space above a heading when jumping to it px** and **Accent color (empty = brand color)**.
+
+**Tips**
+- The list uses the H2 and H3 headings of **Text**, **Image + Text**, **Hero** and **Custom HTML** blocks. Other blocks' titles are not included.
+- The block is hidden when the page has no headings.
+
+---
+
+### Share Bar
+
+Buttons to share the page.
+
+- **Title (empty = none)** and **Message (empty = the page title)**, which is sent with the link.
+- **Buttons**: choose the networks to show.
+- **Shape**, **Alignment**, **Button height px** and **Colors**.
+
+**Tips**
+- The buttons include Facebook, X, LinkedIn, WhatsApp, Telegram, email, copy link and print, and the phone's own share sheet where the phone has one.
+- The link is the address of the page the visitor is on.
+- Nothing is loaded from the networks until a visitor clicks a button.
 
 ---
 

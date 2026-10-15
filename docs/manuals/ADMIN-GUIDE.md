@@ -742,7 +742,7 @@ A backup contains:
   templates, masters, the global header and footer, and redirects;
 - Global Options (`settings.json`, including form emails and the session timeout), the menu,
   and the media library data (`media.json`: descriptions, sizes, folders; `media-folders.json`);
-- every uploaded image in `uploads/`, including the optimized copies in `uploads/_cc/`;
+- every uploaded file in `uploads/` (images, audio and video), including the optimized copies in `uploads/_cc/`;
 - optionally, **version history** ("Include the version history of pages and items") and
   **form messages** ("Include the messages received through forms"). Both are ticked by
   default;
@@ -876,6 +876,9 @@ Keep copies off the server. `sqlite3 .backup` is safe while the site is in use; 
   Reply-To. Use an address on your own domain, or many mail servers will reject or junk the
   message.
 - **Subject**: *Default subject*, otherwise "New submission from your website".
+- **Newsletter Signup** and **Multi-step Form** blocks follow the same rules as the Form block: their receiving
+  email is set by an admin, editors can't see or change it (their saves keep the admin's value), and the default
+  recipient applies when it is empty.
 
 Recipients are never sent to the browser: on publish, CanvasCore writes `forms.json` in the
 data directory (form id → recipient, the labels of the form's fields and its success message)
@@ -980,7 +983,7 @@ What CanvasCore does for you:
   used by pages, collections or redirects, and publishing never writes into or deletes from
   them (section 7.1).
 - **Uploads**: only `jpg`, `jpeg`, `png`, `gif`, `webp`, `avif`, `svg`, `ico`, `bmp`; raster
-  files must be real images. SVGs are accepted only when every element and attribute is on an
+  files must be real images. Audio (`mp3`, `m4a`, `ogg`, `wav`) and video (`mp4`, `webm`) files must start the way their type says, and are size-capped. SVGs are accepted only when every element and attribute is on an
   allow-list of plain drawing features: no scripts, event handlers, animations of links,
   embedded HTML or MathML, external references or style sheets (`@import`), or processing
   instructions. File names are sanitized and prefixed with a timestamp, and an upload never

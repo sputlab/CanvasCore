@@ -10,6 +10,43 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-15 — Premium blocks
+
+Eighteen new blocks, audio and video in the media library, and a site-wide announcement bar.
+
+### Added
+- **Blocks**: Audio Player, Code Snippet, Multi-step Form, Newsletter Signup, Video Hero, Announcement Bar, Bento
+  Grid, Split CTA, Case Study, Author Bio, Testimonial Wall, Scrollytelling, Price Calculator, Product Hotspots,
+  Hover Reveal Grid, Review Summary, Table of Contents and Share Bar. Each one has a panel, an editor preview and
+  the same output on the published page.
+- **Announcement bar**: a site-wide bar in **Global Options** (with a preview), shown on every page. It sticks to the
+  top while scrolling, or under the top menu when that is pinned. Visitors can dismiss it, and it stays dismissed
+  until the message changes.
+- **Media library**: uploads of MP3, M4A, OGG and WAV audio and MP4 and WebM video, shown as tiles with a type
+  filter. The picker of each block offers only the kind it needs.
+- **Backups** keep audio and video files.
+- **Logo Cloud**: the scrolling strip repeats the logos until they fill the line in both directions.
+- **Placeholders** for new images, slides and logos are PNG files, so they survive saving.
+
+### Changed
+- A block added from the Add panel is selected, its settings open, and it is scrolled into view.
+- The `hidden` attribute is respected by Video Hero, Price Calculator and Share Bar even where the block sets its
+  own `display`, so their hidden parts stay hidden on phones.
+- The Multi-step Form and Newsletter Signup send their answers to the same place as the Form block, and their
+  receiving email is an administrator setting, like the Form block's.
+
+### Security
+- Audio and video uploads must start the way their type says: a script, page or document renamed to `.mp3` or
+  `.mp4` is refused, and each file has a size cap with a clear message when the server's own upload limit is hit.
+- A backup restore keeps the real audio and video files and skips any file that does not match its type. Before,
+  one media file that did not match made the whole backup refuse to restore.
+
+### Fixed
+- The Logo Cloud scrolling strip no longer pushes the editor's panels and top bar off the screen.
+- The Multi-step Form moves focus to the step's fields in Firefox.
+- The Price Calculator shows its currency symbol as text.
+- Editing two announcement bar fields in the same moment no longer loses one of the changes.
+
 ## [0.14.1] - 2026-10-13 — Security release
 
 A full security review of the backend and the editor before the repository went public. **Update as soon as

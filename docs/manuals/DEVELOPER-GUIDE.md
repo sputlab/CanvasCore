@@ -116,11 +116,13 @@ canvascore-frontend/         React editor
 | `src/store/useStore.js` | The Zustand store: auth, pages, block tree, history, masters, templates |
 | `src/render/renderBlock.mjs` | Canonical JS renderer (`renderBlock`, `blockRoot`, `buildInlineStyle`, `ccInt`, `escapeHtml`) |
 | `src/render/effects.mjs` | Effect catalogs and `effectClasses()` / `buttonHover()` |
+| `src/render/blockRuntime.mjs` | Behaviour scripts shared by the canvas and published pages (ES5). Each script sits between `// cc-<name>:begin` and `// cc-<name>:end`; the canvas runs it through the `init*Block` wrappers in `SortableBlock.jsx` |
+| `src/render/logosMarquee.mjs` | Logo Cloud scrolling strip (repeats the logos to fill the line); the published page runs the same logic from `CC_LOGOS_SCRIPT` |
 | `src/editor/blockCatalog.js` | Block names, icons, categories, keywords; `CONTAINER_TYPES` |
 | `src/editor/RichText.jsx`, `commands.js`, `cleanHtml.js` | Rich text editor (in-place regions, toolbar, paste cleanup) |
 | `src/utils/safeHtml.js` | `safeHtml(html)`: DOMPurify (`dompurify`, pinned to an exact version) with CanvasCore's config. **Every** HTML string the editor puts into its own DOM (canvas, version history preview, rich text fields, `insertHtml`, Edit HTML) goes through it; returns `''` when there is no DOM |
 | `src/editor/layerDrop.js`, `previewEffects.js` | Layers drop positions; "Preview animation" on the canvas |
-| `src/editor/placeholder.js` | `placeholderImage(w, h)`: built-in placeholder image as a `data:` SVG (no outside service) |
+| `src/editor/placeholder.js` | `placeholderImage(w, h)`: built-in placeholder image as a `data:` PNG drawn on a canvas (no outside service; an SVG would be blanked on save) |
 | `src/editor/mediaInfo.js` | Media library / picker helpers (`formatBytes`) |
 | `src/editor/upload.js` | `uploadImage(file, { folder, onProgress })` and `postForm(action, form, { onProgress })`: XHR uploads with progress and the CSRF header, retried once through `fetch` on 401/403 |
 | `src/editor/useUploader.js` | `useUploader(onFinished)`: upload queue (one file at a time) with per-file progress and result; rendered by `UploadPanel.jsx` |
@@ -584,10 +586,16 @@ reserved addresses). An exception is logged (`CanvasCore publish: …`) and answ
 - `case 'SEARCH'` + `CC_SEARCH_SCRIPT`: the Site Search block. The markup carries `data-index` (`{{BASE_URL}}search-index.json`),
   `data-empty` and `data-limit` (`cc_int`, 1–50); the nowdoc script (with `%ID%` replaced by the block id) loads
   the index on first use and handles `?q=`.
+- `CC_CODE_SCRIPT`, `CC_TOC_SCRIPT`, `CC_SHARE_SCRIPT`, `CC_CALC_SCRIPT`, `CC_WIZARD_SCRIPT`, `CC_VIDEO_SCRIPT`,
+  `CC_AUDIO_SCRIPT` and `CC_ANNOUNCE_SCRIPT` are copies of the regions of `src/render/blockRuntime.mjs`, copied
+  verbatim. Edit the `.mjs` file and copy the region again; `tests/blocks-content.mjs` fails when the two differ.
+  A region must not contain `</script`, `<!--` or `-->`.
 - `SLIDER`: with 2+ images it adds `cc-slider-prev` / `cc-slider-next` buttons; the script pauses autoplay on
   hover and doesn't autoplay under `prefers-reduced-motion`.
 
 ### `media.php`
+
+Audio and video (MP3, M4A, OGG, WAV, MP4, WebM) are stored without copies. `cc_media_kind()` tells the kind of a file, and `cc_media_sniff()` checks that it starts the way its type says; restore from a backup uses the same check.
 
 Loaded by `api.php` and `rebuild_all.php`. Copies are `uploads/_cc/<name>-<width>.webp` for `CC_IMG_WIDTHS`
 (480, 960, 1600) narrower than the original (never enlarged, EXIF orientation applied, skipped when GD or the
@@ -665,9 +673,12 @@ renderers (with the script only in PHP) and the `s1`/`s2` parity fixtures.
 8. **Canvas behaviour (optional)**: injected `<script>`s don't run in the editor. If the block needs JS
    on the canvas, wire it in a `useEffect` in `SortableBlock.jsx` (see `SLIDER`, `BEFORE_AFTER`); add it to
    `INTERACTIVE` if clicks must reach the canvas HTML.
-9. **Tests**: behaviour of the compiled HTML in `tests/blocks-content.mjs` (or `blocks.mjs`), or a quick
+9. **Shared runtime (optional)**: if the canvas must run the same behaviour as the published page, put the script in a
+   `// cc-<name>:begin` / `:end` region of `src/render/blockRuntime.mjs`, copy it into `compiler.php` as a `CC_*_SCRIPT`
+   constant, and wire the canvas through an `init*Block` wrapper called from `SortableBlock.jsx`.
+10. **Tests**: behaviour of the compiled HTML in `tests/blocks-content.mjs` (or `blocks.mjs`), or a quick
    output check in `tests/server.php` (as for `SEARCH`); the panel in `tests/panels-ui.mjs`. Then `npm test` and lint.
-10. **Docs**: the block's entry in [BLOCK-REFERENCE.md](BLOCK-REFERENCE.md), a CHANGELOG line under
+11. **Docs**: the block's entry in [BLOCK-REFERENCE.md](BLOCK-REFERENCE.md), a CHANGELOG line under
     `[Unreleased]`, optionally use it in `starters.json` (checked by `test:starters`).
 
 A new **container** type must be added to `CONTAINER_TYPES` (`blockCatalog.js`), which every editor module
