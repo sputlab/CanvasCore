@@ -48,12 +48,22 @@ function canonicalHtml(block) {
 
 export default function SortableBlock({ block, isMasterPreview = false }) {
   const { selectedBlockId, setSelectedBlockId, updateBlock, viewport, masters } = useStore();
+  const revealBlockId = useStore((s) => s.revealBlockId);
+  const frameRef = useRef(null);
   const isSelected = selectedBlockId === block.id && !isMasterPreview;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: block.id,
     disabled: isMasterPreview,
   });
+
+  // A block that was just added from the Add panel scrolls into view (once)
+  useEffect(() => {
+    if (revealBlockId !== block.id || !frameRef.current) return;
+    const el = frameRef.current;
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    useStore.setState({ revealBlockId: null });
+  }, [revealBlockId, block.id]);
 
   // Slider animation (fade/slide) in the editor: drives the injected canonical DOM
   const sliderRef = useRef(null);
@@ -253,7 +263,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
   };
 
   return (
-    <div ref={setNodeRef} style={wrapperStyle} onClick={handleClick}>
+    <div ref={(el) => { setNodeRef(el); frameRef.current = el; }} style={wrapperStyle} onClick={handleClick}>
       {dragHandle}
       {block.content?.customCss && <style>{String(block.content.customCss).replace(/__THIS__/g, `#${innerId}`)}</style>}
       {renderBody()}

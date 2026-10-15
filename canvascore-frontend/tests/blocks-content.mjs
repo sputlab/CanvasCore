@@ -554,7 +554,7 @@ section('TABLE_OF_CONTENTS');
   const d = $(h);
   check('the block starts hidden and empty: only the script makes it appear', d('nav.cc-toc').attr('hidden') !== undefined && d('.cc-toc-list').children().length === 0 && d('nav').attr('aria-label') === 'On this page');
   check('settings are handed to the script as attributes (levels, numbering, highlighting, offset)', d('nav').attr('data-levels') === 'h2h3' && d('nav').attr('data-numbered') === '1' && d('nav').attr('data-highlight') === '1' && d('nav').attr('data-offset') === '100');
-  check('sticky: position and distance from the top; not sticky by default', /position:sticky; top:120px/.test(h) && !/sticky/.test(php('TABLE_OF_CONTENTS', {})));
+  check('sticky: position and distance from the top; not sticky by default', /position:sticky; top:120px/.test(h) && !/position:sticky/.test(php('TABLE_OF_CONTENTS', {})));
   check('a nameless contents list is still labelled for screen readers', $(php('TABLE_OF_CONTENTS', { title: '' }))('nav').attr('aria-label') === 'Table of contents');
   const bad = php('TABLE_OF_CONTENTS', { title: '<img src=x onerror=a>', levels: 'h9', stickyTop: 9999, offset: -1, accent: 'red;}' });
   check('hostile values: escaped title, unknown level → H2, numbers clamped, unsafe accent replaced', !/<img src=x/.test(bad) && $(bad)('nav').attr('data-levels') === 'h2' && $(bad)('nav').attr('data-offset') === '0' && !/red;\}/.test(bad));
@@ -956,14 +956,37 @@ const phpCall = (code) => execFileSync('php', ['-r', `require ${JSON.stringify(f
   const h = php('ANNOUNCEMENT_BAR', an); const d = $(h);
   check('a labelled region with the message, an emoji icon (hidden from screen readers) and a link to the internal page', d('.cc-announce').attr('role') === 'region' && d('.cc-announce').attr('aria-label') === 'Announcement' && d('.cc-ann-text').text() === 'Spedizione gratuita sopra 50 €' && d('.cc-ann-icon').attr('aria-hidden') === 'true' && d('.cc-ann-icon').text() === '🎁' && d('.cc-ann-link').attr('href') === '{{BASE_URL}}offerte/' && d('.cc-ann-link').text() === 'Scopri →');
   check('the close button exists but stays hidden until the script runs (the message itself is visible without any script)', d('.cc-ann-close').attr('hidden') !== undefined && d('.cc-announce').attr('hidden') === undefined && d('.cc-ann-close').attr('aria-label') === 'Dismiss the announcement' && $(php('ANNOUNCEMENT_BAR', { text: 'x', dismissible: false }))('.cc-ann-close').length === 0);
-  check('sticky pins it to the top of the screen; the presets and custom colors', /position:sticky; top:0; z-index:2147482000/.test(h) && /background:var\(--brand-color, #3b82f6\); color:#ffffff/.test(h) && /background:#fef3c7; color:#78350f/.test(php('ANNOUNCEMENT_BAR', { text: 'x', preset: 'warning' })) && /background:#123456; color:#abcdef/.test(php('ANNOUNCEMENT_BAR', { text: 'x', bg: '#123456', color: '#abcdef' })) && !/sticky/.test(php('ANNOUNCEMENT_BAR', { text: 'x' })));
+  check('sticky pins it to the top of the screen (below the menu\'s own layer, so open menus show over it); the presets and custom colors', /position:sticky; top:0; z-index:9000/.test(h) && /background:var\(--brand-color, #3b82f6\); color:#ffffff/.test(h) && /background:#fef3c7; color:#78350f/.test(php('ANNOUNCEMENT_BAR', { text: 'x', preset: 'warning' })) && /background:#123456; color:#abcdef/.test(php('ANNOUNCEMENT_BAR', { text: 'x', bg: '#123456', color: '#abcdef' })) && !/position:sticky/.test(php('ANNOUNCEMENT_BAR', { text: 'x' })));
   const bad = php('ANNOUNCEMENT_BAR', { text: '<img src=x onerror=a>', icon: '12345678', linkText: 'L', linkUrl: 'javascript:alert(1)', preset: 'evil', bg: 'red;}', color: 'url(x)', sticky: 'yes' });
-  check('hostile values: escaped text, no javascript: link, unsafe colors replaced, unknown preset → dark, the icon is cut at 4 characters, sticky needs exactly true', !/<img src=x/.test(bad) && !/href="javascript:/i.test(bad) && !/red;\}|url\(x\)/.test(bad) && /background:#0f172a/.test(bad) && $(bad)('.cc-ann-icon').text() === '1234' && !/sticky/.test(bad));
+  check('hostile values: escaped text, no javascript: link, unsafe colors replaced, unknown preset → dark, the icon is cut at 4 characters, sticky needs exactly true', !/<img src=x/.test(bad) && !/href="javascript:/i.test(bad) && !/red;\}|url\(x\)/.test(bad) && /background:#0f172a/.test(bad) && $(bad)('.cc-ann-icon').text() === '1234' && !/position:sticky/.test(bad));
   check('the block with no message still draws an (empty) bar so it can be selected and edited; the site-wide bar draws nothing', $(php('ANNOUNCEMENT_BAR', {}))('.cc-announce').length === 1 && phpCall("echo cc_announcement_html(['enabled' => true, 'text' => '   '], 'x', '', '', true);") === '' && phpCall("echo cc_announcement_html(['text' => 'Hello'], 'x', '', '', true);").includes('Hello'));
   const key = (fn, c) => $(fn('ANNOUNCEMENT_BAR', c))('.cc-announce').attr('data-key');
   const msgs = [{ text: 'Hello' }, { text: 'Spedizione gratuita sopra 50 €', linkText: 'Scopri', linkUrl: 'a/index.html' }, { text: '🎁 日本語 é ñ' }, { text: '' }];
   check('the "dismissed" key is the same in PHP and in the editor (8 hex digits), and changes when the message, link text or link changes', msgs.every((m) => /^[0-9a-f]{8}$/.test(key(php, m)) && key(php, m) === key(js, m)) && new Set([key(php, { text: 'A' }), key(php, { text: 'B' }), key(php, { text: 'A', linkText: 'x' }), key(php, { text: 'A', linkUrl: 'y' })]).size === 4 && key(php, { text: 'A', icon: '!' }) === key(php, { text: 'A' }));
   check('PHP and the editor\'s renderer write the same message, link and buttons', [an, { text: 'x', dismissible: false, align: 'left' }, {}].every((v) => { const t = (fn) => { const q = $(fn('ANNOUNCEMENT_BAR', v)); return q('.cc-ann-text').text() + '|' + q('.cc-ann-link').attr('href') + '|' + q('.cc-ann-close').length + '|' + q('.cc-ann-icon').text(); }; return t(php) === t(js); }));
+
+  // a sticky bar and a menu pinned to the top of the screen (position: fixed): the bar stays UNDER the menu, never over it
+  const withMenu = async (menuStyle, bottom, bar = { text: 'x', sticky: true }) => {
+    const q = pub(`<nav class="cc-navigation" style="${menuStyle}"></nav>` + php('ANNOUNCEMENT_BAR', bar));
+    const nav = q.doc.querySelector('.cc-navigation');
+    const state = { bottom };
+    nav.getBoundingClientRect = () => ({ bottom: state.bottom });
+    await settle();
+    return { q, state, bar: q.doc.querySelector('.cc-announce'), nav };
+  };
+  const fixedMenu = await withMenu('position:fixed; top:0; z-index:9999', 70);
+  check('published: under a menu pinned to the top the bar sticks at the menu\'s bottom edge (70px), not over it', fixedMenu.bar.style.top === '70px', fixedMenu.bar.style.top);
+  fixedMenu.state.bottom = 52; fixedMenu.q.win.dispatchEvent(new fixedMenu.q.win.Event('scroll'));
+  check('published: …following the menu when it shrinks while scrolling', fixedMenu.bar.style.top === '52px');
+  fixedMenu.state.bottom = -3; fixedMenu.q.win.dispatchEvent(new fixedMenu.q.win.Event('scroll'));
+  check('published: …and going up to the top when the menu slides out of sight (never a negative distance)', fixedMenu.bar.style.top === '0px');
+  const flowMenu = await withMenu('position:relative', 70);
+  check('published: a menu that is not pinned needs nothing: the bar sticks to the top of the screen', flowMenu.bar.style.top === '0px');
+  const noMenu = pub(php('ANNOUNCEMENT_BAR', { text: 'x', sticky: true }));
+  await settle();
+  check('published: with no menu at all the bar sticks to the top', noMenu.doc.querySelector('.cc-announce').style.top === '0px');
+  const plainBar = await withMenu('position:fixed; top:0', 70, { text: 'x' });
+  check('published: a bar that is not sticky is left alone (it scrolls away with the page)', plainBar.bar.style.top === '');
 
   const p = pub(h); const root = p.doc.querySelector('.cc-announce');
   check('published: the close button appears; the bar is shown', root.hidden === false && root.querySelector('.cc-ann-close').hidden === false);
@@ -998,6 +1021,29 @@ section('NEWSLETTER');
   check('hostile values: escaped everywhere (labels, hint, button, message), unsafe color replaced', !/<b>x|"><script>|"><b>|<i>c|<u>b|"><x>/.test(bad.html) && !/red;\}/.test(bad.html) && $(bad.html)('input[name="_success"]').attr('value') === '"><x>');
   const texts = (html) => { const q = $(html); return ['.cc-nl-title', '.cc-nl-text', 'button', '.cc-nl-consent span'].map((sel) => q(sel).map((_, e) => q(e).text()).get().join('|')).join(' # ') + ' # ' + q('input').map((_, e) => (q(e).attr('type') || '') + (q(e).attr('placeholder') || '') + (q(e).attr('aria-label') || '')).get().join(); };
   check('PHP and the editor\'s renderer write the same texts, labels and fields', [nl, {}, { ...nl, formLayout: 'stacked', askName: false }].every((v) => texts(php('NEWSLETTER', v)) === texts(js('NEWSLETTER', v))));
+}
+
+// =============================================================== hidden elements stay hidden
+section('The hidden attribute is not overridden by an inline display');
+{
+  // An element with its own inline "display" (flex, inline-flex…) ignores the hidden attribute: a "hidden" pause button
+  // or an unticked add-on's line would show. Every block that has such an element carries a rule that restores it.
+  const defs = JSON.parse(readFileSync(new URL('../../canvascore-admin/blocks.json', import.meta.url), 'utf-8'));
+  const more = { SHARE_BAR: { networks: ['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email', 'copy', 'print', 'share'] } };
+  const bad = [];
+  for (const [type, def] of Object.entries(defs.types)) {
+    if (def.children) continue;
+    for (const [name, fn] of [['PHP', php], ['editor', js]]) {
+      const html = fn(type, { ...(def.content || {}), ...(more[type] || {}) }, def.styles || {});
+      const q = $(html);
+      const offenders = q('[hidden]').toArray().filter((e) => /(^|;|\s)display\s*:/.test(q(e).attr('style') || ''));
+      if (offenders.length && !/\[hidden\]\{display:none !important\}/.test(html)) bad.push(`${type} (${name}): ${offenders.length}`);
+    }
+  }
+  check('no block has a hidden element with its own display unless the block restores [hidden]', bad.length === 0, bad.join(', '));
+  check('the blocks that need it do carry the rule (Video Hero, Price Calculator, Share Bar), in PHP and in the editor\'s renderer', ['VIDEO_HERO', 'PRICE_CALCULATOR', 'SHARE_BAR'].every((t) => [php, js].every((fn) => /\[hidden\]\{display:none !important\}/.test(fn(t, { ...defs.types[t].content, ...(more[t] || {}), video: '/a.mp4' }, defs.types[t].styles)))));
+  const calc = $(php('PRICE_CALCULATOR', defs.types.PRICE_CALCULATOR.content));
+  check('a Price Calculator line that is hidden (an unticked add-on) is really hidden: it has the attribute AND the block restores it', calc('li.cc-calc-line[hidden]').length >= 1 && /#tb\[hidden\],#tb \[hidden\]\{display:none !important\}/.test(php('PRICE_CALCULATOR', defs.types.PRICE_CALCULATOR.content)));
 }
 
 // =============================================================== LOGOS strip: logos repeat to cover the strip

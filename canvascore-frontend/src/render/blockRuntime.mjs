@@ -399,6 +399,7 @@ function ccAnnounceInit(root, editor) {
     try { seen = win.localStorage.getItem(key) === '1'; } catch { seen = false; }
     if (seen) { root.hidden = true; return; }
   }
+  if (!editor) ccAnnounceBelowMenu(root);
   if (!btn) return;
   btn.hidden = false;
   btn.addEventListener('click', function () {
@@ -406,6 +407,23 @@ function ccAnnounceInit(root, editor) {
     root.hidden = true;
     try { win.localStorage.setItem(key, '1'); } catch { /* it is not remembered */ }
   });
+}
+// A sticky bar stays UNDER a menu that is pinned to the top of the screen (position: fixed): it sticks at the menu's
+// bottom edge and follows it when the menu shrinks or slides away. Without such a menu it sticks to the top.
+function ccAnnounceBelowMenu(root) {
+  var doc = root.ownerDocument, win = doc.defaultView;
+  var setup = function () {
+    var nav = doc.querySelector('.cc-navigation');
+    if (!nav || win.getComputedStyle(root).position !== 'sticky') return;
+    var follow = function () {
+      var pinned = win.getComputedStyle(nav).position === 'fixed';
+      root.style.top = (pinned ? Math.max(0, Math.round(nav.getBoundingClientRect().bottom)) : 0) + 'px';
+    };
+    follow();
+    win.addEventListener('scroll', follow, { passive: true });
+    win.addEventListener('resize', follow);
+  };
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', setup); else setup();
 }
 // cc-announce:end
 

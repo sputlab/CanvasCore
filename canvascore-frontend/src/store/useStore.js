@@ -299,6 +299,7 @@ export const useStore = create((set, get) => ({
     futureBlocks: []
   }),
   selectedBlockId: null, setSelectedBlockId: (id) => set({ selectedBlockId: id }),
+  revealBlockId: null,   // a block just added: its canvas frame scrolls into view once, then this is cleared
 
   templates: [],
   fetchTemplates: async () => {
@@ -469,7 +470,9 @@ export const useStore = create((set, get) => ({
     const newBlock = { id: newBlockId(), type, content, styles };
     if (def.children || CONTAINER_TYPES.includes(type)) newBlock.children = [];
 
-    set((state) => pushHistory(state, addTo(state.blocks, parentId, newBlock)));
+    // The new block is selected (its settings open) and scrolled into view: it lands at the end of the page or
+    // inside the selected container, often out of sight
+    set((state) => ({ ...pushHistory(state, addTo(state.blocks, parentId, newBlock)), selectedBlockId: newBlock.id, revealBlockId: newBlock.id }));
   },
 
   // Typing in a field sends one update per key: quick successive edits of the same block and the same

@@ -97,6 +97,24 @@ try {
     check(`${t}: addBlock creates the block with the default content`, b.type === t && JSON.stringify(b.content) === JSON.stringify(def.content));
   }
 
+  console.log('\nADDING A BLOCK — it is selected and scrolled into view');
+  {
+    st().setBlocks([]); st().setSelectedBlockId(null);
+    const scrolled = [];
+    w.Element.prototype.scrollIntoView = function (o) { scrolled.push({ id: this.getAttribute('data-test-id') || this.id, el: this, o }); };
+    st().addBlock('DIVIDER');
+    const added = st().blocks[0];
+    check('addBlock selects the new block (so its settings open on the right) and flags it to be revealed', !!added && st().selectedBlockId === added.id && st().revealBlockId === added.id);
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [added.id] }, React.createElement(SortableBlock, { block: added }))));
+    await waitFor(() => scrolled.length > 0 && st().revealBlockId === null);
+    check('the block\'s frame scrolls into view, centred, and the flag is cleared so it happens only once', scrolled.length === 1 && scrolled[0].o.block === 'center' && st().revealBlockId === null);
+    await sleep(60);
+    check('re-rendering the block does not scroll again', scrolled.length === 1);
+    st().addBlock('DIVIDER');
+    check('a second block added becomes the selected one', st().blocks.length === 2 && st().selectedBlockId === st().blocks[1].id && st().selectedBlockId !== added.id);
+    st().setBlocks([]); st().setSelectedBlockId(null);
+  }
+
   console.log('\nPANELS — mounted and editable');
   for (const t of TYPES) {
     addAndSelect(t);

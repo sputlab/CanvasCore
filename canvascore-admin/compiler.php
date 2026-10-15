@@ -310,7 +310,7 @@ function cc_announcement_html($c, $id, $extra, $styleAttr, $requireText) {
     $dismissible = ($c['dismissible'] ?? true) !== false;
     $left = ($c['align'] ?? '') === 'left';
     $key = sprintf('%08x', crc32($text . '|' . $linkText . '|' . $linkUrl) & 0xFFFFFFFF);
-    return '<div id="' . $id . '" class="cc-announce cc-ann-' . $preset . $extra . '" role="region" aria-label="Announcement" data-key="' . $key . '" style="' . $styleAttr . ($sticky ? ' position:sticky; top:0; z-index:2147482000;' : '') . ' background:' . $bg . '; color:' . $fg . '; padding:10px 16px; font-size:14px; line-height:1.4;">'
+    return '<div id="' . $id . '" class="cc-announce cc-ann-' . $preset . $extra . '" role="region" aria-label="Announcement" data-key="' . $key . '" style="' . $styleAttr . ($sticky ? ' position:sticky; top:0; z-index:9000;' : '') . ' background:' . $bg . '; color:' . $fg . '; padding:10px 16px; font-size:14px; line-height:1.4;">'
         . '<div class="cc-ann-inner" style="display:flex; align-items:center; justify-content:' . ($left ? 'flex-start' : 'center') . '; flex-wrap:wrap; gap:4px 12px; max-width:1200px; margin:0 auto; position:relative; padding-right:' . ($dismissible ? '36px' : '0') . '; box-sizing:border-box;">'
         . ($icon !== '' ? '<span class="cc-ann-icon" aria-hidden="true">' . htmlspecialchars($icon) . '</span>' : '')
         . '<span class="cc-ann-text">' . htmlspecialchars($text) . '</span>'
@@ -730,6 +730,7 @@ function ccAnnounceInit(root, editor) {
     try { seen = win.localStorage.getItem(key) === '1'; } catch { seen = false; }
     if (seen) { root.hidden = true; return; }
   }
+  if (!editor) ccAnnounceBelowMenu(root);
   if (!btn) return;
   btn.hidden = false;
   btn.addEventListener('click', function () {
@@ -737,6 +738,23 @@ function ccAnnounceInit(root, editor) {
     root.hidden = true;
     try { win.localStorage.setItem(key, '1'); } catch { /* it is not remembered */ }
   });
+}
+// A sticky bar stays UNDER a menu that is pinned to the top of the screen (position: fixed): it sticks at the menu's
+// bottom edge and follows it when the menu shrinks or slides away. Without such a menu it sticks to the top.
+function ccAnnounceBelowMenu(root) {
+  var doc = root.ownerDocument, win = doc.defaultView;
+  var setup = function () {
+    var nav = doc.querySelector('.cc-navigation');
+    if (!nav || win.getComputedStyle(root).position !== 'sticky') return;
+    var follow = function () {
+      var pinned = win.getComputedStyle(nav).position === 'fixed';
+      root.style.top = (pinned ? Math.max(0, Math.round(nav.getBoundingClientRect().bottom)) : 0) + 'px';
+    };
+    follow();
+    win.addEventListener('scroll', follow, { passive: true });
+    win.addEventListener('resize', follow);
+  };
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', setup); else setup();
 }
 // cc-announce:end
 (function(){var r=document.getElementById('%ID%');if(r)ccAnnounceInit(r,false);})();
@@ -2541,7 +2559,7 @@ function render_block($block) {
                     ? '<a class="cc-share-btn cc-share-' . $net . '" data-net="' . $net . '" href="#" target="_blank" rel="noopener noreferrer" aria-label="' . $aria . '" style="' . $st . '">' . $inner . '</a>'
                     : '<button type="button" class="cc-share-btn cc-share-' . $net . '" data-act="' . $net . '" aria-label="' . $aria . '" style="' . $st . '">' . $inner . '</button>';
             }
-            return $customCss . '<style>#' . $innerId . ' .cc-share-btn:hover{filter:brightness(.92)}#' . $innerId . ' .cc-share-btn:focus-visible{outline:2px solid var(--brand-color, #3b82f6);outline-offset:2px}</style>'
+            return $customCss . '<style>#' . $innerId . '[hidden],#' . $innerId . ' [hidden]{display:none !important}#' . $innerId . ' .cc-share-btn:hover{filter:brightness(.92)}#' . $innerId . ' .cc-share-btn:focus-visible{outline:2px solid var(--brand-color, #3b82f6);outline-offset:2px}</style>'
                 . '<div id="' . $innerId . '" class="cc-share' . $animClass . $innerClass . '" hidden data-msg="' . cc_esc($c['message'] ?? '') . '" style="' . $styleAttr . '">' . "\n"
                 . ($title !== '' ? '<div class="cc-share-title" style="font-weight:700; font-size:15px; color:#0f172a; margin-bottom:10px; text-align:' . $textAlign . ';">' . $title . '</div>' : '')
                 . '<div class="cc-share-list" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:' . $align . ';">' . $btns . '</div>' . "\n</div>\n"
@@ -2649,7 +2667,7 @@ function render_block($block) {
                     . '<label class="cc-calc-pill"><input type="radio" name="' . $innerId . '-billing" value="monthly"' . ($yearly ? '' : ' checked') . '><span>' . $word($c['monthlyLabel'] ?? '', 'Monthly') . '</span></label>'
                     . '<label class="cc-calc-pill"><input type="radio" name="' . $innerId . '-billing" value="yearly"' . ($yearly ? ' checked' : '') . '><span>' . $word($c['yearlyLabel'] ?? '', 'Yearly') . ($disc > 0 ? '<em class="cc-calc-badge"> -' . cc_plain($disc) . '%</em>' : '') . '</span></label></div>'
                 : '';
-            return $customCss . '<style>' . $id . ' .cc-calc-pill input{position:absolute;opacity:0;pointer-events:none}' . $id . ' .cc-calc-pill span{display:inline-block;padding:8px 18px;border-radius:999px;font-weight:600;font-size:14px;color:#475569;cursor:pointer}' . $id . ' .cc-calc-pill input:checked+span{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(15,23,42,0.15)}' . $id . ' .cc-calc-pill input:focus-visible+span{outline:2px solid ' . $accent . ';outline-offset:2px}' . $id . ' .cc-calc-badge{font-style:normal;color:' . $accent . ';font-weight:700}' . $id . ' .cc-calc-btn:hover{filter:brightness(.92)}' . $id . ' input[type=range]:focus-visible,' . $id . ' .cc-calc-addon:focus-visible{outline:2px solid ' . $accent . ';outline-offset:2px}</style>'
+            return $customCss . '<style>' . $id . '[hidden],' . $id . ' [hidden]{display:none !important}' . $id . ' .cc-calc-pill input{position:absolute;opacity:0;pointer-events:none}' . $id . ' .cc-calc-pill span{display:inline-block;padding:8px 18px;border-radius:999px;font-weight:600;font-size:14px;color:#475569;cursor:pointer}' . $id . ' .cc-calc-pill input:checked+span{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(15,23,42,0.15)}' . $id . ' .cc-calc-pill input:focus-visible+span{outline:2px solid ' . $accent . ';outline-offset:2px}' . $id . ' .cc-calc-badge{font-style:normal;color:' . $accent . ';font-weight:700}' . $id . ' .cc-calc-btn:hover{filter:brightness(.92)}' . $id . ' input[type=range]:focus-visible,' . $id . ' .cc-calc-addon:focus-visible{outline:2px solid ' . $accent . ';outline-offset:2px}</style>'
                 . '<div id="' . $innerId . '" class="cc-calc' . $animClass . $innerClass . '" data-base="' . cc_plain($base) . '" data-disc="' . cc_plain($disc) . '" data-dec="' . $dec . '" data-fmt="' . ($eu ? 'eu' : 'en') . '" data-cur="' . htmlspecialchars($cur) . '" data-pos="' . ($after ? 'after' : 'before') . '" data-per-m="' . $perM . '" data-per-y="' . $perY . '" data-save="' . $saveTpl . '" style="' . $styleAttr . '">' . "\n"
                 . '<div class="cc-calc-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'
                 . ($title !== '' ? '<div class="cc-calc-title" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:6px;">' . $title . '</div>' : '')
@@ -2768,7 +2786,7 @@ function render_block($block) {
             $icon = function ($cls, $d, $hidden) { return '<svg class="' . $cls . '"' . ($hidden ? ' style="display:none"' : '') . ' aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">' . $d . '</svg>'; };
             $srcHtml = '';
             foreach ($sources as $u) $srcHtml .= '<source src="' . htmlspecialchars($u) . '"' . (cc_media_mime($u) !== '' ? ' type="' . cc_media_mime($u) . '"' : '') . '>';
-            return $customCss . '<section id="' . $innerId . '" class="cc-vhero' . $animClass . $innerClass . '" data-mobile="' . (($c['mobileVideo'] ?? false) === true ? '1' : '0') . '" style="' . $styleAttr . ' position:relative; overflow:hidden; min-height:' . $h . 'px; display:flex; align-items:center; justify-content:center; background:#0f172a; color:' . $color . ';">' . "\n"
+            return $customCss . '<style>#' . $innerId . ' [hidden]{display:none !important}</style>' . '<section id="' . $innerId . '" class="cc-vhero' . $animClass . $innerClass . '" data-mobile="' . (($c['mobileVideo'] ?? false) === true ? '1' : '0') . '" style="' . $styleAttr . ' position:relative; overflow:hidden; min-height:' . $h . 'px; display:flex; align-items:center; justify-content:center; background:#0f172a; color:' . $color . ';">' . "\n"
                 . ($poster !== '' ? '<div class="cc-vh-poster" aria-hidden="true" style="position:absolute; inset:0; background-image:url(\'' . htmlspecialchars(cc_css_url($poster)) . '\'); background-size:cover; background-position:center;"></div>' : '')
                 . ($sources ? '<video class="cc-vh-video" muted loop playsinline preload="none" aria-hidden="true"' . ($poster !== '' ? ' poster="' . htmlspecialchars($poster) . '"' : '') . ' style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">' . $srcHtml . '</video>' : '')
                 . '<div class="cc-vh-overlay" aria-hidden="true" style="position:absolute; inset:0; background:' . $overlay . '; opacity:' . cc_plain($op / 100) . ';"></div>'
