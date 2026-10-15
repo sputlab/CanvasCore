@@ -10,6 +10,28 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **12 new starter pages** built with the 0.15.0 blocks: SaaS Product, Agency, Product Showcase, Blog Article,
+  Podcast Episode, Documentation, Quote Request, Newsletter Landing, Webinar, Personal Portfolio, Restaurant and Our
+  Story (24 starters in all, offered by Templates and by the setup wizard). Their placeholder images are small
+  palette PNGs, so they survive saving.
+- **Collection items from a template**: Collections › New Item asks where to start: an empty item or any starter
+  template.
+- **View Site** under Publish Site opens the published home page in a new tab, and the page editor has a button
+  that opens the published version of the page being edited (disabled until it has been published).
+
+### Changed
+- The "make it a global master" button in the block panel is an icon (crown) without the "Master" label.
+
+### Fixed
+- **Buttons in the editor now have the size they have on the published page.** The editor stretched every Button
+  block to the full width of the canvas; the canvas measured 40px wider than the published page's content (the
+  padding was added to the page width); and with no site font chosen it used the system font instead of Inter, the
+  published default. Measured in a browser: every button of every block now has the same width, height, font and
+  padding in the editor and on the site.
+- **Phone and tablet previews** apply the blocks' mobile layout (stacked columns, smaller grids) as a phone or tablet
+  does: the blocks' width-based CSS rules become container queries on the preview.
+
 ## [0.15.0] - 2026-10-15 — Premium blocks
 
 Eighteen new blocks, audio and video in the media library, and a site-wide announcement bar.

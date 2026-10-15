@@ -5,6 +5,8 @@ import { Button, IconButton, PageHeader, EmptyState, Badge, StatusBadge, Select 
 import { slugify } from '../utils/slug';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
+import StarterPickerDialog from './StarterPickerDialog';
+import { starterBlocks } from '../editor/starters';
 
 export default function Collections() {
   const { setView, userRole, setActivePage, setBlocks, setSelectedBlockId, publishSiteAsync, activePage } = useStore();
@@ -22,6 +24,7 @@ export default function Collections() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [needsPublish, setNeedsPublish] = useState(''); // why the public site is behind ('' = it is not)
   const [publishing, setPublishing] = useState(false);
+  const [picking, setPicking] = useState(false);   // "New Item": choosing a starter template
 
   const loadCollections = () => {
     return fetch('api.php?action=get_collections').then(r => r.json()).then(d => {
@@ -88,8 +91,9 @@ export default function Collections() {
     loadCollections();
   };
 
-  const editItem = async (item) => {
-    let full = { id: item?.id, collection_id: active.id, title: 'New Item', slug: 'new-item', excerpt: '', cover_image: '', date: new Date().toISOString().slice(0, 10), status: 'draft', archived: 0, seo_title: '', seo_description: '', blocks: [] };
+  // A new item (item = null) can start from a starter template: its blocks, with fresh ids
+  const editItem = async (item, starter = null) => {
+    let full = { id: item?.id, collection_id: active.id, title: 'New Item', slug: 'new-item', excerpt: '', cover_image: '', date: new Date().toISOString().slice(0, 10), status: 'draft', archived: 0, seo_title: '', seo_description: '', blocks: starter ? starterBlocks(starter) : [] };
     if (item) {
       try {
         const res = await fetch('api.php?action=get_item&id=' + encodeURIComponent(item.id));
@@ -203,6 +207,10 @@ export default function Collections() {
   const others = collections.filter((c) => c.id !== active?.id);
   return (
     <>
+      {picking && active && (
+        <StarterPickerDialog title={`New item in "${active.name}"`} onClose={() => setPicking(false)}
+          onPick={(st) => { setPicking(false); editItem(null, st.id === 'blank' ? null : st); }} />
+      )}
       <PageHeader icon={Library} title="Collections" description="Groups of similar pages, such as a blog, news or a portfolio. Show them on any page with the Collection List block."
         actions={userRole === 'admin' && <Button variant="primary" icon={Plus} onClick={() => { setRenaming(null); setNewName(''); }}>New collection</Button>} />
 
@@ -275,7 +283,7 @@ export default function Collections() {
                 </div>
                 <span className="ui-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                   {userRole === 'admin' && <Button size="sm" icon={Pencil} onClick={() => startRename(active)}>Rename</Button>}
-                  <Button variant="primary" size="sm" icon={Plus} onClick={() => editItem(null)}>New Item</Button>
+                  <Button variant="primary" size="sm" icon={Plus} onClick={() => setPicking(true)}>New Item</Button>
                 </span>
               </div>
 
@@ -302,7 +310,7 @@ export default function Collections() {
               ) : itemsState === 'error' ? (
                 <div><p className="ui-error" style={{ marginBottom: 8 }}>The items could not be loaded.</p><Button size="sm" onClick={() => loadItems(active.id)}>Retry</Button></div>
               ) : items.length === 0 ? (
-                <EmptyState icon={FileText} title="No items yet" action={<Button variant="primary" icon={Plus} onClick={() => editItem(null)}>Create the first item</Button>} />
+                <EmptyState icon={FileText} title="No items yet" action={<Button variant="primary" icon={Plus} onClick={() => setPicking(true)}>Create the first item</Button>} />
               ) : (
                 <div className="ui-table-wrap">
                   <table className="ui-table cc-col-table">

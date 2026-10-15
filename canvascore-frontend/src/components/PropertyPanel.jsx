@@ -181,7 +181,7 @@ export default function PropertyPanel() {
       {renderMediaPicker()}
       {head(null, <>
         <IconButton icon={Save} label="Save as template (a reusable copy)" size="sm" onClick={handleSaveTemplate} style={{ color: '#c4b5fd' }} />
-        <Button variant="gold" size="sm" icon={Crown} onClick={handleCreateMaster} title="Make it a global master: edit once, update everywhere">Master</Button>
+        <IconButton icon={Crown} label="Make it a global master: edit once, update everywhere" size="sm" onClick={handleCreateMaster} style={{ color: '#fbbf24' }} />
         <IconButton icon={Trash2} label="Delete block" size="sm" onClick={handleDeleteBlock} style={{ color: '#f87171' }} />
       </>)}
       {quick}
