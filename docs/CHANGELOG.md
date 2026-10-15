@@ -10,6 +10,12 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **12 new starter pages** built with the 0.15.0 blocks: SaaS Product, Agency, Product Showcase, Blog Article,
+  Podcast Episode, Documentation, Quote Request, Newsletter Landing, Webinar, Personal Portfolio, Restaurant and Our
+  Story (24 starters in all, offered by Templates and by the setup wizard). Their placeholder images are small
+  palette PNGs, so they survive saving.
+
 ## [0.15.0] - 2026-10-15 — Premium blocks
 
 Eighteen new blocks, audio and video in the media library, and a site-wide announcement bar.
