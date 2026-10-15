@@ -71,6 +71,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('action=branding')) return new Response(JSON.stringify({ siteName: 'Acme Bakery', faviconUrl: '/uploads/fav.png' }));
   if (u.includes('optimize_media')) return new Response(JSON.stringify({ success: true, done: 1, remaining: 0 }));
   if (u.includes('save_media_meta')) return new Response(JSON.stringify({ success: true }));
+  if (u.includes('get_starters')) return new Response(JSON.stringify(STARTERS));
   if (u.includes('get_revisions')) return new Response(JSON.stringify([{ id: 2, title: 'P', kind: 'published', author: 'ann', created_at: '2026-10-12 10:00:00' }, { id: 1, title: 'P', kind: 'draft', author: 'bob', created_at: '2026-10-11 09:00:00' }]));
   if (u.includes('get_revision&')) return new Response(JSON.stringify({ id: 1, content_json: JSON.stringify([{ id: 'old1', type: 'TEXT', styles: {}, content: { text: '<p>Old version text</p>' } }]) }));
   return new Response(JSON.stringify([]));
@@ -113,6 +114,8 @@ const ITEMS = [
 const COL_SAVES = [];
 const BULK = [];
 const CHUNKS = [];
+const STARTERS = [{ id: 'blank', name: 'Blank', description: 'Start from an empty page.', blocks: [] },
+  { id: 'story', name: 'Our Story', description: 'A brand story.', blocks: [{ id: 'st-1', type: 'SECTION', styles: {}, children: [{ id: 'st-t', type: 'TEXT', styles: {}, content: { text: '<h2>Once upon a time</h2>' } }] }] }];
 const PAGES = [
   { id: 'p1', title: 'Home', clean_slug: 'index', status: 'published', is_home: 1, updated_at: '2026-10-01 10:00:00', content_json: '[]' },
   { id: 'p2', title: 'About us', clean_slug: 'about', status: 'modified', updated_at: '2026-10-05 10:00:00', content_json: '[{"id":"b1","type":"TEXT","content":{"text":"<p>x</p>"},"styles":{}}]' },
@@ -150,6 +153,9 @@ try {
   check('the current section is marked (aria-current)', btn('Pages', nav).getAttribute('aria-current') === 'page');
   click(btn('Media', nav));
   check('clicking a section opens it', st().currentView === 'media');
+  const viewSite = $$('.ui-sidebar a').find((a) => /View Site/.test(a.textContent));
+  check('"View Site" under Publish Site opens the published home page in a new tab', !!viewSite && viewSite.getAttribute('href') === '../' && viewSite.getAttribute('target') === '_blank' && /noopener/.test(viewSite.getAttribute('rel'))
+    && viewSite.closest('div') === btnHas('Publish Site').closest('div'));
   check('user, logout and version in the sidebar', /ann/.test($('.ui-sidebar__foot').textContent) && !!$('[aria-label="Log out"]') && !!$('[aria-label="Change your password"]') && /CanvasCore v/.test($('.ui-sidebar__foot').textContent));
   useStore.setState({ userRole: 'editor' });
   await sleep(30);
@@ -191,6 +197,26 @@ try {
   await sleep(60); // effects (keyboard shortcuts) are attached after the first paint
   click(top.querySelector('button[title="Mobile"]'));
   check('preview size switch', st().viewport === 'mobile');
+  const viewPage = top.querySelector('button[aria-label^="Not published yet"]');
+  check('a "view page" button, disabled while the page has never been published', !!viewPage && viewPage.disabled);
+  const { livePageUrl } = await vite.ssrLoadModule('/src/editor/liveUrl.js');
+  const pg = [{ id: 'p1', status: 'modified', clean_slug: 'about', is_home: 0 }, { id: 'p0', status: 'published', clean_slug: 'home', is_home: 1 }];
+  check('…its address: the live page, a draft copy\'s parent, the home page, a published item', livePageUrl({ id: 'p1', status: 'modified', clean_slug: 'about' }, pg) === '../about/'
+    && livePageUrl({ id: 'd', is_draft_copy: 1, parent_id: 'p1', clean_slug: 'renamed' }, pg) === '../about/' && livePageUrl(pg[1], pg) === '../'
+    && livePageUrl({ __item: true, status: 'published', slug: 'post' }, pg, 'blog') === '../blog/post/' && livePageUrl({ __item: true, status: 'draft', slug: 'post' }, pg, 'blog') === null
+    && livePageUrl({ id: 'n', status: 'draft', clean_slug: 'new' }, pg) === null && livePageUrl({ __part: 'header' }, pg) === '../');
+  const canvasEl = $('.cc-canvas');
+  check('phone preview: the canvas is a container, so the blocks\' mobile rules apply as on a phone', canvasEl.style.containerType === 'inline-size' && canvasEl.style.boxSizing === 'border-box');
+  const { toContainerQueries } = await vite.ssrLoadModule('/src/editor/devicePreview.js');
+  check('…width media queries become container queries (other media features stay)', toContainerQueries('@media(max-width: 768px){a{b:c}}@media (min-width:769px){x{}}@media(hover:none){y{}}') === '@container cc-canvas (max-width: 768px){a{b:c}}@container cc-canvas (min-width: 769px){x{}}@media(hover:none){y{}}');
+  useStore.setState({ blocks: [hero, section, { id: 'bt1', type: 'BUTTON', styles: { ...blockDefs.types.BUTTON.styles }, content: { ...blockDefs.types.BUTTON.content } }] });
+  click(top.querySelector('button[title="Desktop"]')); await sleep(40);
+  const btnA = await waitFor(() => $('.cc-canvas .cc-btn-wrap > a.cc-btn'));
+  check('a Button keeps its own size in the canvas (not stretched to the full width, as on the published page)', !!btnA && !/width:\s*100%/.test(btnA.getAttribute('style')) && /display: inline-block/.test(btnA.getAttribute('style')), btnA && btnA.getAttribute('style'));
+  check('desktop: the canvas uses the published wrapper\'s box model and plain media queries', !$('.cc-canvas').style.containerType && $('.cc-canvas').style.boxSizing === 'border-box');
+  check('the canvas uses the published default font (Inter) when no site font is set', /Inter/.test($('.cc-canvas').style.getPropertyValue('--font-family')));
+  useStore.setState({ blocks: [hero, section] });
+  click(top.querySelector('button[title="Mobile"]')); await sleep(30);
   w.dispatchEvent(new w.KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
   check('Ctrl+S saves the draft', !!(await waitFor(() => calls.some((c) => c.u.includes('save_page')))));
   check('…with a notification', !!(await waitFor(() => $$('.ui-toast').some((t) => /Draft saved/.test(t.textContent)))));
@@ -220,6 +246,8 @@ try {
   mount(React.createElement(PropertyPanel));
   const head = await waitFor(() => $('.cc-pp-head'));
   check('header shows the block name from the catalog', !!head && head.textContent.includes('Hero'));
+  const masterBtn = head.querySelector('button[aria-label^="Make it a global master"]');
+  check('"make it a master" is an icon button without the "Master" label', !!masterBtn && masterBtn.textContent.trim() === '' && !!masterBtn.querySelector('svg'));
   check('tabs Content / Style / Advanced', ['Content', 'Style', 'Advanced'].every((t) => $$('[role="tab"]').some((b) => b.textContent.trim() === t)));
   check('the first Content section starts open', $$('.ui-section')[0].getAttribute('data-open') === 'true');
   click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Style')); await sleep(30);
@@ -684,6 +712,17 @@ try {
     check('the items table fits its card: fixed layout, long titles and slugs end in "…" with the full text on hover', /\.cc-col-table \{[^}]*table-layout: fixed/.test(css) && /\.cc-col-title > div \{[^}]*text-overflow: ellipsis[^}]*white-space: nowrap/.test(css)
       && rows.every((r) => r.querySelector('.cc-col-title .ui-cell-title').getAttribute('title') === r.querySelector('.cc-col-title .ui-cell-title').textContent));
     check('an archived item shows only "Archived" (not "Published" too)', statusOf('Old post') === 'Archived' && statusOf('Live post') === 'Published' && statusOf('Draft post') === 'Draft', rows.map((r) => r.children[3].textContent).join('|'));
+
+    // a new item can start from a starter template
+    click(btnHas('New Item'));
+    const pick = await waitFor(() => $('[aria-labelledby="cc-starter-title"]') && $$('.cc-starter-pick__item').length === 2 && $('[aria-labelledby="cc-starter-title"]'));
+    check('"New Item" offers Blank and the starter templates', !!pick && /New item in "Blog"/.test(pick.textContent) && /Our Story/.test(pick.textContent) && /Blank/.test($$('.cc-starter-pick__item')[0].textContent));
+    click($$('.cc-starter-pick__item').find((b) => /Our Story/.test(b.textContent)));
+    await waitFor(() => st().currentView === 'editor');
+    const nb = st().blocks;
+    check('…picking one opens the editor on a new item with the template\'s blocks (fresh ids)', st().currentView === 'editor' && st().activePage.__item && st().activePage.collection_id === 'c1' && /^item_/.test(st().activePage.id)
+      && nb.length === 1 && nb[0].type === 'SECTION' && nb[0].id !== 'st-1' && nb[0].children[0].content.text === '<h2>Once upon a time</h2>' && nb[0].children[0].id !== 'st-t');
+    useStore.setState({ currentView: 'collections', activePage: null, blocks: [] }); await sleep(30);
 
     // rename (name only: the address stays)
     click($('[aria-label="Rename collection Blog"]'));

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import {
   FileText, LayoutTemplate, Library, Image as ImageIcon, ListTree, Palette, Inbox, Users, LogOut, Globe,
-  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info,
+  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info, ExternalLink,
 } from 'lucide-react';
 import { Button } from '../ui/kit';
 import ChangePasswordDialog from './ChangePasswordDialog';
@@ -59,6 +59,10 @@ export default function AdminLayout({ children, wide }) {
           <Button variant="success" block icon={Globe} onClick={publish} disabled={publishing} title="Rebuild and publish the whole site">
             {publishing ? 'Publishing…' : 'Publish Site'}
           </Button>
+          {/* The published site's home page: the folder above canvascore-admin/ */}
+          <a className="ui-btn ui-btn--ghost ui-btn--block" href="../" target="_blank" rel="noopener noreferrer" title="Open the published site in a new tab" style={{ marginTop: 6 }}>
+            <ExternalLink size={16} aria-hidden="true" />View Site
+          </a>
         </div>
         <nav className="ui-nav">
           {NAV.filter((g) => !g.admin || userRole === 'admin').map((g) => (

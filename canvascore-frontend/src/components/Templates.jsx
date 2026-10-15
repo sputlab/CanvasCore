@@ -4,16 +4,9 @@ import { notify } from '../ui/notify';
 import { uniqueSlug } from '../utils/slug';
 import { LayoutTemplate, Plus, FileText } from 'lucide-react';
 import { Button, PageHeader, EmptyState } from '../ui/kit';
-import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
+import { fetchStarters, starterBlocks, starterOutline } from '../editor/starters';
 
-// Regenerates the block tree's ids to avoid collisions
-let _seq = 0;
 const newPageId = () => 'page-' + Date.now();
-const regenIds = (node) => {
-  const n = { ...node, id: 'block-' + Date.now() + '-' + (_seq++) };
-  if (node.children) n.children = node.children.map(regenIds);
-  return n;
-};
 
 export default function Templates() {
   const { setView, setActivePage, setBlocks, setSelectedBlockId, pages, setPages } = useStore();
@@ -21,16 +14,13 @@ export default function Templates() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch('api.php?action=get_starters')
-      .then(res => res.json())
-      .then(data => { if (Array.isArray(data)) setStarters(data); })
-      .catch(console.error);
+    fetchStarters().then(setStarters);
   }, []);
 
   const applyStarter = async (starter) => {
     setBusy(true);
     const id = newPageId();
-    const blocks = (starter.blocks || []).map(regenIds);
+    const blocks = starterBlocks(starter);
     // The slug follows the title, as for a new blank page (and skips slugs already in use)
     const title = starter.name === 'Blank' ? 'New Page' : starter.name;
     const slug = uniqueSlug(title, { pages });
@@ -52,13 +42,7 @@ export default function Templates() {
     setView('editor');
   };
 
-  // What a starter contains (content blocks, not their containers), as a quick outline
-  const outline = (st) => {
-    const out = [];
-    const walk = (list) => (list || []).forEach((b) => { if (!CONTAINER_TYPES.includes(b.type) && !out.includes(blockLabel(b.type))) out.push(blockLabel(b.type)); walk(b.children); });
-    walk(st.blocks);
-    return out.slice(0, 7);
-  };
+  const outline = starterOutline;
 
   return (
     <>

@@ -11,12 +11,13 @@ import AddBlocksPanel from './AddBlocksPanel';
 import RevisionHistory from './RevisionHistory';
 import {
   ChevronLeft, Monitor, Tablet, Smartphone, Undo2, Redo2, Save, Globe, Layers, PlusCircle, Crown, AlertCircle,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, History,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, History, ExternalLink,
 } from 'lucide-react';
 import { Button, IconButton, Segmented, Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { CONTAINER_TYPES } from '../editor/blockCatalog';
 import { confirmDialog } from '../ui/dialog';
+import { livePageUrl } from '../editor/liveUrl';
 
 // Remembered per browser: which side panels are open
 const readPanels = () => { try { return JSON.parse(localStorage.getItem('cc_editor_panels') || '{}'); } catch { return {}; } };
@@ -233,6 +234,20 @@ export default function VisualEditor() {
   const parentId = getValidParentId();
   const findType = (nodes, id) => { for (const n of nodes || []) { if (n.id === id) return n.type; const r = findType(n.children, id); if (r) return r; } return null; };
   const targetType = parentId ? findType(blocks, parentId) : null;
+  // The collection's address, for an item's live link
+  const pages = useStore((s) => s.pages);
+  const [colSlug, setColSlug] = useState(null);
+  useEffect(() => {
+    if (!activePage?.__item || !activePage.collection_id) return undefined;
+    let alive = true;
+    fetch('api.php?action=get_collections').then((r) => r.json()).then((d) => {
+      const c = Array.isArray(d) ? d.find((x) => x.id === activePage.collection_id) : null;
+      if (alive) setColSlug(c ? c.slug : null);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [activePage?.__item, activePage?.collection_id]);
+  const liveUrl = livePageUrl(activePage, pages, colSlug);
+
   const kind = activePage?.__part ? (activePage.__part === 'header' ? 'Global header' : 'Global footer') : activePage?.__item ? 'Collection item' : null;
   const backLabel = activePage?.__item ? 'Collections' : activePage?.__part ? 'Global Options' : 'Pages';
 
@@ -266,6 +281,9 @@ export default function VisualEditor() {
             <IconButton icon={Redo2} label="Redo (Ctrl+Shift+Z)" size="sm" onClick={redo} disabled={futureBlocks.length === 0} />
           </div>
           <div className="cc-ed-top__group" style={{ justifyContent: 'flex-end', flex: '1 1 0' }}>
+            <IconButton icon={ExternalLink} size="sm" disabled={!liveUrl}
+              label={liveUrl ? 'View the published page in a new tab (changes not yet published are not shown)' : 'Not published yet: publish it to view it online'}
+              onClick={() => { if (liveUrl) window.open(liveUrl, '_blank', 'noopener,noreferrer'); }} />
             {!activePage?.__part && (
               <IconButton icon={History} label="Version history" size="sm" onClick={() => setHistoryOpen(true)} />
             )}

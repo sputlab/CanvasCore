@@ -8,6 +8,7 @@ import { renderBlock, blockRoot } from '../render/renderBlock.mjs';
 import { fillLogosMarquee } from '../render/logosMarquee.mjs';
 import { initCodeBlock, initShareBlock, initTocBlock, initCalcBlock, initWizardBlock, initVideoBlock, initAudioBlock, initAnnounceBlock } from '../render/blockRuntime.mjs';
 import { safeHtml } from '../utils/safeHtml';
+import { forViewport } from '../editor/devicePreview';
 import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
 
 const CONTAINERS = CONTAINER_TYPES;
@@ -19,7 +20,11 @@ const INTERACTIVE = ['ACCORDION', 'TABS', 'BEFORE_AFTER', 'HOTSPOTS', 'CODE_SNIP
 // they go on the frame (so flex/grid behave as on the site), not duplicated in the content.
 const SIZING_KEYS = ['width', 'maxWidth', 'minWidth', 'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'gridColumn', 'gridRow', 'order'];
 
-function splitStyles(styles = {}) {
+// A Button block's styles are the button's own (the published page puts them on the <a>, inside a full-width
+// wrapper): they stay on it untouched, or the forced width below would stretch every button across the canvas.
+const OWN_STYLE_TYPES = ['BUTTON'];
+function splitStyles(styles = {}, type = '') {
+  if (OWN_STYLE_TYPES.includes(type)) return { outer: {}, inner: { ...styles } };
   const outer = {};
   const inner = { ...styles };
   for (const k of SIZING_KEYS) {
@@ -42,8 +47,8 @@ const TEXT_FIELDS = {
   FORM: { title: 'basic' },
 };
 
-function canonicalHtml(block) {
-  return renderBlock(block).replace(/\{\{BASE_URL\}\}/g, '#');
+function canonicalHtml(block, viewport) {
+  return forViewport(renderBlock(block).replace(/\{\{BASE_URL\}\}/g, '#'), viewport);
 }
 
 export default function SortableBlock({ block, isMasterPreview = false }) {
@@ -138,7 +143,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     updateBlock(block.id, { content: { ...block.content, [key]: value } });
   };
 
-  const { outer, inner } = splitStyles(block.styles || {});
+  const { outer, inner } = splitStyles(block.styles || {}, block.type);
   const innerBlock = { ...block, styles: inner };
 
   // Frame: neutral + sizing/positioning properties (behaves like the item in its parent)
@@ -238,7 +243,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     // the size, spacing and margins it has on the published page (the toolbar floats above it)
     if (TEXT_FIELDS[block.type] && isSelected && !isMasterPreview) {
       return (
-        <InlineRegions html={renderBlock(innerBlock, { fields: true })} variants={TEXT_FIELDS[block.type]}
+        <InlineRegions html={forViewport(renderBlock(innerBlock, { fields: true }), viewport)} variants={TEXT_FIELDS[block.type]}
           onCommit={commitField} initialPoint={clickPoint} style={{ width: '100%' }} />
       );
     }
@@ -252,13 +257,13 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     // SLIDER: canonical HTML + animation driven via ref
     if (block.type === 'SLIDER') {
       return (
-        <div ref={sliderRef} style={{ pointerEvents: isMasterPreview ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock)) }} />
+        <div ref={sliderRef} style={{ pointerEvents: isMasterPreview ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock, viewport)) }} />
       );
     }
 
     // Everything else (and unselected editables): canonical HTML = identical to the site
     return (
-      <div ref={htmlRef} style={{ pointerEvents: (isMasterPreview || INTERACTIVE.includes(block.type)) ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock)) }} />
+      <div ref={htmlRef} style={{ pointerEvents: (isMasterPreview || INTERACTIVE.includes(block.type)) ? 'auto' : 'none', width: '100%' }} dangerouslySetInnerHTML={{ __html: safeHtml(canonicalHtml(innerBlock, viewport)) }} />
     );
   };
 
