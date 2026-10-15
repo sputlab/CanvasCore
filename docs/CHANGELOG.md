@@ -27,6 +27,10 @@ Eighteen new blocks, audio and video in the media library, and a site-wide annou
 - **Backups** keep audio and video files.
 - **Logo Cloud**: the scrolling strip repeats the logos until they fill the line in both directions.
 - **Placeholders** for new images, slides and logos are PNG files, so they survive saving.
+- **Demo mode** for public demo sites, on only when `demo.json` exists in the data folder (normal installations are
+  unchanged): the sign-in screen offers the demo login, a banner counts down to the next reset, password changes
+  and uploads are refused, form emails are skipped (submissions are kept), published pages are hidden from search
+  engines, and visitors may create a limited number of pages and collection items per reset.
 
 ### Changed
 - A block added from the Add panel is selected, its settings open, and it is scrolled into view.
@@ -949,6 +953,7 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/sputlab/CanvasCore/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/sputlab/CanvasCore/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/sputlab/CanvasCore/releases/tag/v0.14.0
