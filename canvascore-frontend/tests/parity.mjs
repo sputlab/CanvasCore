@@ -299,5 +299,25 @@ for (const fx of fixtures) {
   }
 }
 
+// --- Styles per device: the media rules must be byte-identical in both renderers (hostile values included) ---
+const RESP = { tablet: { padding: '20px', fontSize: '18px', animation: 'cc-fade-up', textAlign: 'center' },
+  mobile: { padding: '10px', margin: '0 auto', fontSize: '15px', color: 'red;}body{display:none', backgroundColor: '</style><script>x()</script>', width: 'expression(alert(1))', gap: 12, order: '' },
+  hide: ['desktop', 'mobile', 'nonsense'] };
+const deviceFixtures = [
+  { id: 'd1', type: 'TEXT', styles: { padding: '40px' }, content: { text: '<p>x</p>' }, responsive: RESP },
+  { id: 'd2', type: 'BUTTON', styles: { padding: '12px 24px' }, content: { text: 'Go', url: '#' }, responsive: RESP },
+  { id: 'd3', type: 'SECTION', styles: {}, children: [{ id: 'd3c', type: 'TEXT', styles: {}, content: { text: '<p>y</p>' }, responsive: { mobile: { fontSize: '14px' } } }], responsive: { tablet: { padding: '30px 10px' } } },
+  { id: 'd4', type: 'HERO', styles: {}, content: { title: '<h1>t</h1>', customId: 'my-hero' }, responsive: { hide: ['tablet'] } },
+  { id: 'd5', type: 'TEXT', styles: {}, content: { text: '<p>z</p>' }, responsive: { tablet: {}, mobile: null, hide: [] } },
+];
+const deviceRules = (html) => [...html.matchAll(/<style data-cc-device>([\s\S]*?)<\/style>/g)].map((m) => m[1]);
+for (const fx of deviceFixtures) {
+  const js = deviceRules(renderBlock(fx));
+  const php = deviceRules(execFileSync('php', [phpScript], { input: JSON.stringify(fx) }).toString());
+  const hostile = /script|expression|body\{|nonsense|animation/i.test(js.join(''));
+  if (JSON.stringify(js) !== JSON.stringify(php) || hostile) { failures++; console.error(`\n✗ DEVICE STYLES — ${fx.type} (${fx.id})\n   JS=${JSON.stringify(js)}\n   PHP=${JSON.stringify(php)}`); }
+  else console.log(`✓ device styles: ${fx.type} (${fx.id})${js.length ? '' : ' — no rules'}`);
+}
+
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);
 process.exit(failures === 0 ? 0 : 1);

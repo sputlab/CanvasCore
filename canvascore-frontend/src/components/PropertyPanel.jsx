@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import { ChevronLeft, Sliders, Palette, Shield, Save, Trash2, Crown, FileEdit, MousePointerClick, ArrowUp, ArrowDown, CopyPlus, Clipboard } from 'lucide-react';
 import MediaPickerModal from './MediaPickerModal';
 import { IconButton, Button } from '../ui/kit';
+import { blockOnDevice, deviceStylePatch } from '../editor/deviceStyles';
 import { notify } from '../ui/notify';
 import { blockInfo, CONTAINER_TYPES } from '../editor/blockCatalog';
 import { findLiveBlock } from './panel/helpers';
@@ -18,7 +19,7 @@ import { confirmDialog, promptDialog } from '../ui/dialog';
 const TABS = [['content', 'Content', Sliders], ['style', 'Style', Palette], ['advanced', 'Advanced', Shield]];
 
 export default function PropertyPanel() {
-  const { blocks, selectedBlockId, setSelectedBlockId, updateBlock, removeBlock, activePage, updateActivePage, pages, fetchTemplates, enterMasterEditMode, saveAsMaster, userRole, duplicateBlock, copyBlock, moveBlockBy } = useStore();
+  const { blocks, selectedBlockId, setSelectedBlockId, updateBlock, removeBlock, activePage, updateActivePage, pages, fetchTemplates, enterMasterEditMode, saveAsMaster, userRole, duplicateBlock, copyBlock, moveBlockBy, viewport } = useStore();
 
   // Blocks from templates, imports or older pages may have no "content"/"styles" (e.g. SECTION/CONTAINER):
   // the panel reads them directly, so it always gets objects (a crash here blanks the whole editor).
@@ -65,9 +66,13 @@ export default function PropertyPanel() {
     const cur = selectedBlock ? findLiveBlock(useStore.getState().blocks, selectedBlock.id) : null;
     return (cur || selectedBlock || {}).styles || {};
   };
-  const handleStyleChange = (property, value) => updateBlock(selectedBlock.id, { styles: { ...liveStyles(), [property]: value } });
-  // Several style properties in one update
-  const patchStyles = (patch) => updateBlock(selectedBlock.id, { styles: { ...liveStyles(), ...patch } });
+  // Style changes go to the device being previewed (desktop = the block's own styles, tablet/phone = overrides)
+  const liveBlock = () => (selectedBlock ? findLiveBlock(useStore.getState().blocks, selectedBlock.id) : null) || selectedBlock || {};
+  const patchStyles = (patch) => {
+    const b = liveBlock();
+    updateBlock(selectedBlock.id, deviceStylePatch({ ...b, styles: liveStyles() }, useStore.getState().viewport, patch));
+  };
+  const handleStyleChange = (property, value) => patchStyles({ [property]: value });
 
   // Helpers for list blocks: immutable updates (no mutation of the store state)
   const lstOf = (key) => { const v = liveContent()[key]; return Array.isArray(v) ? v : []; };
@@ -166,8 +171,10 @@ export default function PropertyPanel() {
   const tabs = TABS.filter(([id]) => id !== 'content' || !!CONTENT_PANELS[selectedBlock.type]); // blocks without a content panel (Section, Container) open on Style
   const tab = tabs.some(([id]) => id === activeTab) ? activeTab : tabs[0][0];
   const c = selectedBlock.content || {};
+  // The panel's fields show the block's values on the previewed device
+  const shownBlock = blockOnDevice(selectedBlock, viewport);
   const ctx = {
-    selectedBlock, c, set: handleContentChange, handleContentChange, patchContent, handleStyleChange, patchStyles, updateBlock, setMediaPickerTarget,
+    selectedBlock: shownBlock, device: viewport, c, set: handleContentChange, handleContentChange, patchContent, handleStyleChange, patchStyles, updateBlock, setMediaPickerTarget,
     pick: (type, index) => () => setMediaPickerTarget(index === undefined ? { type } : { type, index }),
     // Generic picker target for new blocks: the image goes into content[key], or into item `index` of the list
     // content[list]; `alt` names the alt-text field that the library's alt text fills while it is empty.

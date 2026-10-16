@@ -1238,8 +1238,63 @@ function cc_menu_effects_css($effects, $o) {
     return implode("\n    ", $css);
 }
 
+// ---------------------------------------------------------------------------
+// Styles per device. block.responsive = { tablet: {styles}, mobile: {styles}, hide: ['desktop'|'tablet'|'mobile'] }:
+// overrides of the block's own styles (desktop), written as media rules on the block's id. Phones inherit the
+// tablet overrides, as in CSS. Mirrors deviceCss() in renderBlock.mjs (parity tests compare the two).
+// ---------------------------------------------------------------------------
+const CC_TABLET_MAX = 1024;
+const CC_MOBILE_MAX = 767;
+const CC_DEVICE_KEYS = ['margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight',
+    'paddingBottom', 'paddingLeft', 'width', 'height', 'maxWidth', 'minWidth', 'minHeight', 'maxHeight', 'fontSize', 'lineHeight',
+    'letterSpacing', 'fontWeight', 'textTransform', 'textAlign', 'color', 'backgroundColor', 'borderWidth', 'borderStyle', 'borderColor',
+    'borderRadius', 'gap', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'order'];
+function cc_device_decls($styles, $keys) {
+    if (!is_array($styles)) return '';
+    $out = '';
+    foreach ($keys as $k) {
+        if (!array_key_exists($k, $styles)) continue;
+        $v = $styles[$k];
+        if (!is_string($v) && !is_int($v) && !is_float($v)) continue;
+        $v = trim((string)$v);
+        if ($v === '' || preg_match('/[;{}<>\\\\]|expression\s*\(|javascript:|vbscript:|\/\*/i', $v)) continue;
+        $out .= strtolower(preg_replace('/(?<!^)[A-Z]/', '-$0', $k)) . ':' . $v . ' !important;';
+    }
+    return $out;
+}
+function cc_device_css($block, $id) {
+    $r = $block['responsive'] ?? null;
+    if (!is_array($r) || $id === '') return '';
+    // A Button's styles are on its link, except the spacing and alignment of its wrapper
+    $outerKeys = ['margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'textAlign'];
+    $isBtn = ($block['type'] ?? '') === 'BUTTON';
+    $rule = function ($styles) use ($id, $isBtn, $outerKeys) {
+        if (!$isBtn) { $d = cc_device_decls($styles, CC_DEVICE_KEYS); return $d !== '' ? "#$id{" . $d . '}' : ''; }
+        $o = cc_device_decls($styles, $outerKeys);
+        $i = cc_device_decls($styles, array_values(array_diff(CC_DEVICE_KEYS, $outerKeys)));
+        return ($o !== '' ? "#$id{" . $o . '}' : '') . ($i !== '' ? "#$id>.cc-btn{" . $i . '}' : '');
+    };
+    $css = '';
+    $t = $rule($r['tablet'] ?? null);
+    if ($t !== '') $css .= '@media(max-width:' . CC_TABLET_MAX . 'px){' . $t . '}';
+    $m = $rule($r['mobile'] ?? null);
+    if ($m !== '') $css .= '@media(max-width:' . CC_MOBILE_MAX . 'px){' . $m . '}';
+    $hide = is_array($r['hide'] ?? null) ? $r['hide'] : [];
+    $ranges = ['desktop' => '(min-width:' . (CC_TABLET_MAX + 1) . 'px)', 'tablet' => '(min-width:' . (CC_MOBILE_MAX + 1) . 'px) and (max-width:' . CC_TABLET_MAX . 'px)', 'mobile' => '(max-width:' . CC_MOBILE_MAX . 'px)'];
+    foreach ($ranges as $dev => $q) { if (in_array($dev, $hide, true)) $css .= "@media$q{#$id{display:none !important;}}"; }
+    return $css !== '' ? '<style data-cc-device>' . $css . "</style>\n" : '';
+}
+
 function render_block($block) {
     if (!$block || !is_array($block)) return '';
+    $html = cc_render_block_body($block);
+    if (($block['type'] ?? '') === 'MASTER' || empty($block['responsive'])) return $html;
+    $bid = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($block['id'] ?? ''));
+    $id = !empty($block['content']['customId']) ? preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$block['content']['customId']) : $bid;
+    return cc_device_css($block, $id) . $html;
+}
+
+function cc_render_block_body($block) {
 
     static $masters_cache = null;
     if ($masters_cache === null) {
