@@ -299,6 +299,17 @@ try {
   pick($$('select').find((x) => [...x.options].some((o) => o.value === 'sm')), 'sm'); await sleep(30);
   check('on the phone preview a style change becomes a phone override (desktop unchanged)', blk('bt1').styles.padding === '18px 36px' && blk('bt1').responsive?.mobile?.padding === '8px 16px' && blk('bt1').responsive?.mobile?.fontSize === '14px', JSON.stringify(blk('bt1').responsive));
   useStore.setState({ viewport: 'desktop' }); await sleep(30);
+  // Style tab borders: a thickness alone must show a border (the Style list shows "Solid" when none is stored)
+  click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Style')); await sleep(30);
+  if (!$$('input').some((i) => i.getAttribute('placeholder') === 'e.g. 2px')) { click(btnHas('Borders')); await sleep(30); }
+  const bw = $$('input').find((i) => i.getAttribute('placeholder') === 'e.g. 2px');
+  typeIn(bw, '3px'); await sleep(30);
+  check('setting a border thickness in the Style tab also stores the "solid" style shown, so the border appears', blk('bt1').styles.borderWidth === '3px' && blk('bt1').styles.borderStyle === 'solid', JSON.stringify(blk('bt1').styles));
+  check('a Button block gets no "its buttons are styled in Content" note', !$('.cc-style-note'));
+  useStore.setState({ selectedBlockId: 'h1' }); await sleep(30);
+  check('a Hero\'s Style tab says its buttons are styled in the Content tab (a border here frames the whole Hero)', /whole Hero block/.test($('.cc-style-note')?.textContent || '') && /Content/.test($('.cc-style-note').textContent));
+  useStore.setState({ selectedBlockId: 'bt1' }); await sleep(30);
+  click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Content')); await sleep(30);
   await openSec('Hover');
   pick(selByLabel('Hover effect'), 'glow'); await sleep(30);
   check('button hover effect is saved', blk('bt1').content.btnEffect === 'glow');

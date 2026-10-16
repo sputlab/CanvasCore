@@ -3,14 +3,30 @@ import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, Palette, Type } 
 import { PanelAccordion, SpacingControl, ColorInput } from './fields';
 import { handleNumericKey, labelStyle, inputStyle } from './helpers';
 import DeviceBar from './DeviceBar';
+import { blockLabel } from '../../editor/blockCatalog';
+
+// Blocks whose buttons are part of the block: the Style tab styles the whole block, the buttons have their own
+// settings in the Content tab (a border set here goes around the whole block, not around its buttons)
+const OWN_BUTTONS = ['HERO', 'VIDEO_HERO', 'PRICING', 'SPLIT_CTA', 'PRICE_CALCULATOR', 'CASE_STUDY', 'NEWSLETTER', 'FORM', 'WIZARD', 'ANNOUNCEMENT_BAR'];
 
 // Style tab (every block): size, spacing, typography, background, borders.
 export default function StyleTab({ ctx }) {
-  const { selectedBlock, handleStyleChange } = ctx;
+  const { selectedBlock, handleStyleChange, patchStyles } = ctx;
+  // A border needs a style to show: the Style list shows "Solid" when none is set, so setting a thickness or a
+  // colour also stores "solid" (otherwise the browser draws no border at all)
+  const setBorder = (prop, value) => {
+    if (!selectedBlock.styles.borderStyle && value) patchStyles({ [prop]: value, borderStyle: 'solid' });
+    else handleStyleChange(prop, value);
+  };
   return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
 
     <DeviceBar block={selectedBlock} />
+    {OWN_BUTTONS.includes(selectedBlock.type) && (
+      <p className="cc-style-note" style={{ margin: '0 0 6px', padding: '8px 10px', borderRadius: 8, background: 'rgba(56,189,248,.08)', border: '1px solid rgba(56,189,248,.25)', fontSize: 11.5, color: '#cbd5e1', lineHeight: 1.45 }}>
+        These styles apply to the whole {blockLabel(selectedBlock.type)} block. Its buttons have their own colours and style in the <strong>Content</strong> tab.
+      </p>
+    )}
 
     <PanelAccordion title="Size & Dimensions" icon={Layout} defaultOpen={false}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
@@ -102,7 +118,7 @@ export default function StyleTab({ ctx }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
         <div>
           <label style={{ fontSize: '10px', color: '#94a3b8' }}>Thickness (↑/↓)</label>
-          <input type="text" value={selectedBlock.styles.borderWidth || '0px'} onChange={e => handleStyleChange('borderWidth', e.target.value)} onKeyDown={e => handleNumericKey(e, selectedBlock.styles.borderWidth, val => handleStyleChange('borderWidth', val))} style={inputStyle} placeholder="e.g. 2px" />
+          <input type="text" value={selectedBlock.styles.borderWidth || '0px'} onChange={e => setBorder('borderWidth', e.target.value)} onKeyDown={e => handleNumericKey(e, selectedBlock.styles.borderWidth, val => setBorder('borderWidth', val))} style={inputStyle} placeholder="e.g. 2px" />
         </div>
         <div>
           <label style={{ fontSize: '10px', color: '#94a3b8' }}>Style</label>
@@ -113,7 +129,7 @@ export default function StyleTab({ ctx }) {
       </div>
       <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block' }}>Color</label>
       <div style={{ marginBottom: '15px' }}>
-        <ColorInput label="border color" value={selectedBlock.styles.borderColor} onChange={v => handleStyleChange('borderColor', v)} placeholder="#000000" />
+        <ColorInput label="border color" value={selectedBlock.styles.borderColor} onChange={v => setBorder('borderColor', v)} placeholder="#000000" />
       </div>
       <label style={labelStyle}>Border Radius (↑/↓ to adjust)</label>
       <input type="text" placeholder="e.g. 10px, 50%" value={selectedBlock.styles.borderRadius || '0px'} onChange={e => handleStyleChange('borderRadius', e.target.value)} onKeyDown={e => handleNumericKey(e, selectedBlock.styles.borderRadius, val => handleStyleChange('borderRadius', val))} style={inputStyle} />

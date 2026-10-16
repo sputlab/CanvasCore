@@ -24,6 +24,13 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   values included); checked in Firefox: the published page at 1280, 768 and 375px matches the editor's three
   previews.
 
+### Fixed
+- **Borders set in the Style tab could stay invisible**: the Style list shows "Solid" when no style is stored, but
+  without one the browser draws no border. Setting a thickness or a colour now stores the style too.
+- The Style tab of blocks that have their own buttons (Hero, Video Hero, Pricing, Split CTA, Price Calculator, Case
+  Study, Newsletter, Form, Multi-step Form, Announcement Bar) says that its styles apply to the whole block, and that
+  the buttons are styled in the Content tab: a border set there framed the whole Hero instead of its buttons.
+
 ## [0.16.0] - 2026-10-15 — More starters, editor matches the site
 
 ### Added
