@@ -1,5 +1,7 @@
 import React from 'react';
-import { MoveUp, Code, MousePointerClick, Repeat, Play } from 'lucide-react';
+import { MoveUp, Code, MousePointerClick, Repeat, Play, EyeOff } from 'lucide-react';
+import { useStore } from '../../store/useStore';
+import { DEVICES, hidePatch } from '../../editor/deviceStyles';
 import { PanelAccordion, SelF } from './fields';
 import { labelStyle, inputStyle } from './helpers';
 import { REVEAL_ANIMATIONS, DURATIONS, DELAYS, HOVER_EFFECTS, LOOP_EFFECTS } from '../../render/effects.mjs';
@@ -10,9 +12,21 @@ import { previewEffects } from '../../editor/previewEffects';
 export default function AdvancedTab({ ctx }) {
   const { selectedBlock, handleContentChange, handleStyleChange, userRole } = ctx;
   const c = selectedBlock.content || {};
+  const updateBlock = useStore((s) => s.updateBlock);
+  const hidden = (selectedBlock.responsive && Array.isArray(selectedBlock.responsive.hide)) ? selectedBlock.responsive.hide : [];
   const anim = REVEAL_ANIMATIONS.some(([v]) => v === selectedBlock.styles.animation) ? selectedBlock.styles.animation : 'none';
   return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+
+    <PanelAccordion title="Visibility" icon={EyeOff} defaultOpen={hidden.length > 0}>
+      {DEVICES.map(([d, name]) => (
+        <label key={d} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#e2e8f0', marginBottom: 8, cursor: 'pointer' }}>
+          <input type="checkbox" checked={hidden.includes(d)} onChange={(e) => updateBlock(selectedBlock.id, hidePatch(selectedBlock, d, e.target.checked))} />
+          Hide on {name.toLowerCase()}
+        </label>
+      ))}
+      <p style={{ fontSize: '11px', color: '#64748b', margin: '4px 0 0' }}>A hidden block stays in the page but isn't shown on that kind of screen. In the editor it is shown faded, so you can still select it.</p>
+    </PanelAccordion>
 
     <PanelAccordion title="Entrance Animation" icon={MoveUp} defaultOpen={true}>
       <SelF label="When the block scrolls into view" value={anim} onChange={v => handleStyleChange('animation', v)} options={REVEAL_ANIMATIONS} />

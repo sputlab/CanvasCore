@@ -291,9 +291,14 @@ try {
 
   const bt = { id: 'bt1', type: 'BUTTON', styles: {}, content: { text: 'Go', url: '#', useGlobal: true } };
   const cards = { id: 'c1', type: 'CARDS', styles: {}, content: { items: ['<h3>a</h3>', '<h3>b</h3>', '<h3>c</h3>'] } };
-  useStore.setState({ blocks: [...st().blocks, bt, cards], selectedBlockId: 'bt1' }); await sleep(30);
+  useStore.setState({ blocks: [...st().blocks, bt, cards], selectedBlockId: 'bt1', viewport: 'desktop' }); await sleep(30);
   pick($$('select').find((x) => [...x.options].some((o) => o.value === 'lg')), 'lg'); await sleep(30);
   check('button size sets padding and font size together', blk('bt1').styles.padding === '18px 36px' && blk('bt1').styles.fontSize === '20px', JSON.stringify(blk('bt1').styles));
+  // styles per device: on the phone preview the same control writes phone overrides, desktop stays as it is
+  useStore.setState({ viewport: 'mobile' }); await sleep(30);
+  pick($$('select').find((x) => [...x.options].some((o) => o.value === 'sm')), 'sm'); await sleep(30);
+  check('on the phone preview a style change becomes a phone override (desktop unchanged)', blk('bt1').styles.padding === '18px 36px' && blk('bt1').responsive?.mobile?.padding === '8px 16px' && blk('bt1').responsive?.mobile?.fontSize === '14px', JSON.stringify(blk('bt1').responsive));
+  useStore.setState({ viewport: 'desktop' }); await sleep(30);
   await openSec('Hover');
   pick(selByLabel('Hover effect'), 'glow'); await sleep(30);
   check('button hover effect is saved', blk('bt1').content.btnEffect === 'glow');
@@ -694,6 +699,46 @@ try {
     await waitFor(() => calls.some((c) => c.u.includes('backup_delete')), 2000);
     check('…then deletes it', calls.some((c) => c.u.includes('backup_delete')));
     w.HTMLAnchorElement.prototype.click = origClick;
+  }
+
+  console.log('\nSTYLES PER DEVICE');
+  {
+    const ds = await vite.ssrLoadModule('/src/editor/deviceStyles.js');
+    const rb = await vite.ssrLoadModule('/src/render/renderBlock.mjs');
+    const b0 = { id: 'r1', type: 'TEXT', styles: { padding: '40px', fontSize: '20px', animation: 'fade-up' }, content: { text: '<p>x</p>' } };
+    const t1 = { ...b0, ...ds.deviceStylePatch(b0, 'tablet', { padding: '20px', animation: 'zoom-in' }) };
+    check('a tablet change is a tablet override; effects stay the same on every device', t1.styles.padding === '40px' && t1.responsive.tablet.padding === '20px' && t1.styles.animation === 'zoom-in' && !('animation' in t1.responsive.tablet));
+    const m1 = { ...t1, ...ds.deviceStylePatch(t1, 'mobile', { padding: '20px', fontSize: '16px' }) };
+    check('phones inherit the tablet value: setting the same value adds no phone override', !('padding' in m1.responsive.mobile) && m1.responsive.mobile.fontSize === '16px');
+    check('effective styles: desktop, tablet (desktop + tablet), phone (+ phone)', rb.effectiveStyles(m1, 'desktop').padding === '40px' && rb.effectiveStyles(m1, 'tablet').padding === '20px' && rb.effectiveStyles(m1, 'mobile').padding === '20px' && rb.effectiveStyles(m1, 'mobile').fontSize === '16px' && rb.effectiveStyles(m1, 'tablet').fontSize === '20px');
+    const back = { ...m1, ...ds.deviceStylePatch(m1, 'tablet', { padding: '40px' }) };
+    check('going back to the inherited value removes the override (nothing left = no responsive data)', back.responsive && !back.responsive.tablet && !!back.responsive.mobile && ds.tidyResponsive({ tablet: {}, mobile: {}, hide: [] }) === undefined);
+    const h = { ...b0, ...ds.hidePatch(b0, 'mobile', true) };
+    check('hide on a device', JSON.stringify(h.responsive) === '{"hide":["mobile"]}' && ds.hidePatch(h, 'mobile', false).responsive === undefined);
+    check('published page: media rules on the block id, tablet ≤1024px, phone ≤767px, hidden ranges', /@media\(max-width:1024px\)\{#r1\{padding:20px !important;\}\}/.test(rb.renderBlock(m1)) && /@media\(max-width:767px\)\{#r1\{font-size:16px !important;\}\}/.test(rb.renderBlock(m1)) && /@media\(max-width:767px\)\{#r1\{display:none !important;\}\}/.test(rb.renderBlock(h)));
+
+    // the panel and the canvas follow the previewed device
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, blocks: [m1, h], selectedBlockId: 'r1', viewport: 'tablet', userRole: 'admin', isEditingMaster: false });
+    mount(React.createElement(VisualEditor)); await sleep(80);
+    click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Style')); await sleep(40);
+    const bar = $('.cc-device-bar');
+    check('the Style tab says which device it edits (synced with the preview size)', !!bar && bar.querySelector('[aria-pressed="true"]')?.textContent.trim() === 'Tablet' && /up to 1024px/.test(bar.textContent) && /1 setting changed/.test(bar.textContent));
+    click($$('button', bar).find((b) => b.textContent.trim() === 'Phone')); await sleep(40);
+    check('…switching it switches the canvas preview', st().viewport === 'mobile');
+    const canvasText = $('.cc-canvas #r1');
+    check('the canvas shows the phone styles directly (no media rules in the editor)', !!canvasText && /font-size: 16px/.test(canvasText.getAttribute('style')) && /padding: 20px/.test(canvasText.getAttribute('style')) && !$('.cc-canvas style[data-cc-device]'));
+    const badge = $$('.cc-hidden-badge');
+    check('a block hidden on this device is shown faded with a "Hidden on phone" mark', badge.length === 1 && /Hidden on phone/.test(badge[0].textContent));
+    const reset = $$('button', $('.cc-device-bar')).find((b) => /Reset/.test(b.textContent));
+    click(reset); await sleep(30);
+    check('Reset gives the phone the tablet styles again', !blk('r1').responsive?.mobile && blk('r1').responsive?.tablet?.padding === '20px');
+    click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Advanced')); await sleep(40);
+    if (!$$('label').some((l) => /^Hide on /.test(l.textContent.trim()))) { click(btnHas('Visibility')); await sleep(30); }
+    const vis = $$('label').filter((l) => /^Hide on /.test(l.textContent.trim()));
+    check('Advanced › Visibility: hide on desktop, tablet, phone', vis.length === 3);
+    click(vis[0].querySelector('input')); await sleep(30);
+    check('…ticking one stores it', (blk('r1').responsive?.hide || []).includes('desktop'));
+    useStore.setState({ viewport: 'desktop', selectedBlockId: null });
   }
 
   console.log('\nCOLLECTIONS');

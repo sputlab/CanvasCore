@@ -212,7 +212,74 @@ export function announcementHtml(c, id, extra, styleAttr, requireText) {
 
 // opts.fields (editor canvas only): marks the rich text fields as editable in place
 // (data-cc-field + contenteditable) on the same elements the site renders, so editing keeps the layout.
+// ---------------------------------------------------------------------------
+// Styles per device: block.responsive = { tablet: {styles}, mobile: {styles}, hide: ['desktop'|'tablet'|'mobile'] }.
+// Overrides of the block's own (desktop) styles, written as media rules on the block's id; phones inherit the
+// tablet overrides. Mirrors cc_device_css() in compiler.php. The editor applies the same overrides directly to the
+// previewed device (effectiveStyles), so it renders without these rules (opts.noDeviceCss).
+// ---------------------------------------------------------------------------
+export const TABLET_MAX = 1024;
+export const MOBILE_MAX = 767;
+export const DEVICE_KEYS = ['margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight',
+  'paddingBottom', 'paddingLeft', 'width', 'height', 'maxWidth', 'minWidth', 'minHeight', 'maxHeight', 'fontSize', 'lineHeight',
+  'letterSpacing', 'fontWeight', 'textTransform', 'textAlign', 'color', 'backgroundColor', 'borderWidth', 'borderStyle', 'borderColor',
+  'borderRadius', 'gap', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'order'];
+const BTN_OUTER_KEYS = ['margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'textAlign'];
+const deviceDecls = (styles, keys) => {
+  if (!styles || typeof styles !== 'object' || Array.isArray(styles)) return '';
+  let out = '';
+  for (const k of keys) {
+    if (!Object.prototype.hasOwnProperty.call(styles, k)) continue;
+    const raw = styles[k];
+    if (typeof raw !== 'string' && typeof raw !== 'number') continue;
+    const v = String(raw).trim();
+    if (v === '' || /[;{}<>\\]|expression\s*\(|javascript:|vbscript:|\/\*/i.test(v)) continue;
+    out += k.replace(/(?<!^)[A-Z]/g, (m) => '-' + m).toLowerCase() + ':' + v + ' !important;';
+  }
+  return out;
+};
+export function deviceCss(block, id) {
+  const r = block && block.responsive;
+  if (!r || typeof r !== 'object' || Array.isArray(r) || !id) return '';
+  const isBtn = block.type === 'BUTTON';
+  const rule = (styles) => {
+    if (!isBtn) { const d = deviceDecls(styles, DEVICE_KEYS); return d ? `#${id}{${d}}` : ''; }
+    const o = deviceDecls(styles, BTN_OUTER_KEYS);
+    const i = deviceDecls(styles, DEVICE_KEYS.filter((k) => !BTN_OUTER_KEYS.includes(k)));
+    return (o ? `#${id}{${o}}` : '') + (i ? `#${id}>.cc-btn{${i}}` : '');
+  };
+  let css = '';
+  const t = rule(r.tablet);
+  if (t) css += `@media(max-width:${TABLET_MAX}px){${t}}`;
+  const m = rule(r.mobile);
+  if (m) css += `@media(max-width:${MOBILE_MAX}px){${m}}`;
+  const hide = Array.isArray(r.hide) ? r.hide : [];
+  const ranges = [['desktop', `(min-width:${TABLET_MAX + 1}px)`], ['tablet', `(min-width:${MOBILE_MAX + 1}px) and (max-width:${TABLET_MAX}px)`], ['mobile', `(max-width:${MOBILE_MAX}px)`]];
+  for (const [dev, q] of ranges) if (hide.includes(dev)) css += `@media${q}{#${id}{display:none !important;}}`;
+  return css ? `<style data-cc-device>${css}</style>\n` : '';
+}
+
+// The styles a block has on a device: its own, then the tablet overrides, then (phone) the phone overrides.
+export function effectiveStyles(block, device) {
+  const base = (block && block.styles) || {};
+  const r = (block && block.responsive) || {};
+  const pick = (o) => { const out = {}; if (o && typeof o === 'object') for (const k of DEVICE_KEYS) if (o[k] !== undefined && o[k] !== '') out[k] = o[k]; return out; };
+  if (device === 'tablet') return { ...base, ...pick(r.tablet) };
+  if (device === 'mobile') return { ...base, ...pick(r.tablet), ...pick(r.mobile) };
+  return base;
+}
+export const hiddenOn = (block, device) => !!(block && block.responsive && Array.isArray(block.responsive.hide) && block.responsive.hide.includes(device));
+
 export function renderBlock(block, opts = {}) {
+  if (!block || typeof block !== 'object') return '';
+  const html = renderBlockBody(block, opts);
+  if (opts.noDeviceCss || block.type === 'MASTER' || !block.responsive) return html;
+  const bid = block.id ? String(block.id).replace(/[^a-zA-Z0-9_-]/g, '') : '';
+  const id = block.content && block.content.customId ? String(block.content.customId).replace(/[^a-zA-Z0-9_-]/g, '') : bid;
+  return deviceCss(block, id) + html;
+}
+
+function renderBlockBody(block, opts = {}) {
   if (!block || typeof block !== 'object') return '';
   const field = (name, placeholder) => (opts.fields ? ` data-cc-field="${name}" contenteditable="true" data-cc-placeholder="${placeholder}"` : '');
 

@@ -2,12 +2,15 @@ import React from 'react';
 import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, Palette, Type } from 'lucide-react';
 import { PanelAccordion, SpacingControl, ColorInput } from './fields';
 import { handleNumericKey, labelStyle, inputStyle } from './helpers';
+import DeviceBar from './DeviceBar';
 
 // Style tab (every block): size, spacing, typography, background, borders.
 export default function StyleTab({ ctx }) {
   const { selectedBlock, handleStyleChange } = ctx;
   return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+
+    <DeviceBar block={selectedBlock} />
 
     <PanelAccordion title="Size & Dimensions" icon={Layout} defaultOpen={false}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>

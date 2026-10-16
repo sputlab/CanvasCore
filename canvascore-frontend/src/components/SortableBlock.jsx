@@ -4,7 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useStore } from '../store/useStore';
 import { InlineRegions } from '../editor/RichText';
 import { Crown } from 'lucide-react';
-import { renderBlock, blockRoot } from '../render/renderBlock.mjs';
+import { renderBlock, blockRoot, effectiveStyles, hiddenOn } from '../render/renderBlock.mjs';
 import { fillLogosMarquee } from '../render/logosMarquee.mjs';
 import { initCodeBlock, initShareBlock, initTocBlock, initCalcBlock, initWizardBlock, initVideoBlock, initAudioBlock, initAnnounceBlock } from '../render/blockRuntime.mjs';
 import { safeHtml } from '../utils/safeHtml';
@@ -143,15 +143,20 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     updateBlock(block.id, { content: { ...block.content, [key]: value } });
   };
 
-  const { outer, inner } = splitStyles(block.styles || {}, block.type);
-  const innerBlock = { ...block, styles: inner };
+  // The previewed device's styles (desktop + tablet overrides + phone overrides): the canvas shows them directly,
+  // so the block renders without its device media rules (those are for the published page)
+  const { outer, inner } = splitStyles(effectiveStyles(block, viewport), block.type);
+  const innerBlock = { ...block, styles: inner, responsive: undefined };
+  const DEVICE_NAMES = { desktop: 'desktop', tablet: 'tablet', mobile: 'phone' };
+  const hiddenHere = !isMasterPreview && hiddenOn(block, viewport);
 
   // Frame: neutral + sizing/positioning properties (behaves like the item in its parent)
   const wrapperStyle = {
     position: 'relative',
     transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.6 : 1,
-    outline: isSelected ? '2px solid #38bdf8' : 'none',
+    // Hidden on this device: still shown (so it can be selected and edited), faded and marked
+    opacity: isDragging ? 0.6 : hiddenHere ? 0.35 : 1,
+    outline: isSelected ? '2px solid #38bdf8' : hiddenHere ? '1px dashed #94a3b8' : 'none',
     outlineOffset: '-2px',
     cursor: isMasterPreview ? 'inherit' : (isSelected ? 'default' : 'pointer'),
     zIndex: isDragging ? 1000 : 1,
@@ -270,6 +275,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
   return (
     <div ref={(el) => { setNodeRef(el); frameRef.current = el; }} style={wrapperStyle} onClick={handleClick}>
       {dragHandle}
+      {hiddenHere && <div className="cc-hidden-badge" style={{ position: 'absolute', top: 4, right: 4, zIndex: 40, background: '#334155', color: '#f8fafc', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', pointerEvents: 'none' }}>Hidden on {DEVICE_NAMES[viewport]}</div>}
       {block.content?.customCss && <style>{String(block.content.customCss).replace(/__THIS__/g, `#${innerId}`)}</style>}
       {renderBody()}
     </div>

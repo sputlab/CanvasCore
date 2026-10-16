@@ -10,6 +10,20 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **Styles per device** (roadmap Phase 1): every block can have its own spacing, size, typography, colours, borders
+  and layout on tablets (up to 1024px) and phones (up to 767px). The Style tab edits the device being previewed: a
+  Desktop / Tablet / Phone switch at its top is the same as the editor's preview size. Tablet values override the
+  desktop ones and phones inherit the tablet values; setting a field back to the inherited value removes the
+  override, and Reset gives a device the inherited styles again. Effects (animations, hovers) stay the same on every
+  device.
+- **Hide on desktop, tablet or phone** (Advanced › Visibility). In the editor a hidden block stays visible, faded and
+  marked "Hidden on phone", so it can still be selected.
+- Published pages get the overrides as media rules on the block's id (`block.responsive`, no change for pages without
+  them); the editor previews them directly. Same rules in the PHP compiler and the editor (parity fixtures, hostile
+  values included); checked in Firefox: the published page at 1280, 768 and 375px matches the editor's three
+  previews.
+
 ## [0.16.0] - 2026-10-15 — More starters, editor matches the site
 
 ### Added
