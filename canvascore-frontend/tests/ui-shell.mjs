@@ -41,6 +41,7 @@ const calls = [];
 globalThis.fetch = async (url, init = {}) => {
   const u = String(url); calls.push({ u, body: init.body });
   if (u.includes('save_page')) return new Response(JSON.stringify({ success: true }));
+  if (u.includes('save_settings')) return new Response(JSON.stringify({ success: true }));
   if (u.includes('get_pages')) return new Response(JSON.stringify(PAGES));
   if (u.includes('get_media_folders')) return new Response(JSON.stringify(MEDIA_FOLDERS));
   if (u.includes('get_media')) return new Response(JSON.stringify(MEDIA));
@@ -750,6 +751,47 @@ try {
     click(vis[0].querySelector('input')); await sleep(30);
     check('…ticking one stores it', (blk('r1').responsive?.hide || []).includes('desktop'));
     useStore.setState({ viewport: 'desktop', selectedBlockId: null });
+  }
+
+  console.log('\nGLOBAL COLOURS');
+  {
+    const pal = await vite.ssrLoadModule('/src/editor/palette.js');
+    const p0 = pal.normalizePalette({ brandColor: '#ff0000', colors: [{ id: 'sale', name: 'Sale', value: '#E11D48' }, { id: 'bad id', value: '#000' }] });
+    check('palette: built-in colours (primary = brand colour) then custom ones', p0.map((c) => c.id).join(',') === 'primary,secondary,accent,text,background,sale' && p0[0].value === '#ff0000' && p0[5].value === '#e11d48');
+    check('a reference points to a palette colour and resolves to its current value', pal.colorRef(p0[5]) === 'var(--cc-color-sale, #e11d48)' && pal.parseColorRef('var(--cc-color-sale, #e11d48)').id === 'sale'
+      && pal.resolveColor('var(--cc-color-sale, #000000)', p0) === '#e11d48' && pal.parseColorRef('var(--brand-color, #3b82f6)').id === 'primary' && pal.parseColorRef('#fff') === null);
+    // the colour fields offer the palette; picking a swatch stores a reference
+    useStore.setState({ palette: p0, currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false,
+      blocks: [{ id: 'gc1', type: 'TEXT', styles: {}, content: { text: '<p>x</p>' } }], selectedBlockId: 'gc1' });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Style')); await sleep(30);
+    if (!$('[aria-label="Pick text color"]')) { click(btnHas('Typography')); await sleep(30); }
+    const sw = $$('.cc-swatches')[0];
+    check('colour fields show the global colours as swatches', !!sw && $$('button', sw).length === 6 && $$('button', sw).some((b) => /Sale \(global colour\)/.test(b.getAttribute('aria-label'))));
+    click($$('button', sw).find((b) => /^Accent/.test(b.getAttribute('aria-label')))); await sleep(30);
+    check('…picking one stores a reference to it, not a fixed colour', blk('gc1').styles.color === 'var(--cc-color-accent, #f59e0b)', blk('gc1').styles.color);
+    const chip = $('.cc-color-global');
+    check('…and the field shows the colour by name ("Accent · global")', !!chip && /Accent/.test(chip.textContent) && /global/.test(chip.textContent));
+    click($$('button', chip).find((b) => b.textContent.trim() === 'Unlink')); await sleep(30);
+    check('Unlink keeps today\'s colour as a fixed value', blk('gc1').styles.color === '#f59e0b');
+
+    // Global Options › Global colours
+    useStore.setState({ currentView: 'settings', palette: null });
+    calls.length = 0;
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/GlobalSettings.jsx')).default)));
+    const rowsOf = () => $$('.cc-palette__row');
+    await waitFor(() => rowsOf().length === 5 && btnHas('Save & Publish'));   // loaded (the defaults show before the answer)
+    check('Global colours lists the five built-in colours (Primary = brand colour), none deletable', rowsOf().length === 5 && /Primary/.test(rowsOf()[0].querySelector('input[aria-label="Colour name"]').value) && !rowsOf()[0].querySelector('button[aria-label^="Delete"]'));
+    click(btnHas('Add colour')); await sleep(30);
+    check('"Add colour" adds a custom colour that can be renamed and deleted', rowsOf().length === 6 && !!rowsOf()[5].querySelector('button[aria-label^="Delete"]'), `rows=${rowsOf().length} btn=${btnHas('Add colour')?.outerHTML.slice(0,120)}`);
+    typeIn(rowsOf()[5].querySelector('input[aria-label="Colour name"]'), 'Sale'); await sleep(20);
+    const prim = rowsOf()[0].querySelector('input[type="color"]');
+    Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(prim, '#123456'); prim.dispatchEvent(new w.Event('input', { bubbles: true })); await sleep(20);
+    click(btnHas('Save & Publish'));
+    const sent = await waitFor(() => calls.find((c) => c.u.includes('save_settings')));
+    const body = sent ? JSON.parse(sent.body) : {};
+    check('saving sends the palette, and the primary colour as the brand colour', Array.isArray(body.colors) && body.colors.length === 6 && body.colors[5].name === 'Sale' && body.colors[0].value === '#123456' && body.brandColor === '#123456', sent && sent.body.slice(0, 200));
+    check('…and the colour fields everywhere get the new palette', await waitFor(() => (st().palette || []).length === 6 && st().palette[0].value === '#123456'));
   }
 
   console.log('\nCOLLECTIONS');

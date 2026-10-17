@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useDraftSync } from '../session/hooks';
 import { useStore } from '../store/useStore';
+import { paletteCss } from '../editor/palette';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -477,6 +478,10 @@ function MenuRow({ item, index, total, depth, pages, onUpdate, onRemove, onAddCh
 // Stays at the top while scrolling the settings; "Mobile" narrows the frame below the breakpoint.
 function LivePreview({ items, settings, device, onDevice }) {
   const [html, setHtml] = useState('');
+  // the global colours, so menu colours that point to them show as on the site
+  const palette = useStore((st) => st.palette);
+  const loadPalette = useStore((st) => st.loadPalette);
+  useEffect(() => { if (!palette) loadPalette(); }, [palette, loadPalette]);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -492,7 +497,7 @@ function LivePreview({ items, settings, device, onDevice }) {
   }, [items, settings]);
 
   const doc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>:root{--brand-color:#3b82f6}html,body{margin:0;padding:0;background:#f1f5f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}${DUMMY_CSS}</style>
+    <style>:root{--brand-color:${palette && palette[0] ? palette[0].value : '#3b82f6'};${paletteCss(palette)}}html,body{margin:0;padding:0;background:#f1f5f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}${DUMMY_CSS}</style>
     </head><body>${html}${DUMMY_PAGE}</body></html>`;
   const mobile = device === 'mobile';
 

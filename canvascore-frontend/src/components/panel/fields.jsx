@@ -1,7 +1,9 @@
 // Reusable controls of the property panel (sections, spacing box, list item cards, labelled fields).
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Image as ImageIcon } from 'lucide-react';
 import { Section } from '../../ui/kit';
+import { useStore } from '../../store/useStore';
+import { colorRef, parseColorRef, resolveColor } from '../../editor/palette';
 import { handleNumericKey, lstIconBtn, fldInput, fldLabel } from './helpers';
 
 // Collapsible section (same look everywhere: ui-section from the UI kit)
@@ -67,25 +69,59 @@ export const ChkF = ({ label, checked, onChange }) => (
 );
 // Color field: swatch + typed value (any CSS color) + Transparent + clear. Used for every color in the panels.
 const checker = 'repeating-conic-gradient(#94a3b8 0% 25%, #e2e8f0 0% 50%) 50% / 10px 10px';
+// The global colours as swatches under a colour field; picking one stores a reference, so the field follows the
+// palette when it changes (Global Options › Global colours)
+export const PaletteSwatches = ({ value, onPick }) => {
+  const palette = useStore((s) => s.palette);
+  const loadPalette = useStore((s) => s.loadPalette);
+  useEffect(() => { if (!palette) loadPalette(); }, [palette, loadPalette]);
+  if (!palette || !palette.length) return null;
+  const ref = parseColorRef(value);
+  return (
+    <div className="cc-swatches" role="group" aria-label="Global colours" style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+      {palette.map((c) => (
+        <button key={c.id} type="button" title={`${c.name} (global colour)`} aria-label={`${c.name} (global colour)`} aria-pressed={!!ref && ref.id === c.id}
+          onClick={() => onPick(colorRef(c))}
+          style={{ width: 20, height: 20, borderRadius: '50%', cursor: 'pointer', padding: 0, background: c.value, border: ref && ref.id === c.id ? '2px solid #38bdf8' : '1px solid #475569', boxShadow: ref && ref.id === c.id ? '0 0 0 2px #0f172a inset' : 'none' }} />
+      ))}
+    </div>
+  );
+};
+
 export const ColorInput = ({ value, onChange, placeholder, allowTransparent = true, allowClear = true, label }) => {
+  const palette = useStore((s) => s.palette);
   const v = value ?? '';
-  const hex = /^#[0-9a-fA-F]{6}$/.test(v) ? v : (/^#[0-9a-fA-F]{3}$/.test(v) ? '#' + v.slice(1).split('').map(c => c + c).join('') : null);
+  const ref = parseColorRef(v);
+  const global = ref ? (palette || []).find((c) => c.id === ref.id) : null;
+  const shown = resolveColor(v, palette);
+  const hex = /^#[0-9a-fA-F]{6}$/.test(shown) ? shown : (/^#[0-9a-fA-F]{3}$/.test(shown) ? '#' + shown.slice(1).split('').map(c => c + c).join('') : null);
   const isTransparent = v === 'transparent';
   const chip = { height: '30px', padding: '0 8px', fontSize: '11px', fontWeight: 600, borderRadius: '6px', cursor: 'pointer', border: '1px solid #334155', flexShrink: 0 };
   return (
-    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-      <span style={{ position: 'relative', width: '30px', height: '30px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0, border: '1px solid #334155', background: isTransparent || !v ? checker : v }}>
-        <input type="color" aria-label={label ? `Pick ${label}` : 'Pick a color'} value={hex || '#ffffff'} onChange={e => onChange(e.target.value)}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 'none', padding: 0 }} />
-      </span>
-      <input type="text" aria-label={label || 'Color'} style={{ ...fldInput, flex: 1, minWidth: 0 }} value={v} onChange={e => onChange(e.target.value)} placeholder={placeholder || 'Default'} />
-      {allowTransparent && (
-        <button type="button" onClick={() => onChange('transparent')} title="No fill (transparent)" aria-pressed={isTransparent}
-          style={{ ...chip, background: isTransparent ? '#38bdf8' : '#1e293b', color: isTransparent ? '#0f172a' : '#cbd5e1' }}>Transparent</button>
-      )}
-      {allowClear && v !== '' && (
-        <button type="button" onClick={() => onChange('')} title="Back to default" aria-label="Clear color" style={{ ...chip, background: 'transparent', color: '#94a3b8', padding: '0 6px' }}>×</button>
-      )}
+    <div>
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <span style={{ position: 'relative', width: '30px', height: '30px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0, border: '1px solid #334155', background: isTransparent || !v ? checker : shown }}>
+          <input type="color" aria-label={label ? `Pick ${label}` : 'Pick a color'} value={hex || '#ffffff'} onChange={e => onChange(e.target.value)}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 'none', padding: 0 }} />
+        </span>
+        {ref ? (
+          // A global colour: shown by name; "Unlink" keeps today's colour as a fixed value
+          <span className="cc-color-global" style={{ ...fldInput, flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 0 }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{global ? global.name : 'Missing colour'} <span style={{ color: '#64748b' }}>· global</span></span>
+            <button type="button" onClick={() => onChange(shown || '')} title="Keep this colour but stop following the global colour" style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: 11, cursor: 'pointer', padding: 0 }}>Unlink</button>
+          </span>
+        ) : (
+          <input type="text" aria-label={label || 'Color'} style={{ ...fldInput, flex: 1, minWidth: 0 }} value={v} onChange={e => onChange(e.target.value)} placeholder={placeholder || 'Default'} />
+        )}
+        {allowTransparent && (
+          <button type="button" onClick={() => onChange('transparent')} title="No fill (transparent)" aria-pressed={isTransparent}
+            style={{ ...chip, background: isTransparent ? '#38bdf8' : '#1e293b', color: isTransparent ? '#0f172a' : '#cbd5e1' }}>Transparent</button>
+        )}
+        {allowClear && v !== '' && (
+          <button type="button" onClick={() => onChange('')} title="Back to default" aria-label="Clear color" style={{ ...chip, background: 'transparent', color: '#94a3b8', padding: '0 6px' }}>×</button>
+        )}
+      </div>
+      <PaletteSwatches value={v} onPick={onChange} />
     </div>
   );
 };

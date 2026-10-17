@@ -64,6 +64,15 @@ check('CSS values: colors and lengths only', cc_css_color('red;}x{', '#fff') ===
 check('image URLs: javascript: and data:text are dropped, http(s), paths and raster data kept', cc_img_url(" JAVA\tSCRIPT:x") === '' && cc_img_url('data:text/html,x') === '' && cc_img_url('/uploads/a.png') === '/uploads/a.png' && cc_img_url('data:image/png;base64,AA') !== '');
 check('inline styles of blocks: one value per property', build_inline_style(['color' => 'red; position:fixed', 'marginTop' => '4px']) === 'margin-top: 4px; ');
 
+echo "\nGLOBAL COLOURS\n";
+$pal = cc_palette(['brandColor' => '#ff0000', 'colors' => [['id' => 'accent', 'name' => 'Gold', 'value' => '#FFD700'], ['id' => 'sale', 'name' => '<b>Sale</b>', 'value' => '#e11d48'],
+    ['id' => 'Bad Id', 'value' => '#000'], ['id' => 'x', 'value' => 'red;}body{'], ['id' => 'accent', 'value' => '#111111']]]);
+check('palette: the five built-in colours first (primary = the brand colour), then valid custom ones', implode(',', array_column($pal, 'id')) === 'primary,secondary,accent,text,background,sale' && $pal[0]['value'] === '#ff0000' && $pal[2]['name'] === 'Gold' && $pal[2]['value'] === '#ffd700', json_encode($pal));
+check('…names lose markup, values are hex only, a duplicate id is ignored', $pal[5]['name'] === 'bSale/b' && !strpos(json_encode($pal), 'red;'));
+check('…as CSS variables for :root', strpos(cc_palette_css($pal), '--cc-color-accent: #ffd700;') !== false && strpos(cc_palette_css($pal), '--cc-color-sale: #e11d48;') !== false);
+check('colour references are accepted where colours are validated', cc_css_color('var(--cc-color-accent, #ffd700)', 'x') === 'var(--cc-color-accent, #ffd700)' && cc_css_color('var(--cc-color-accent, red;})', 'x') === 'x' && cc_is_color_ref('var(--brand-color, #3b82f6)') && !cc_is_color_ref('var(--evil)'));
+check('rich text keeps the site colour and global colours, never another var()', cc_sanitize_html('<p><span style="color: var(--brand-color, #3b82f6)">a</span><span style="color: var(--cc-color-accent, #ffd700); background: var(--evil)">b</span></p>') === '<p><span style="color: var(--brand-color, #3b82f6)">a</span><span style="color: var(--cc-color-accent, #ffd700)">b</span></p>');
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);

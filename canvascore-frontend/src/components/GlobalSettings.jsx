@@ -3,6 +3,8 @@ import { useDraftSync } from '../session/hooks';
 import { useStore } from '../store/useStore';
 import { PanelTop, PanelBottom, Edit3, Trash2, Save, Palette, Mail, Search, ShieldCheck, Settings2, Cookie, Megaphone } from 'lucide-react';
 import RedirectsCard from './RedirectsCard';
+import GlobalColorsCard from './GlobalColorsCard';
+import { normalizePalette } from '../editor/palette';
 import ImageUrlField from './ImageUrlField';
 import { Button, Card, Field, Input, Select, Checkbox, PageHeader } from '../ui/kit';
 import { notify } from '../ui/notify';
@@ -51,6 +53,7 @@ export default function GlobalSettings() {
       draft.saved(settings);
       setRestoredAt(null);
       useStore.getState().setBranding(settings);   // new site name / favicon in the sidebar right away
+      useStore.getState().setPalette(normalizePalette(settings));   // the colour fields' swatches follow
       const pub = await publishSiteAsync();
       if (pub && pub.success) notify('Global options saved and site updated.');
       else notify('Global options saved, but publishing the site had an issue.', 'error');
@@ -101,14 +104,10 @@ export default function GlobalSettings() {
         </div>
       )}
 
-      <Card title="Brand & typography" icon={Palette} description="The brand color is used by buttons, links and the site color in the text editor.">
+      <GlobalColorsCard settings={settings} set={set} />
+
+      <Card title="Typography" icon={Palette} description="The site's font. The brand colour is the Primary global colour above.">
         <div className="ui-grid">
-          <Field label="Primary brand color">
-            <div className="ui-row" style={{ flexWrap: 'nowrap' }}>
-              <input type="color" aria-label="Pick the brand color" value={settings.brandColor || '#3b82f6'} onChange={e => set({ brandColor: e.target.value })} style={{ width: 38, height: 34, border: 'none', borderRadius: 6, cursor: 'pointer', padding: 0, background: 'none', flexShrink: 0 }} />
-              <Input type="text" value={settings.brandColor || '#3b82f6'} onChange={e => set({ brandColor: e.target.value })} />
-            </div>
-          </Field>
           <Field label="Primary font (Google Fonts)">
             <Select value={settings.fontFamily || 'Inter'} onChange={e => set({ fontFamily: e.target.value })} options={FONTS} />
           </Field>

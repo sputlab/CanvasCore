@@ -304,9 +304,11 @@ try {
   await boot(be6);
   await waitFor(() => buttonByText('Global Options'));
   click(buttonByText('Global Options'));
-  const brand = await waitFor(() => $$('input[type="text"]').find((i) => i.value === '#112233'));
+  // the Primary global colour is the brand colour: its value field shows the saved one
+  const brand = await waitFor(() => { const i = $('input[aria-label="Primary value"]'); return i && i.value === '#112233' ? i : null; });
   check('Global Options loads the data from the server', !!brand);
   setInput(brand, '#abcdef');
+  brand.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true }));   // a hex value is applied when the field loses focus
   check('the edit ends up in the local backup', !!(await waitFor(() => draftKeys().some((k) => k.endsWith(':settings')), { timeout: 3000 })));
   alerts.length = 0; be6.authenticated = false;
   click(buttonByText('Save & Publish'));

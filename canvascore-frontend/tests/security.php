@@ -129,6 +129,15 @@ $t0 = microtime(true); (new Client())->login('owner', 'whatever1'); $tk = microt
 check('an unknown username takes as long as a wrong password (no account discovery by timing)', $tu > $tk * 0.5, sprintf('%.3fs vs %.3fs', $tu, $tk));
 @unlink($data . '/login_attempts.json');
 
+echo "\nGLOBAL COLOURS\n";
+$r = $own->api('save_settings', ['siteName' => 'Test', 'colors' => [['id' => 'primary', 'name' => 'Brand', 'value' => '#112233'], ['id' => 'evil', 'name' => '</style><script>x()</script>', 'value' => 'red;}body{display:none'], ['id' => 'ok', 'name' => '<img onerror=x>', 'value' => '#abcdef']]]);
+$saved = json_decode((string)file_get_contents($data . '/settings.json'), true);
+check('saved global colours are cleaned: hex values only, no markup in names; the primary colour is the brand colour', !empty($r['json']['success']) && $saved['brandColor'] === '#112233'
+    && !strpos(json_encode($saved['colors']), 'script') && !strpos(json_encode($saved['colors']), 'display:none') && !strpos(json_encode($saved['colors']), '<img') && in_array('ok', array_column($saved['colors'], 'id'), true) && !in_array('evil', array_column($saved['colors'], 'id'), true), json_encode($saved['colors'] ?? null));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$home = (string)@file_get_contents($web . '/404.html');
+check('published pages define the palette as CSS variables', strpos($home, '--cc-color-primary: #112233;') !== false && strpos($home, '--cc-color-ok: #abcdef;') !== false && strpos($home, '--brand-color: #112233') !== false);
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);
