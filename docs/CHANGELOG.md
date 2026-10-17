@@ -10,7 +10,18 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-17 — Styles per device, global colours and text styles
+
 ### Added
+- **Global colours** (Global Options): a named palette of five built-in colours (Primary, which is the brand colour,
+  Secondary, Accent, Text and Background) that can be renamed and changed, plus custom colours that can be added and
+  removed. Every colour field of the editor and the text editor's colour menu offers the palette as swatches. A field
+  that uses a global colour follows it when the palette changes; Unlink keeps the current colour as a fixed value.
+  Published pages define the palette as CSS variables.
+- **Text styles** (Global Options): named presets for H1–H6, body text, small text and buttons, each with a font, size,
+  weight and line height, and tablet and phone overrides. The site's own headings, body, small text and buttons use
+  them. In the Style tab, Typography › Text style applies a preset to a block; values the block sets itself still win.
+  Button blocks keep their bold default unless the Button preset sets a weight.
 - **Styles per device** (roadmap Phase 1): every block can have its own spacing, size, typography, colours, borders
   and layout on tablets (up to 1024px) and phones (up to 767px). The Style tab edits the device being previewed: a
   Desktop / Tablet / Phone switch at its top is the same as the editor's preview size. Tablet values override the
