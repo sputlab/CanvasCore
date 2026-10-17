@@ -60,7 +60,8 @@ try {
     if (isset($settings['footerEnabled']) && empty($settings['footerEnabled'])) $footer_html = '';
 
     // These go into <style> and <title>: only safe values (a color, a font name, escaped text)
-    $brand_color = (is_string($settings['brandColor'] ?? null) && preg_match('/^#[0-9a-fA-F]{3,8}$/', $settings['brandColor'])) ? $settings['brandColor'] : '#3b82f6';
+    $palette = cc_palette($settings);
+    $brand_color = $palette[0]['value'];   // the primary global colour is the brand colour
     $font_family = preg_replace('/[^A-Za-z0-9 \-]/', '', (string)($settings['fontFamily'] ?? 'Inter'));
     if (trim($font_family) === '') $font_family = 'Inter';
     $site_suffix = htmlspecialchars(isset($settings['siteSuffix']) ? (string)$settings['siteSuffix'] : ' | My Site');
@@ -138,6 +139,7 @@ try {
     $template = file_get_contents($master_file);
     // Block effects and button hovers (shared with the editor canvas)
     $effects_file = __DIR__ . '/effects.css';
+    $template = str_replace('{{COLOR_VARS}}', cc_palette_css($palette), $template);   // global colours, in :root
     $template = str_replace('{{EFFECTS_CSS}}', file_exists($effects_file) ? file_get_contents($effects_file) : '', $template);
 
     // Only published/modified pages (the live version is always the parent row).

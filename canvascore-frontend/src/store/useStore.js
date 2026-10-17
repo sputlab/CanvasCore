@@ -1,8 +1,10 @@
 import { create } from 'zustand';
+import { normalizePalette } from '../editor/palette';
 import { flushDrafts, setDraftUser } from '../session/drafts';
 import { CONTAINER_TYPES } from '../editor/blockCatalog';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
+let paletteRequest = null;   // one settings request for all the colour fields
 
 // Unique ids even for many blocks created in the same millisecond (templates, masters, imports)
 let idSeq = 0;
@@ -161,6 +163,7 @@ export const useStore = create((set, get) => ({
   appVersion: (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''),
   appBuild: (typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 0),
   serverVersion: null,
+  palette: null,              // the global colours (Global Options), loaded once by the colour fields: [{id, name, value}]
   branding: { siteName: '', faviconUrl: '' },   // site name + favicon (Global Options) for the login and the sidebar
   demo: null,   // demo mode only: { username, password, resetMinutes, nextResetIn, resetAt, maxNewPages, maxNewItems }
 
@@ -196,6 +199,14 @@ export const useStore = create((set, get) => ({
         set({ demo: data.demo && typeof data.demo === 'object' ? { ...data.demo, resetAt: Date.now() + (Number(data.demo.nextResetIn) || 0) * 1000 } : null });
       }
     } catch { /* noop: the default name and icon stay */ }
+  },
+  setPalette: (list) => set({ palette: Array.isArray(list) ? list : null }),
+  loadPalette: () => {
+    if (paletteRequest) return paletteRequest;
+    paletteRequest = fetch('api.php?action=get_settings').then((r) => r.json())
+      .then((d) => { get().setPalette(normalizePalette(d)); })
+      .catch(() => { paletteRequest = null; });
+    return paletteRequest;
   },
   setBranding: (b) => set({ branding: { siteName: String((b && b.siteName) || '').trim(), faviconUrl: String((b && b.faviconUrl) || '').trim() } }),
 

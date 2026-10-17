@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
+import { normalizePalette, paletteVars } from '../editor/palette';
 import SortableBlock from './SortableBlock';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -21,7 +22,9 @@ function useSiteLook() {
         if (!alive || !data || typeof data !== 'object') return;
         // The published pages use Inter when no site font is chosen (rebuild_all.php): the canvas does the same
         const fontFamily = (typeof data.fontFamily === 'string' ? data.fontFamily.replace(/[^A-Za-z0-9 -]/g, '') : '').trim() || 'Inter';
-        setLook({ brandColor: /^#[0-9a-fA-F]{3,8}$/.test(data.brandColor || '') ? data.brandColor : '#3b82f6', fontFamily });
+        const palette = normalizePalette(data);
+        useStore.getState().setPalette(palette);
+        setLook({ brandColor: palette[0].value, fontFamily });
         if (fontFamily && !document.getElementById('cc-canvas-font')) {
           const link = document.createElement('link');
           link.id = 'cc-canvas-font'; link.rel = 'stylesheet';
@@ -37,6 +40,7 @@ function useSiteLook() {
 
 export default function Canvas() {
   const { blocks, moveBlock, activePage, viewport, setSelectedBlockId } = useStore();
+  const palette = useStore((s) => s.palette);
   const site = useSiteLook();
 
   const handleDragEnd = (event) => {
@@ -71,7 +75,9 @@ export default function Canvas() {
     overflow: 'hidden',
     position: 'relative',
     // Same variables as master.html, so brand-colored buttons and the site font match the published page
-    '--brand-color': site.brandColor,
+    // the global colours (Global Options): the primary one is the brand colour
+    ...paletteVars(palette),
+    '--brand-color': palette && palette[0] ? palette[0].value : site.brandColor,
     '--font-family': `'${site.fontFamily}', sans-serif`
   };
 

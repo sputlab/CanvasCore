@@ -229,12 +229,53 @@ if (!function_exists('sanitize_slug')) {
 // Values that go into CSS: a color (hex, rgb()/rgba(), a color name) or a length; anything else -> $default
 function cc_css_color($v, $default) {
     $v = trim((string)$v);
+    if (cc_is_color_ref($v)) return $v;
     return preg_match('/^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,30}|rgba?\(\s*[\d.]+%?\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?\s*(,\s*[\d.]+%?\s*)?\))$/', $v) ? $v : $default;
 }
 function cc_css_length($v, $default) {
     $v = trim((string)$v);
     return preg_match('/^\d{1,5}(\.\d+)?(px|%|rem|em|vw)?$/', $v) ? $v : $default;
 }
+// ---------------------------------------------------------------------------
+// Global colours (Global Options): a named palette in settings.json ("colors": [{id, name, value}]). Each colour is
+// a CSS variable (--cc-color-<id>) on published pages and in the editor; blocks that use one store a reference,
+// var(--cc-color-<id>, <its value when chosen>), so changing the palette changes the whole site. "primary" is the
+// brand colour (brandColor, --brand-color). Mirrors src/editor/palette.js.
+// ---------------------------------------------------------------------------
+const CC_DEFAULT_COLORS = [['primary', 'Primary', '#3b82f6'], ['secondary', 'Secondary', '#0f172a'], ['accent', 'Accent', '#f59e0b'],
+    ['text', 'Text', '#0f172a'], ['background', 'Background', '#ffffff']];
+const CC_COLOR_REF = '/^var\(--(?:brand-color|cc-color-[a-z][a-z0-9-]{0,31})(?:\s*,\s*(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}))?\)$/';
+function cc_is_color_ref($v) { return is_string($v) && preg_match(CC_COLOR_REF, trim($v)) === 1; }
+function cc_palette_hex($v) { $v = trim((string)$v); return preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $v) ? strtolower($v) : null; }
+// The site's palette: the built-in colours (in this order, names editable) then the custom ones; bad entries dropped
+function cc_palette($settings) {
+    $settings = is_array($settings) ? $settings : [];
+    $saved = [];
+    foreach ((is_array($settings['colors'] ?? null) ? $settings['colors'] : []) as $c) {
+        if (!is_array($c)) continue;
+        $id = strtolower(trim((string)($c['id'] ?? '')));
+        $val = cc_palette_hex($c['value'] ?? '');
+        if (!preg_match('/^[a-z][a-z0-9-]{0,31}$/', $id) || $val === null || isset($saved[$id]) || count($saved) >= 40) continue;
+        $name = trim(preg_replace('/[\x00-\x1f\x7f<>]/', '', (string)($c['name'] ?? '')));
+        $saved[$id] = ['id' => $id, 'name' => mb_substr($name, 0, 40), 'value' => $val];
+    }
+    $out = [];
+    foreach (CC_DEFAULT_COLORS as [$id, $name, $value]) {
+        $c = $saved[$id] ?? ['id' => $id, 'name' => $name, 'value' => $value];
+        if ($id === 'primary' && !isset($saved['primary']) && ($b = cc_palette_hex($settings['brandColor'] ?? ''))) $c['value'] = $b;
+        if ($c['name'] === '') $c['name'] = $name;
+        $out[] = $c; unset($saved[$id]);
+    }
+    foreach ($saved as $c) { if ($c['name'] === '') $c['name'] = ucfirst($c['id']); $out[] = $c; }
+    return $out;
+}
+// The palette as CSS custom properties (inside :root)
+function cc_palette_css($palette) {
+    $css = '';
+    foreach ($palette as $c) $css .= '--cc-color-' . $c['id'] . ': ' . $c['value'] . '; ';
+    return $css;
+}
+
 // Top-level folders of the site that belong to CanvasCore itself: no page, collection or redirect may use them
 // (a page published there would replace or redirect the admin, the images or the data).
 function cc_reserved_slugs() {
@@ -682,6 +723,7 @@ function cc_sanitize_style($css) {
         [$prop, $val] = array_map('trim', explode(':', $decl, 2));
         $prop = strtolower($prop);
         if (!in_array($prop, CC_STYLE_PROPS, true) || $val === '') continue;
+        if (in_array($prop, ['color', 'background-color', 'background', 'border-color', 'text-decoration-color'], true) && cc_is_color_ref($val)) { $out[] = $prop . ': ' . trim($val); continue; }
         $probe = strtolower(preg_replace('/[\x00-\x20\x7f]+/', '', $val));
         if (preg_match('/[\\\\<>@{}"`]|url\(|expression|javascript|vbscript|-moz-binding|behavior|image-set|var\(|env\(|attr\(/', $probe)) continue;
         if ($prop === 'display' && !in_array($probe, ['block', 'inline', 'inline-block', 'none', 'table', 'table-cell', 'table-row', 'list-item', 'flex', 'inline-flex'], true)) continue;

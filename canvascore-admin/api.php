@@ -427,6 +427,11 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($decoded['trustedProxies'])) {   // comma separated IP addresses only
         $decoded['trustedProxies'] = implode(', ', array_filter(array_map('trim', explode(',', (string)$decoded['trustedProxies'])), function ($ip) { return filter_var($ip, FILTER_VALIDATE_IP); }));
     }
+    // Global colours: only valid entries are kept; the primary colour is the brand colour
+    if (isset($decoded['colors'])) {
+        $decoded['colors'] = cc_palette(['colors' => $decoded['colors'], 'brandColor' => $decoded['brandColor'] ?? '']);
+        $decoded['brandColor'] = $decoded['colors'][0]['value'];
+    }
     if (isset($decoded['brandColor']) && !preg_match('/^#[0-9a-fA-F]{3,8}$/', (string)$decoded['brandColor'])) {
         echo json_encode(['success' => false, 'message' => 'The brand color must be a hex color such as #3b82f6.']); exit;
     }

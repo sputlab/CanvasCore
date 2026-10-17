@@ -14,6 +14,7 @@ import {
 import { useStore } from '../store/useStore';
 import MediaPickerModal from '../components/MediaPickerModal';
 import { tidyHtml } from './cleanHtml';
+import { colorRef } from './palette';
 import { safeHtml } from '../utils/safeHtml';
 import {
   TOOLSETS, BLOCK_FORMATS, FONTS, SIZES, TEXT_COLORS, HIGHLIGHTS, SITE_COLOR, TB_ATTR,
@@ -233,6 +234,10 @@ const POP_LABEL = { color: 'Text color', highlight: 'Highlight', link: 'Link', i
 
 function ColorPop({ brand, colors, label, highlight, onPick }) {
   const [custom, setCustom] = useState(highlight ? '#fef08a' : '#0f172a');
+  // the global colours (Global Options): the text follows them when the palette changes
+  const palette = useStore((s) => s.palette);
+  const loadPalette = useStore((s) => s.loadPalette);
+  useEffect(() => { if (!palette) loadPalette(); }, [palette, loadPalette]);
   return (
     <div>
       <div style={popTitle}>{label}</div>
@@ -241,6 +246,14 @@ function ColorPop({ brand, colors, label, highlight, onPick }) {
           style={{ ...swatch, background: brand, width: 'auto', padding: '0 8px', color: '#fff', fontSize: 11, fontWeight: 700 }}>Site</button>
         {colors.map((c) => <button key={c} type="button" title={c} aria-label={c} onClick={() => onPick(c)} style={{ ...swatch, background: c }} />)}
       </div>
+      {palette && palette.length > 0 && (
+        <div className="cc-rte-palette" role="group" aria-label="Global colours" style={{ marginTop: 8 }}>
+          <div style={{ ...popTitle, marginBottom: 4 }}>Global colours</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxWidth: 236 }}>
+            {palette.map((c) => <button key={c.id} type="button" title={`${c.name} (follows Global Options)`} aria-label={`${c.name} (global colour)`} onClick={() => onPick(colorRef(c))} style={{ ...swatch, background: c.value }} />)}
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: 8 }}>
         <input type="color" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="Custom color" style={{ width: 30, height: 26, padding: 0, border: 'none', background: 'none' }} />
         <button type="button" onClick={() => onPick(custom)} style={popBtn}>Apply</button>
