@@ -138,6 +138,16 @@ $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 $home = (string)@file_get_contents($web . '/404.html');
 check('published pages define the palette as CSS variables', strpos($home, '--cc-color-primary: #112233;') !== false && strpos($home, '--cc-color-ok: #abcdef;') !== false && strpos($home, '--brand-color: #112233') !== false);
 
+echo "\nTEXT STYLES\n";
+$r = $own->api('save_settings', ['siteName' => 'Test', 'typography' => ['h1' => ['font' => 'Lato', 'size' => '3rem;}body{display:none}', 'tablet' => ['size' => '2.4rem']], 'h2' => ['size' => '2rem']]]);
+$saved = json_decode((string)file_get_contents($data . '/settings.json'), true);
+check('saved text styles: a size with CSS in it is dropped; only valid values stored', !empty($r['json']['success']) && !isset($saved['typography']['h1']['size']) && $saved['typography']['h1']['font'] === 'Lato'
+    && strpos(json_encode($saved['typography'] ?? []), 'display') === false, json_encode($saved['typography'] ?? null));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$home = (string)@file_get_contents($web . '/404.html');
+check('published pages: text styles as CSS, and the font of a text style is loaded from Google Fonts', strpos($home, '--cc-type-h2-size: 2rem;') !== false && strpos($home, 'h2{font-size: var(--cc-type-h2-size);') !== false
+    && strpos($home, 'family=Lato') !== false, substr($home, 0, 0));
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

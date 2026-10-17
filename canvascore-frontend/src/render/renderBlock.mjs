@@ -10,6 +10,7 @@
 
 import { effectClasses, buttonHover } from './effects.mjs';
 import { ccPlain } from './blockRuntime.mjs';
+import { withTextPreset } from './typography.mjs';
 
 export function escapeHtml(s) {
   return String(s ?? '')
@@ -68,7 +69,7 @@ function resolveInternalUrl(url) {
 // Canonical root of a block (single source shared editor<->compiler for containers).
 // Returns tag + id + className + style (camelCase object, ready for React).
 export function blockRoot(block) {
-  const styles = block.styles || {};
+  const styles = withTextPreset(block.styles);   // the block's text style (Style tab) under its own values
   const content = block.content || {};
   const id = block.id ? String(block.id).replace(/[^a-zA-Z0-9_-]/g, '') : 'b_x';
   const innerId = content.customId ? String(content.customId).replace(/[^a-zA-Z0-9_-]/g, '') : id;
@@ -283,7 +284,7 @@ function renderBlockBody(block, opts = {}) {
   if (!block || typeof block !== 'object') return '';
   const field = (name, placeholder) => (opts.fields ? ` data-cc-field="${name}" contenteditable="true" data-cc-placeholder="${placeholder}"` : '');
 
-  const styles = block.styles || {};
+  const styles = withTextPreset(block.styles);   // the block's text style (Style tab) under its own values
   const content = block.content || {};
   const styleAttr = buildInlineStyle(styles);
   const styleString = styleAttr ? ` style="${styleAttr}"` : '';
@@ -360,7 +361,7 @@ function renderBlockBody(block, opts = {}) {
       delete own.margin; delete own.textAlign; delete own.animation;
       const globalStyle = useGlobal ? 'background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; ' : '';
       const hv = buttonHover({ bg: content.btnHoverBg, color: content.btnHoverColor, border: content.btnHoverBorder, effect: content.btnEffect });
-      const btnStyle = 'display:inline-block; text-decoration:none; font-weight:bold; box-sizing:border-box; ' + globalStyle + buildInlineStyle(own) + escapeHtml(hv.vars);
+      const btnStyle = 'display:inline-block; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; ' + globalStyle + buildInlineStyle(own) + escapeHtml(hv.vars);
       return customCss + `<div id="${innerId}" class="cc-btn-wrap${animClass}${innerClass}" style="text-align:${align}; margin:${margin};">\n<a href="${url}" class="cc-btn${hv.cls}" style="${btnStyle}">${text}</a>\n</div>\n`;
     }
 
@@ -387,7 +388,7 @@ function renderBlockBody(block, opts = {}) {
         const bUrl = escapeHtml(resolveInternalUrl(btn.url));
         const hv = buttonHover({ bg: btn.hoverBg, color: btn.hoverColor, border: btn.hoverBorder, effect: btn.effect });
         const bBorder = btn.borderColor ? `2px solid ${escapeHtml(btn.borderColor)}` : 'none';
-        buttonsHtml += `<a href="${bUrl}" class="cc-btn${hv.cls}" style="display:inline-block; padding:14px 28px; background:${escapeHtml(btn.bgColor)}; color:${escapeHtml(btn.textColor)}; border-radius:${escapeHtml(btn.borderRadius)}; text-decoration:none; font-weight:bold; border:${bBorder}; box-sizing:border-box; ${escapeHtml(hv.vars)}">${escapeHtml(btn.text)}</a>`;
+        buttonsHtml += `<a href="${bUrl}" class="cc-btn${hv.cls}" style="display:inline-block; padding:14px 28px; background:${escapeHtml(btn.bgColor)}; color:${escapeHtml(btn.textColor)}; border-radius:${escapeHtml(btn.borderRadius)}; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); border:${bBorder}; box-sizing:border-box; ${escapeHtml(hv.vars)}">${escapeHtml(btn.text)}</a>`;
       }
       buttonsHtml += `</div>`;
       return customCss + `<section id="${innerId}" class="cc-hero${animClass}${innerClass}" style="${styleAttr} ${bg} min-height:${minHeight}; display:flex; flex-direction:column; justify-content:center;">\n<div>\n${opts.fields ? `<div${field('title', 'Title')}>${title}</div>` : title}\n<div style="margin:20px 0;"${field('subtitle', 'Subtitle')}>${subtitle}</div>\n${buttonsHtml}\n</div>\n</section>\n`;

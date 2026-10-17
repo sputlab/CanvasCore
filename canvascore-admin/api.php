@@ -428,6 +428,8 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $decoded['trustedProxies'] = implode(', ', array_filter(array_map('trim', explode(',', (string)$decoded['trustedProxies'])), function ($ip) { return filter_var($ip, FILTER_VALIDATE_IP); }));
     }
     // Global colours: only valid entries are kept; the primary colour is the brand colour
+    // Text styles: only valid presets and values are kept
+    if (isset($decoded['typography'])) $decoded['typography'] = cc_typography(['typography' => $decoded['typography']]);
     if (isset($decoded['colors'])) {
         $decoded['colors'] = cc_palette(['colors' => $decoded['colors'], 'brandColor' => $decoded['brandColor'] ?? '']);
         $decoded['brandColor'] = $decoded['colors'][0]['value'];

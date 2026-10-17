@@ -164,6 +164,7 @@ export const useStore = create((set, get) => ({
   appBuild: (typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 0),
   serverVersion: null,
   palette: null,              // the global colours (Global Options), loaded once by the colour fields: [{id, name, value}]
+  typography: null,           // the text styles (Global Options › Text styles), as normalizeTypography() returns them
   branding: { siteName: '', faviconUrl: '' },   // site name + favicon (Global Options) for the login and the sidebar
   demo: null,   // demo mode only: { username, password, resetMinutes, nextResetIn, resetAt, maxNewPages, maxNewItems }
 
@@ -201,6 +202,7 @@ export const useStore = create((set, get) => ({
     } catch { /* noop: the default name and icon stay */ }
   },
   setPalette: (list) => set({ palette: Array.isArray(list) ? list : null }),
+  setTypography: (t) => set({ typography: t && typeof t === 'object' ? t : null }),
   loadPalette: () => {
     if (paletteRequest) return paletteRequest;
     paletteRequest = fetch('api.php?action=get_settings').then((r) => r.json())

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { normalizePalette, paletteVars } from '../editor/palette';
+import { normalizeTypography, typeCanvasCss, typeFontsUsed } from '../render/typography.mjs';
 import SortableBlock from './SortableBlock';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -24,11 +25,14 @@ function useSiteLook() {
         const fontFamily = (typeof data.fontFamily === 'string' ? data.fontFamily.replace(/[^A-Za-z0-9 -]/g, '') : '').trim() || 'Inter';
         const palette = normalizePalette(data);
         useStore.getState().setPalette(palette);
+        useStore.getState().setTypography(normalizeTypography(data));
         setLook({ brandColor: palette[0].value, fontFamily });
-        if (fontFamily && !document.getElementById('cc-canvas-font')) {
+        // the site font and the fonts of the text styles
+        const families = [fontFamily, ...typeFontsUsed(normalizeTypography(data)).filter((f) => f !== fontFamily)];
+        if (!document.getElementById('cc-canvas-font')) {
           const link = document.createElement('link');
           link.id = 'cc-canvas-font'; link.rel = 'stylesheet';
-          link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFamily)}:wght@300;400;600;700;900&display=swap`;
+          link.href = `https://fonts.googleapis.com/css2?${families.map((f) => `family=${encodeURIComponent(f)}:wght@300;400;600;700;900`).join('&')}&display=swap`;
           document.head.appendChild(link);
         }
       })
@@ -41,6 +45,7 @@ function useSiteLook() {
 export default function Canvas() {
   const { blocks, moveBlock, activePage, viewport, setSelectedBlockId } = useStore();
   const palette = useStore((s) => s.palette);
+  const typography = useStore((s) => s.typography);
   const site = useSiteLook();
 
   const handleDragEnd = (event) => {
@@ -84,6 +89,8 @@ export default function Canvas() {
   return (
     <div style={{ padding: viewport !== 'desktop' ? '40px 0' : '0', minHeight: '100%', display: 'flex', justifyContent: 'center' }} onClick={() => setSelectedBlockId(null)}>
       <style>{EFFECTS_CSS}</style>
+      {/* the text styles of the device being edited (Global Options › Text styles) */}
+      <style>{typeCanvasCss(typography, viewport)}</style>
       <div className="cc-canvas" style={wrapperStyle} onClick={(e) => {
         // Clicking the empty area of the page clears the selection
         if(e.target === e.currentTarget) setSelectedBlockId(null);

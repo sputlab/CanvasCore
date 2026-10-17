@@ -73,6 +73,20 @@ check('…as CSS variables for :root', strpos(cc_palette_css($pal), '--cc-color-
 check('colour references are accepted where colours are validated', cc_css_color('var(--cc-color-accent, #ffd700)', 'x') === 'var(--cc-color-accent, #ffd700)' && cc_css_color('var(--cc-color-accent, red;})', 'x') === 'x' && cc_is_color_ref('var(--brand-color, #3b82f6)') && !cc_is_color_ref('var(--evil)'));
 check('rich text keeps the site colour and global colours, never another var()', cc_sanitize_html('<p><span style="color: var(--brand-color, #3b82f6)">a</span><span style="color: var(--cc-color-accent, #ffd700); background: var(--evil)">b</span></p>') === '<p><span style="color: var(--brand-color, #3b82f6)">a</span><span style="color: var(--cc-color-accent, #ffd700)">b</span></p>');
 
+echo "\nTEXT STYLES\n";
+$typo = cc_typography(['typography' => ['h1' => ['font' => 'Poppins', 'size' => '3rem', 'weight' => '700', 'lineHeight' => '1.1', 'tablet' => ['size' => '2.4rem'], 'mobile' => ['size' => 'bogus', 'font' => 'Comic Sans']],
+    'body' => ['font' => 'Comic Sans', 'size' => '17px'], 'unknown' => ['size' => '9px']]]);
+// the same literal as the JavaScript test (ui-shell.mjs), so the two agree on what is kept
+check('text styles: only known presets, fonts and values are kept; tablet and phone are overrides', json_encode($typo) === '{"h1":{"font":"Poppins","size":"3rem","weight":"700","lineHeight":"1.1","tablet":{"size":"2.4rem"}},"body":{"size":"17px"}}', json_encode($typo));
+$tcss = cc_type_css($typo);
+check('text styles as CSS: variables on :root, the elements use them, tablet overrides in a media query', strpos($tcss, ':root{--cc-type-h1-font: \'Poppins\', sans-serif;') === 0
+    && strpos($tcss, 'h1{font-family: var(--cc-type-h1-font); font-size: var(--cc-type-h1-size);') !== false && strpos($tcss, '@media(max-width:1024px){:root{--cc-type-h1-size: 2.4rem; }h1{font-size: var(--cc-type-h1-size); }}') !== false
+    && strpos($tcss, 'body{font-size: var(--cc-type-body-size); }') !== false, $tcss);
+check('text styles: a preset that is not set makes no CSS', cc_type_css([]) === '');
+$blk = cc_with_text_preset(['textPreset' => 'h2', 'fontSize' => '', 'color' => 'red']);
+check('a block with a text preset gets the preset variables; its own values win, emptied ones fall back', json_encode($blk) === '{"fontFamily":"var(--cc-type-h2-font)","fontSize":"var(--cc-type-h2-size)","fontWeight":"var(--cc-type-h2-weight)","lineHeight":"var(--cc-type-h2-line)","color":"red"}', json_encode($blk));
+check('…an unknown text preset is ignored (and never printed as a CSS property)', cc_with_text_preset(['textPreset' => 'nope', 'color' => 'red']) === ['color' => 'red']);
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);

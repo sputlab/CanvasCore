@@ -4,6 +4,8 @@ import { useStore } from '../store/useStore';
 import { PanelTop, PanelBottom, Edit3, Trash2, Save, Palette, Mail, Search, ShieldCheck, Settings2, Cookie, Megaphone } from 'lucide-react';
 import RedirectsCard from './RedirectsCard';
 import GlobalColorsCard from './GlobalColorsCard';
+import TextStylesCard from './TextStylesCard';
+import { normalizeTypography } from '../render/typography.mjs';
 import { normalizePalette } from '../editor/palette';
 import ImageUrlField from './ImageUrlField';
 import { Button, Card, Field, Input, Select, Checkbox, PageHeader } from '../ui/kit';
@@ -54,6 +56,7 @@ export default function GlobalSettings() {
       setRestoredAt(null);
       useStore.getState().setBranding(settings);   // new site name / favicon in the sidebar right away
       useStore.getState().setPalette(normalizePalette(settings));   // the colour fields' swatches follow
+      useStore.getState().setTypography(normalizeTypography(settings));   // the text styles of the editor follow
       const pub = await publishSiteAsync();
       if (pub && pub.success) notify('Global options saved and site updated.');
       else notify('Global options saved, but publishing the site had an issue.', 'error');
@@ -105,6 +108,7 @@ export default function GlobalSettings() {
       )}
 
       <GlobalColorsCard settings={settings} set={set} />
+      <TextStylesCard settings={settings} set={set} />
 
       <Card title="Typography" icon={Palette} description="The site's font. The brand colour is the Primary global colour above.">
         <div className="ui-grid">
