@@ -276,6 +276,97 @@ function cc_palette_css($palette) {
     return $css;
 }
 
+// ---------------------------------------------------------------------------
+// Text styles (Global Options › Text styles): named presets for H1–H6, body, small text and buttons, each with a font,
+// size, weight and line height; tablet and phone values override the desktop ones. Every value is a CSS variable
+// (--cc-type-<preset>-<prop>): the site's own elements are styled by cc_type_css(), and a block that picks a preset
+// (styles.textPreset) gets the variables through cc_with_text_preset(). Mirrors src/render/typography.mjs.
+// ---------------------------------------------------------------------------
+const CC_TYPE_PRESETS = ['h1' => 'h1', 'h2' => 'h2', 'h3' => 'h3', 'h4' => 'h4', 'h5' => 'h5', 'h6' => 'h6', 'body' => 'body', 'small' => 'small', 'button' => '.cc-btn'];
+const CC_TYPE_PROPS = ['font' => 'font-family', 'size' => 'font-size', 'weight' => 'font-weight', 'lineHeight' => 'line-height'];
+const CC_TYPE_SHORT = ['font' => 'font', 'size' => 'size', 'weight' => 'weight', 'lineHeight' => 'line'];
+const CC_TYPE_FONTS = ['Inter', 'Roboto', 'Poppins', 'Open Sans', 'Montserrat', 'Lato', 'Oswald', 'Playfair Display', 'Raleway', 'Ubuntu', 'Lora'];
+const CC_TYPE_WEIGHTS = ['300', '400', '600', '700', '900'];
+const CC_TYPE_TABLET_MAX = 1024;
+const CC_TYPE_MOBILE_MAX = 767;
+// One value of one property, or '' when it is not valid
+function cc_type_clean($prop, $v) {
+    $s = trim(is_scalar($v) ? (string)$v : '');
+    if ($prop === 'font') return in_array($s, CC_TYPE_FONTS, true) ? $s : '';
+    if ($prop === 'weight') return in_array($s, CC_TYPE_WEIGHTS, true) ? $s : '';
+    if ($prop === 'size') return preg_match('/^\d{1,5}(\.\d+)?(px|%|rem|em|vw)?$/', $s) ? $s : '';
+    return preg_match('/^\d{1,2}(\.\d{1,2})?(px|rem|em)?$/', $s) ? $s : '';
+}
+function cc_type_pick($src) {
+    $o = [];
+    foreach (array_keys(CC_TYPE_PROPS) as $k) { $v = cc_type_clean($k, is_array($src) ? ($src[$k] ?? '') : ''); if ($v !== '') $o[$k] = $v; }
+    return $o;
+}
+// The tidy form of settings.typography: only the presets and values that are set
+function cc_typography($settings) {
+    $raw = is_array($settings['typography'] ?? null) ? $settings['typography'] : [];
+    $out = [];
+    foreach (array_keys(CC_TYPE_PRESETS) as $id) {
+        $p = is_array($raw[$id] ?? null) ? $raw[$id] : [];
+        $base = cc_type_pick($p);
+        foreach (['tablet', 'mobile'] as $d) { $o = cc_type_pick($p[$d] ?? null); if ($o) $base[$d] = $o; }
+        if ($base) $out[$id] = $base;
+    }
+    return $out;
+}
+// The Google Fonts the text styles use (the site font is added by the caller)
+function cc_type_fonts($typo) {
+    $out = [];
+    foreach (array_keys(CC_TYPE_PRESETS) as $id) { $f = $typo[$id]['font'] ?? ''; if ($f !== '' && !in_array($f, $out, true)) $out[] = $f; }
+    return $out;
+}
+// The site's text styles as CSS: the variables on :root, and the rules that use them, for the desktop, then the tablet
+// and phone overrides inside their media queries
+function cc_type_css($typo) {
+    $out = '';
+    $scopes = [['desktop', ''], ['tablet', '@media(max-width:' . CC_TYPE_TABLET_MAX . 'px)'], ['mobile', '@media(max-width:' . CC_TYPE_MOBILE_MAX . 'px)']];
+    foreach ($scopes as [$dev, $wrap]) {
+        $vars = ''; $rules = '';
+        foreach (CC_TYPE_PRESETS as $id => $target) {
+            $p = $typo[$id] ?? [];
+            $own = $dev === 'desktop' ? cc_type_pick($p) : cc_type_pick($p[$dev] ?? null);
+            $decl = '';
+            foreach (CC_TYPE_PROPS as $k => $cssProp) {
+                if (!isset($own[$k])) continue;
+                $var = '--cc-type-' . $id . '-' . CC_TYPE_SHORT[$k];
+                $value = $k === 'font' ? "'" . $own[$k] . "', sans-serif" : $own[$k];
+                $vars .= $var . ': ' . $value . '; ';
+                $decl .= $cssProp . ': var(' . $var . '); ';
+            }
+            if ($decl !== '') $rules .= $target . '{' . $decl . '}';
+        }
+        if ($vars === '') continue;
+        $block = ':root{' . $vars . '}' . $rules;
+        $out .= $wrap === '' ? $block : $wrap . '{' . $block . '}';
+    }
+    return $out;
+}
+// A block's styles with its text preset applied: the preset's properties as variables, under the block's own values
+// (a value the block sets, or a tablet/phone override, wins; an emptied field falls back to the preset)
+function cc_with_text_preset($styles) {
+    $styles = is_array($styles) ? $styles : [];
+    $id = $styles['textPreset'] ?? null;
+    unset($styles['textPreset']);
+    if (!is_string($id) || !isset(CC_TYPE_PRESETS[$id])) return $styles;
+    $ref = [
+        'fontFamily' => 'var(--cc-type-' . $id . '-font)',
+        'fontSize' => 'var(--cc-type-' . $id . '-size)',
+        'fontWeight' => 'var(--cc-type-' . $id . '-weight)',
+        'lineHeight' => 'var(--cc-type-' . $id . '-line)',
+    ];
+    $out = $ref;
+    foreach ($styles as $k => $v) {
+        if (array_key_exists($k, $ref) && ($v === '' || $v === null)) continue;
+        $out[$k] = $v;
+    }
+    return $out;
+}
+
 // Top-level folders of the site that belong to CanvasCore itself: no page, collection or redirect may use them
 // (a page published there would replace or redirect the admin, the images or the data).
 function cc_reserved_slugs() {

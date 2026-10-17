@@ -4,6 +4,7 @@ import { PanelAccordion, SpacingControl, ColorInput } from './fields';
 import { handleNumericKey, labelStyle, inputStyle } from './helpers';
 import DeviceBar from './DeviceBar';
 import { blockLabel } from '../../editor/blockCatalog';
+import { TYPE_PRESETS } from '../../render/typography.mjs';
 
 // Blocks whose buttons are part of the block: the Style tab styles the whole block, the buttons have their own
 // settings in the Content tab (a border set here goes around the whole block, not around its buttons)
@@ -61,6 +62,14 @@ export default function StyleTab({ ctx }) {
     </PanelAccordion>
 
     <PanelAccordion title="Typography" icon={Type} defaultOpen={false}>
+      <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block' }}>Text style</label>
+      <select style={{ ...inputStyle, marginBottom: 6 }} value={selectedBlock.styles.textPreset || ''} onChange={e => handleStyleChange('textPreset', e.target.value)} aria-label="Text style">
+        <option value="">Default</option>
+        {TYPE_PRESETS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+      </select>
+      {selectedBlock.styles.textPreset && (
+        <p style={{ margin: '0 0 10px', fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>Font, size, weight and line height come from Global Options › Text styles. Values set below win.</p>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
         <div>
           <label style={{ fontSize: '10px', color: '#94a3b8' }}>Font Size (↑/↓)</label>

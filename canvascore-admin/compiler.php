@@ -1324,6 +1324,7 @@ function cc_render_block_body($block) {
         return "<!-- Start Master: $mName -->\n" . $inner . "\n<!-- End Master -->\n";
     }
 
+    $block['styles'] = cc_with_text_preset($block['styles'] ?? []);   // the block's text style, as variables
     $styleAttr = build_inline_style($block['styles'] ?? []);
     $styleString = $styleAttr ? " style=\"$styleAttr\"" : "";
     $animClass = cc_effect_classes($block['styles'] ?? [], $block['content'] ?? []);
@@ -1404,7 +1405,7 @@ function cc_render_block_body($block) {
             $globalStyle = $useGlobal ? "background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; " : "";
             $c = $block['content'] ?? [];
             $hv = cc_button_hover($c['btnHoverBg'] ?? null, $c['btnHoverColor'] ?? null, $c['btnHoverBorder'] ?? null, $c['btnEffect'] ?? null);
-            $btnStyle = "display:inline-block; text-decoration:none; font-weight:bold; box-sizing:border-box; " . $globalStyle . build_inline_style($btnOwn) . $hv['vars'];
+            $btnStyle = "display:inline-block; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; " . $globalStyle . build_inline_style($btnOwn) . $hv['vars'];
             $html = "<div id=\"$innerId\" class=\"cc-btn-wrap$animClass$innerClass\" style=\"text-align:$align; margin:$margin;\">\n<a href=\"$url\" class=\"cc-btn{$hv['cls']}\" style=\"$btnStyle\">$text</a>\n</div>\n";
             return $customCss . $html;
 
@@ -1441,7 +1442,7 @@ function cc_render_block_body($block) {
                 $bRad = htmlspecialchars((string)($btn['borderRadius'] ?? ''));
                 $hv = cc_button_hover($btn['hoverBg'] ?? null, $btn['hoverColor'] ?? null, $btn['hoverBorder'] ?? null, $btn['effect'] ?? null);
                 $bBorder = !empty($btn['borderColor']) ? '2px solid ' . htmlspecialchars($btn['borderColor']) : 'none';
-                $buttonsHtml .= "<a href=\"$bUrl\" class=\"cc-btn{$hv['cls']}\" style=\"display:inline-block; padding:14px 28px; background:$bBg; color:$bColor; border-radius:$bRad; text-decoration:none; font-weight:bold; border:$bBorder; box-sizing:border-box; {$hv['vars']}\">$bText</a>";
+                $buttonsHtml .= "<a href=\"$bUrl\" class=\"cc-btn{$hv['cls']}\" style=\"display:inline-block; padding:14px 28px; background:$bBg; color:$bColor; border-radius:$bRad; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); border:$bBorder; box-sizing:border-box; {$hv['vars']}\">$bText</a>";
             }
             $buttonsHtml .= "</div>";
             $html = "<section id=\"$innerId\" class=\"cc-hero$animClass$innerClass\" style=\"$styleAttr; $bg; min-height:$minHeight; display:flex; flex-direction:column; justify-content:center;\">\n<div>\n$title\n<div style=\"margin:20px 0;\">$subtitle</div>\n$buttonsHtml\n</div>\n</section>\n";

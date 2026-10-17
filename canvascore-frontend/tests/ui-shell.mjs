@@ -794,6 +794,49 @@ try {
     check('…and the colour fields everywhere get the new palette', await waitFor(() => (st().palette || []).length === 6 && st().palette[0].value === '#123456'));
   }
 
+  console.log('\nTEXT STYLES');
+  {
+    const ty = await vite.ssrLoadModule('/src/render/typography.mjs');
+    const rb = await vite.ssrLoadModule('/src/render/renderBlock.mjs');
+    // the same literals as the PHP tests (server.php, security.php)
+    const typo = ty.normalizeTypography({ typography: { h1: { font: 'Poppins', size: '3rem', weight: '700', lineHeight: '1.1', tablet: { size: '2.4rem' }, mobile: { size: 'bogus', font: 'Comic Sans' } },
+      body: { font: 'Comic Sans', size: '17px' }, unknown: { size: '9px' } } });
+    check('text styles: only known presets, fonts and values are kept; tablet and phone are overrides', JSON.stringify(typo) === '{"h1":{"font":"Poppins","size":"3rem","weight":"700","lineHeight":"1.1","tablet":{"size":"2.4rem"}},"body":{"size":"17px"}}', JSON.stringify(typo));
+    check('a block with a text preset gets the preset variables; its own values win, emptied ones fall back', JSON.stringify(ty.withTextPreset({ textPreset: 'h2', fontSize: '', color: 'red' })) === '{"fontFamily":"var(--cc-type-h2-font)","fontSize":"var(--cc-type-h2-size)","fontWeight":"var(--cc-type-h2-weight)","lineHeight":"var(--cc-type-h2-line)","color":"red"}');
+    check('…an unknown text preset is ignored', JSON.stringify(ty.withTextPreset({ textPreset: 'nope', color: 'red' })) === '{"color":"red"}');
+    const desk = ty.typeCanvasCss(typo, 'desktop'), tab = ty.typeCanvasCss(typo, 'tablet'), mob = ty.typeCanvasCss(typo, 'mobile');
+    check('the editor shows the device it edits: desktop 3rem, tablet its own size, phone the tablet size', desk.includes('--cc-type-h1-size: 3rem;') && tab.includes('--cc-type-h1-size: 2.4rem;') && mob.includes('--cc-type-h1-size: 2.4rem;')
+      && !mob.includes('Comic Sans') && desk.includes('.cc-canvas h1{font-family: var(--cc-type-h1-font); font-size: var(--cc-type-h1-size);'), desk.slice(0, 200));
+    check('…and the site elements are scoped to the canvas (the editor\'s own chrome is not restyled)', !/(^|[}\s])body\{/.test(desk) && desk.includes('.cc-canvas{'));
+    check('a text style of a block renders as variables, not as a property of its own', (() => { const h = rb.renderBlock({ id: 'tp1', type: 'TEXT', styles: { textPreset: 'h2' }, content: { text: '<p>a</p>' } }); return h.includes('font-size: var(--cc-type-h2-size)') && !h.includes('text-preset'); })());
+
+    // Style tab: the Text style picker sets the block's preset
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false,
+      blocks: [{ id: 'ts1', type: 'TEXT', styles: {}, content: { text: '<p>x</p>' } }], selectedBlockId: 'ts1' });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Style')); await sleep(30);
+    if (!$('select[aria-label="Text style"]')) { click(btnHas('Typography')); await sleep(30); }
+    const ts = $('select[aria-label="Text style"]');
+    check('the Style tab offers the text styles (Default, Heading 1–6, Body, Small, Button)', !!ts && ts.options.length === 10 && ts.options[9].textContent === 'Button');
+    if (ts) { ts.value = 'h3'; ts.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(30);
+    check('…picking one sets the block\'s text style', st().blocks.find((b) => b.id === 'ts1').styles.textPreset === 'h3');
+
+    // Global Options › Text styles: a size is saved for the preset
+    useStore.setState({ currentView: 'settings', palette: null, typography: null });
+    calls.length = 0;
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/GlobalSettings.jsx')).default)));
+    const h1Size = await waitFor(() => btnHas('Save & Publish') && $('input[aria-label="Heading 1 size"]'));
+    check('Global Options shows the text styles (Heading 1 size, with the default as placeholder)', !!h1Size && h1Size.placeholder === 'Default');
+    if (h1Size) { typeIn(h1Size, '4rem'); h1Size.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true })); }
+    await sleep(30);
+    click(btnHas('Save & Publish'));
+    const sentTs = await waitFor(() => calls.find((c) => c.u.includes('save_settings')));
+    const bodyTs = sentTs ? JSON.parse(sentTs.body) : {};
+    check('saving sends the text style, and the editor gets it', bodyTs.typography && bodyTs.typography.h1 && bodyTs.typography.h1.size === '4rem', sentTs && sentTs.body.slice(0, 160));
+    check('…and the editor\'s text styles follow', await waitFor(() => st().typography && st().typography.h1 && st().typography.h1.size === '4rem'));
+  }
+
   console.log('\nCOLLECTIONS');
   {
     useStore.setState({ currentView: 'collections', userRole: 'admin', activePage: null });

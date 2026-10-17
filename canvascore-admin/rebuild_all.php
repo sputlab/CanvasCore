@@ -61,6 +61,7 @@ try {
 
     // These go into <style> and <title>: only safe values (a color, a font name, escaped text)
     $palette = cc_palette($settings);
+    $typo = cc_typography($settings);
     $brand_color = $palette[0]['value'];   // the primary global colour is the brand colour
     $font_family = preg_replace('/[^A-Za-z0-9 \-]/', '', (string)($settings['fontFamily'] ?? 'Inter'));
     if (trim($font_family) === '') $font_family = 'Inter';
@@ -79,8 +80,10 @@ try {
     };
     $sitemap_urls = [];
 
-    $font_url = urlencode($font_family);
-    $google_fonts_link = "<link href=\"https://fonts.googleapis.com/css2?family={$font_url}:ital,wght@0,300;0,400;0,600;0,700;0,900;1,400&display=swap\" rel=\"stylesheet\">";
+    // The site font, then the fonts of the text styles (one family parameter each)
+    $families = array_values(array_unique(array_merge([$font_family], cc_type_fonts($typo))));
+    $family_params = implode('&', array_map(function ($f) { return 'family=' . urlencode($f) . ':ital,wght@0,300;0,400;0,600;0,700;0,900;1,400'; }, $families));
+    $google_fonts_link = "<link href=\"https://fonts.googleapis.com/css2?{$family_params}&display=swap\" rel=\"stylesheet\">";
 
     // Every file written by this build (relative to the site root), and the ones that could not be written
     $site_root = realpath(__DIR__ . '/..');
@@ -140,6 +143,7 @@ try {
     // Block effects and button hovers (shared with the editor canvas)
     $effects_file = __DIR__ . '/effects.css';
     $template = str_replace('{{COLOR_VARS}}', cc_palette_css($palette), $template);   // global colours, in :root
+    $template = str_replace('{{TYPE_CSS}}', cc_type_css($typo), $template);   // text styles (Global Options › Text styles)
     $template = str_replace('{{EFFECTS_CSS}}', file_exists($effects_file) ? file_get_contents($effects_file) : '', $template);
 
     // Only published/modified pages (the live version is always the parent row).
